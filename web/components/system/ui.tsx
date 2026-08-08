@@ -1,8 +1,8 @@
 /**
  * The NIGHT WALK primitives. Server-safe — no hooks, no client directive.
  *
- * The grammar comes from the night-sky poster: bracketed mono telemetry,
- * numbered light-chips, hairline-ringed plates, and exactly two buttons.
+ * The voice is calm and editorial: quiet sentence-case metadata, numbered
+ * chips in the moment's ink, hairline-ringed plates, and exactly two buttons.
  * Every metadata voice in the app speaks through these.
  */
 import type { CSSProperties, ReactNode } from "react";
@@ -25,28 +25,28 @@ export function NumberChip({
   className?: string;
 }) {
   const sizes = {
-    sm: "h-6 min-w-6 px-1 text-[10px] rounded-[6px]",
-    md: "h-8 min-w-8 px-1.5 text-[12px] rounded-[8px]",
-    lg: "h-12 min-w-12 px-2 text-[18px] rounded-[10px]",
+    sm: "h-6 min-w-6 px-1 text-[11px] rounded-[5px]",
+    md: "h-7 min-w-7 px-1.5 text-[12px] rounded-[6px]",
+    lg: "h-11 min-w-11 px-2 text-[17px] rounded-[8px]",
   };
   const style: CSSProperties = ink
     ? {
         background: ink.base,
         color: NIGHT,
-        boxShadow: `0 0 0 1px ${ink.base}, 0 0 12px ${ink.glow}`,
+        boxShadow: "0 0 0 1.5px rgb(15 13 35 / 0.55)",
       }
     : { color: STARLIGHT, boxShadow: "var(--ring-strong)" };
   return (
     <span
       style={style}
-      className={`tnum inline-flex items-center justify-center font-mono font-bold ${sizes[size]} ${className}`}
+      className={`tnum inline-flex items-center justify-center font-semibold ${sizes[size]} ${className}`}
     >
-      {String(n).padStart(2, "0")}
+      {n}
     </span>
   );
 }
 
-/** The round play button. A glyph, not a control — wrap it in the real button. */
+/** The play button face. A glyph, not a control — wrap it in the real button. */
 export function PlayGlyph({
   size = 40,
   paused = false,
@@ -63,7 +63,7 @@ export function PlayGlyph({
   return (
     <span
       aria-hidden
-      className="grid shrink-0 place-items-center rounded-full"
+      className="grid shrink-0 place-items-center rounded-[8px]"
       style={{ width: size, height: size, background: disc }}
     >
       {paused ? (
@@ -86,12 +86,12 @@ export function PlayGlyph({
   );
 }
 
-/** Primary button — the ember pill. */
+/** Primary button — ember. */
 export function inkButtonClass(extra = "") {
-  return `btn-ember px-5 py-2.5 text-[14px] disabled:opacity-40 ${extra}`;
+  return `btn-ember px-4 py-2 text-[13.5px] disabled:opacity-40 ${extra}`;
 }
 
-/** Secondary — starlight outline. */
+/** Secondary — quiet plate. */
 export function outlineButtonClass(extra = "") {
   return `btn-ghost px-4 py-2 text-[13px] disabled:opacity-40 ${extra}`;
 }
@@ -176,15 +176,15 @@ export function KeyframeImg({
 export function SynthNote({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`tag chip chip-synth text-[9px] ${className}`}
+      className={`tag chip chip-synth text-[10px] ${className}`}
       title="No capture uploaded yet — this frame is printed from the moment's metadata."
     >
-      [ synthetic ]
+      synthetic
     </span>
   );
 }
 
-/** Mono uppercase tag with optional ink color. */
+/** Quiet metadata tag with optional ink color. */
 export function InkTag({
   children,
   color,

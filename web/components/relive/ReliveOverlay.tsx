@@ -100,13 +100,13 @@ export function ReliveOverlay({
               {moment.title}
             </h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <InkTag className="text-[10px]" color={ink.base}>
-                [ {clockTime(tripStartedAt, moment.tStart)} · {duration(moment.tEnd - moment.tStart)} ]
+              <InkTag className="text-[12px]" color={ink.base}>
+                {clockTime(tripStartedAt, moment.tStart)} · {duration(moment.tEnd - moment.tStart)}
               </InkTag>
-              <InkTag className="text-[10px] text-moth">[ {moment.place.label} ]</InkTag>
+              <InkTag className="text-[12px] text-moth">{moment.place.label}</InkTag>
               {moment.people.length > 0 && (
-                <InkTag className="text-[10px] text-moth">
-                  [ with {moment.people.join(" + ")} ]
+                <InkTag className="text-[12px] text-moth">
+                  with {moment.people.join(" and ")}
                 </InkTag>
               )}
             </div>
@@ -129,7 +129,7 @@ export function ReliveOverlay({
       {/* ── Stage + evidence ────────────────────────────────────────────── */}
       <div className="relative z-10 grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 pb-3 sm:px-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <div
-          className="rise-in relative min-h-[300px] overflow-hidden rounded-[14px]"
+          className="rise-in relative min-h-[300px] overflow-hidden rounded-[10px]"
           style={{ "--i": 1, boxShadow: "var(--ring)" } as React.CSSProperties}
         >
           <SplatViewer
@@ -142,16 +142,16 @@ export function ReliveOverlay({
             <div className="plate absolute bottom-3 left-3 flex items-center gap-2.5 px-3 py-2">
               <LabelDot label={focused.label} size={8} />
               <span className="text-[13px] font-bold text-starlight">{focused.label}</span>
-              <span className="tag text-[9px] text-moth">
-                [ {timecode(focused.firstSeenT)}–{timecode(focused.lastSeenT)} ]
+              <span className="tag text-[11px] text-moth">
+                {timecode(focused.firstSeenT)}–{timecode(focused.lastSeenT)}
               </span>
               {navTargets[focused.trackId] && (
-                <span className="tag text-[9px] text-aurora">[ robot can drive here ]</span>
+                <span className="tag text-[11px] text-aurora">robot can drive here</span>
               )}
               <button
                 type="button"
                 onClick={() => setFocusTrackId(null)}
-                className="tag ml-1 text-[9px] text-faint transition-colors duration-300 ease-(--ease-signature) hover:text-starlight"
+                className="tag ml-1 text-[11px] text-faint transition-colors duration-300 ease-(--ease-signature) hover:text-starlight"
               >
                 clear
               </button>
@@ -171,7 +171,7 @@ export function ReliveOverlay({
             {moment.keyframes.map((kf) => (
               <span
                 key={kf.id}
-                className="relative shrink-0 overflow-hidden rounded-[14px]"
+                className="relative shrink-0 overflow-hidden rounded-[8px]"
                 style={{ boxShadow: "var(--ring)" }}
               >
                 <KeyframeImg keyframe={kf} alt={`Frame at ${timecode(kf.t)}`} className="h-16 w-24 object-cover" width={192} height={128} />
@@ -193,7 +193,7 @@ export function ReliveOverlay({
                       disabled={!canPlace}
                       onClick={() => setFocusTrackId(on ? null : o.trackId)}
                       title={canPlace ? `Fly to the ${o.label}` : "No depth for this track — can't be placed in 3D"}
-                      className={`flex w-full items-center justify-between gap-2 rounded-[14px] px-2.5 py-1.5 text-left transition-[background-color,box-shadow] duration-300 ease-(--ease-signature) ${
+                      className={`flex w-full items-center justify-between gap-2 rounded-[8px] px-2.5 py-1.5 text-left transition-[background-color,box-shadow] duration-300 ease-(--ease-signature) ${
                         on
                           ? "bg-haze shadow-[var(--ring)]"
                           : canPlace
@@ -207,8 +207,8 @@ export function ReliveOverlay({
                           {o.label}
                         </span>
                         {on && (
-                          <InkTag className="text-[8.5px]" color={ink.base}>
-                            [ in view ]
+                          <InkTag className="text-[11px]" color={ink.base}>
+                            in view
                           </InkTag>
                         )}
                       </span>
@@ -226,11 +226,11 @@ export function ReliveOverlay({
               <ol className="mt-2 space-y-1.5">
                 {moment.transcript.map((seg) => (
                   <li key={seg.id} className="flex gap-2.5">
-                    <span className="tag shrink-0 pt-px text-[9px]" style={{ color: ink.base }}>
-                      [ {timecode(seg.t)} ]
+                    <span className="tag tnum shrink-0 pt-px text-[11px]" style={{ color: ink.base }}>
+                      {timecode(seg.t)}
                     </span>
                     <p className="min-w-0 text-[12.5px] leading-relaxed text-moth">
-                      <span className="tag mr-1.5 text-[9px] text-faint">[ {seg.speaker} ]</span>
+                      <span className="tag mr-1.5 text-[11px] text-faint">{seg.speaker}</span>
                       {seg.text}
                     </p>
                   </li>
@@ -257,22 +257,22 @@ export function ReliveOverlay({
                     <a
                       href={moment.music.spotifyUri}
                       title="Open in Spotify — mock URI until the playback SDK is wired up"
-                      className="block truncate font-display text-[15px] font-bold leading-tight text-starlight hover:underline"
+                      className="block truncate text-[14px] font-semibold leading-tight text-starlight hover:underline"
                     >
                       {moment.music.trackName}
                     </a>
-                    <span className="tag text-[9.5px] text-moth">
-                      [ {moment.music.artist} · {moment.vibe.mood} ]
+                    <span className="tag text-[11px] text-moth">
+                      {moment.music.artist} · {moment.vibe.mood}
                     </span>
                   </div>
                 </div>
                 <p className="relative border-t border-starlight/15 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-moth">
-                  <span className="tag text-[8.5px] text-faint">[ picked because ] </span>
+                  <span className="tag text-[11px] text-faint">Picked because: </span>
                   {moment.music.chosenBecause}
                 </p>
               </div>
             ) : (
-              <p className="mt-2 rounded-[14px] border border-dashed border-starlight/25 px-3.5 py-3 text-[12px] leading-relaxed text-moth">
+              <p className="mt-2 rounded-[10px] border border-dashed border-starlight/25 px-3.5 py-3 text-[12px] leading-relaxed text-moth">
                 No track — energy was low and the window short, so the picker stayed quiet rather
                 than scoring a two-minute stop for fries.
               </p>
@@ -284,8 +284,8 @@ export function ReliveOverlay({
       {/* ── Footer transport ────────────────────────────────────────────── */}
       <footer className="relative z-10 flex items-center justify-between gap-3 px-4 pb-4 pt-1 sm:px-6">
         <StepButton dir={-1} disabled={index === 0} onStep={onStep} />
-        <span className="tag text-[11px] text-moth">
-          [ {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")} ]
+        <span className="tag tnum text-[12px] text-moth">
+          {index + 1} of {total}
         </span>
         <StepButton dir={1} disabled={index === total - 1} onStep={onStep} />
       </footer>
@@ -297,11 +297,11 @@ function SectionTag({ children, ink }: { children: React.ReactNode; ink: MomentI
   return (
     <div className="flex items-center gap-2">
       <span
-        className="h-2 w-2"
-        style={{ background: ink.base, boxShadow: `0 0 10px ${ink.glow}` }}
+        className="h-2 w-2 rounded-full"
+        style={{ background: ink.base }}
         aria-hidden
       />
-      <span className="tag text-[10px] text-moth">[ {children} ]</span>
+      <span className="tag text-[12px] font-semibold text-moth">{children}</span>
     </div>
   );
 }

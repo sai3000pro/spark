@@ -26,7 +26,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
-import { Music } from "lucide-react";
 import { localToLngLat, tripBounds } from "@/lib/geo";
 import { EMBER, GOLD, NIGHT, STARLIGHT, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
@@ -125,15 +124,15 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
         </Source>
 
         {/* Trailheads. */}
-        <TrailheadMarker at={routeCoords[0]} label="START" />
-        <TrailheadMarker at={routeCoords[routeCoords.length - 1]} label="END" hollow />
+        <TrailheadMarker at={routeCoords[0]} label="Start" />
+        <TrailheadMarker at={routeCoords[routeCoords.length - 1]} label="End" hollow />
 
-        {/* The kept moments — numbered lights on the park. */}
+        {/* The kept moments — numbered pins on the park. */}
         {moments.map((m, i) => {
           const [lng, lat] = localToLngLat(m.placePos);
           return (
-            <Marker key={m.id} longitude={lng} latitude={lat} anchor="center" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
-              <LightMarker
+            <Marker key={m.id} longitude={lng} latitude={lat} anchor="bottom" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
+              <PinMarker
                 index={i}
                 ink={inkForMoment(i)}
                 title={m.title}
@@ -174,10 +173,11 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A light-marker: the moment's ink glowing in a starlight hairline ring.
- * Outline-only while unreached during a replay — not happened yet.
+ * A map pin in the classic teardrop shape — the moment's ink, a dark number,
+ * a hairline night outline so it separates from any tile underneath. Dimmed
+ * to an outline while unreached during a replay — not happened yet.
  */
-function LightMarker({
+function PinMarker({
   index,
   ink,
   title,
@@ -205,52 +205,49 @@ function LightMarker({
       onFocus={() => onHover(true)}
       onBlur={() => onHover(false)}
       onClick={onOpen}
-      className="relative grid place-items-center"
-      style={{ width: 52, height: 52 }}
+      className="relative block"
+      style={{
+        transform: active ? "scale(1.12)" : "scale(1)",
+        transformOrigin: "bottom center",
+        transition: "transform 0.3s var(--ease-signature)",
+      }}
     >
-      {/* Breathing halo — the light is alive. */}
-      {!unreached && (
-        <span
-          aria-hidden
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `radial-gradient(circle, ${ink.glow} 0%, rgb(0 0 0 / 0) 70%)`,
-            animation: active ? "glow-breathe 1.6s ease-in-out infinite" : undefined,
-            opacity: active ? 1 : 0.7,
-          }}
-        />
-      )}
-
-      <span
-        className="relative grid place-items-center rounded-full font-mono text-[13px] font-bold"
+      <svg
+        width={30}
+        height={40}
+        viewBox="0 0 30 40"
+        aria-hidden
         style={{
-          width: 36,
-          height: 36,
-          background: unreached ? NIGHT : ink.base,
-          color: unreached ? ink.base : NIGHT,
-          boxShadow: unreached
-            ? `0 0 0 2px ${ink.base}`
-            : `0 0 0 1.5px rgb(242 238 252 / 0.85), 0 0 18px ${ink.glow}, 0 4px 14px rgb(6 5 18 / 0.6)`,
-          transform: active ? "scale(1.18)" : "scale(1)",
-          transition: "transform 0.3s var(--ease-signature), background 0.3s var(--ease-signature)",
+          display: "block",
+          filter: active
+            ? `drop-shadow(0 2px 3px rgb(6 5 18 / 0.55)) drop-shadow(0 0 10px ${ink.glow})`
+            : "drop-shadow(0 2px 3px rgb(6 5 18 / 0.55))",
         }}
       >
-        {String(index + 1).padStart(2, "0")}
-        {hasMusic && !unreached && (
-          <span
-            aria-hidden
-            className="absolute -right-1.5 -top-1.5 grid place-items-center rounded-full"
-            style={{ width: 16, height: 16, background: NIGHT, color: GOLD, boxShadow: "0 0 0 1px rgb(242 238 252 / 0.4)" }}
-          >
-            <Music size={9} strokeWidth={2} />
-          </span>
-        )}
-      </span>
+        <path
+          d="M15 1.5c-7.32 0-13 5.72-13 12.8 0 4.9 3.05 9.5 6.1 13.06 2.35 2.74 4.9 5.62 6.9 10.14 2-4.52 4.55-7.4 6.9-10.14 3.05-3.56 6.1-8.16 6.1-13.06 0-7.08-5.68-12.8-13-12.8Z"
+          fill={unreached ? NIGHT : ink.base}
+          stroke={unreached ? ink.base : "rgb(15 13 35 / 0.75)"}
+          strokeWidth={1.5}
+          opacity={unreached ? 0.85 : 1}
+        />
+        <text
+          x={15}
+          y={19.5}
+          textAnchor="middle"
+          fontSize={12.5}
+          fontWeight={650}
+          fontFamily="var(--font-sans)"
+          fill={unreached ? ink.base : NIGHT}
+        >
+          {index + 1}
+        </text>
+      </svg>
 
       {/* Hover label — a small plate floating over the park. */}
       {active && (
         <span
-          className="tag pointer-events-none absolute bottom-[54px] left-1/2 w-max -translate-x-1/2 rounded-[8px] px-2.5 py-1.5 text-[10px]"
+          className="tag pointer-events-none absolute bottom-[46px] left-1/2 w-max -translate-x-1/2 rounded-[6px] px-2.5 py-1.5 text-[11.5px] font-semibold"
           style={{
             background: "rgb(31 27 64 / 0.96)",
             color: STARLIGHT,
@@ -259,7 +256,9 @@ function LightMarker({
           }}
         >
           {title}
-          <span className="ml-1.5 text-faint">· step inside</span>
+          <span className="ml-1.5 font-medium text-faint">
+            {hasMusic ? "· scored · step inside" : "· step inside"}
+          </span>
         </span>
       )}
     </button>
@@ -267,23 +266,26 @@ function LightMarker({
 }
 
 function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: string; hollow?: boolean }) {
-  // START stacks its label above the dot, END below — the two trailheads sit
+  // Start stacks its label above the dot, End below — the two trailheads sit
   // metres apart and their labels collide otherwise.
   return (
     <Marker longitude={at[0]} latitude={at[1]} anchor="center" offset={hollow ? [0, 14] : [0, -14]} style={{ zIndex: 1 }}>
-      <span className={`pointer-events-none flex items-center gap-1 ${hollow ? "flex-col" : "flex-col-reverse"}`}>
+      <span className={`pointer-events-none flex items-center gap-1.5 ${hollow ? "flex-col" : "flex-col-reverse"}`}>
         <span
           aria-hidden
           className="block rounded-full"
           style={{
-            width: 10,
-            height: 10,
+            width: 9,
+            height: 9,
             background: hollow ? NIGHT : GOLD,
-            boxShadow: hollow ? `0 0 0 2px ${GOLD}` : `0 0 10px ${GOLD}88`,
+            boxShadow: hollow ? `0 0 0 2px ${GOLD}` : "0 0 0 1.5px rgb(15 13 35 / 0.7)",
           }}
         />
-        <span className="tag text-[8px]" style={{ color: GOLD, textShadow: "0 1px 4px rgb(6 5 18 / 0.9)" }}>
-          [ {label} ]
+        <span
+          className="tag rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ color: GOLD, background: "rgb(15 13 35 / 0.75)" }}
+        >
+          {label}
         </span>
       </span>
     </Marker>
@@ -293,7 +295,7 @@ function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: s
 /** The robot re-walking the path — a warm light moving through the dark. */
 function RobotDot() {
   return (
-    <span className="pointer-events-none relative grid place-items-center" style={{ width: 44, height: 44 }}>
+    <span className="pointer-events-none relative grid place-items-center" style={{ width: 40, height: 40 }}>
       <span
         aria-hidden
         className="absolute inset-0 rounded-full"
@@ -303,18 +305,14 @@ function RobotDot() {
         }}
       />
       <span
-        className="relative grid place-items-center rounded-full"
+        className="relative block rounded-full"
         style={{
-          width: 20,
-          height: 20,
-          background: NIGHT,
-          boxShadow: `0 0 0 1.5px ${GOLD}, 0 0 16px rgb(255 196 107 / 0.55)`,
+          width: 14,
+          height: 14,
+          background: GOLD,
+          boxShadow: "0 0 0 2.5px rgb(15 13 35 / 0.9), 0 0 0 4px rgb(255 196 107 / 0.5)",
         }}
-      >
-        <svg width={12} height={12} viewBox="0 0 24 24" aria-hidden>
-          <path d="M12 1.5 L14 9.5 L22.5 12 L14 14.5 L12 22.5 L10 14.5 L1.5 12 L10 9.5 Z" fill={GOLD} />
-        </svg>
-      </span>
+      />
     </span>
   );
 }

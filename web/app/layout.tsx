@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import { Archivo, Martian_Mono } from "next/font/google";
+import { Fraunces, Instrument_Sans } from "next/font/google";
 import { Suspense } from "react";
 import { DeviceFrame } from "@/components/system/DeviceFrame";
 import "./globals.css";
 
 // Self-hosted by next/font rather than an @import from fonts.googleapis.com, so
-// the demo still renders correctly with no network. Archivo is the ONE family —
-// width 125 + weight 800 is the display voice, width 100 the UI voice — and
-// Martian Mono speaks every timestamp, coordinate and provenance chip.
-const archivo = Archivo({
-  variable: "--font-archivo",
+// the demo still renders correctly with no network. Two families on a real
+// contrast axis: Fraunces (a warm editorial serif, optical size on) carries
+// every headline; Instrument Sans carries the UI, labels and numbers.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  axes: ["wdth"],
+  axes: ["opsz"],
   display: "swap",
 });
-const martian = Martian_Mono({
-  variable: "--font-martian",
+const instrument = Instrument_Sans({
+  variable: "--font-instrument",
   subsets: ["latin"],
   display: "swap",
 });
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${archivo.variable} ${martian.variable} antialiased`}>
+    <html lang="en" className={`${fraunces.variable} ${instrument.variable} antialiased`}>
       <body>
         {/* DeviceFrame reads ?chrome=off via useSearchParams, which needs a
             Suspense boundary; the fallback renders the app unwrapped so there is
