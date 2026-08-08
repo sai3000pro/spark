@@ -1,7 +1,7 @@
 ---
-version: 4
-name: Spark-night-walk
-description: "NIGHT WALK v4 — a painted park at blue hour you can step into. The product material is light: Gaussian splats are point clouds of captured light, so the whole app lives the hour after sunset. Deep indigo-violet grounds (#0f0d23), warm ember/gold afterglow for action, aurora teal for anything live and measured, six luminous moment inks. The world is ILLUSTRATED: generated storybook paintings (the robot on a lamp-lit path) carry the landing; the day itself is a REAL map — Waterloo Park's actual paths and lake restyled into twilight — with the walk as a ribbon of light and every kept moment a classic teardrop map pin in its ink. The voice is calm and editorial: Fraunces for headlines, Instrument Sans for everything else, quiet sentence-case metadata separated by middle dots. No all-caps telemetry, no brackets, no pills; one small radius scale and exactly two motion curves."
+version: 5
+name: Spark-field-notes
+description: "FIELD NOTES v5 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a pinned intro storm (one word, NOTICED, then every detection of the day pressed onto the page as colored chips, then an ink cut — 'It noticed 1,204 things. It kept six.'), a halftone-dot pine hero with a blur-cycling last line, a smeared marquee band, dark grain plates with honest count-ups, a KEPT/DISCARDED journal spread, a scroll-dragged statement, an accordion of field notes, and a finale where the giant wordmark bleeds off the page behind one pane of glass. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -11,120 +11,104 @@ generated: `web/scripts/build-map-style.mjs` recolors OpenFreeMap Liberty into
 
 ## The idea
 
-Spark's material IS light, and its world is a storybook. A Gaussian splat is a cloud of
-captured light; the walk ended at dusk; the robot's job is to keep the glowing parts of a
-day. So the interface is the hour after sunset — a painted park (generated key art: soft
-gouache, lamp posts, fireflies, the little robot on the path) for the landing, and the real
-park gone indigo for the map. Two things are sacred: the painted-illustration world and the
-real twilight tiles. The chrome around them stays quiet, clean and professional so the art
-and the map do the talking.
+The robot is a field naturalist. It walks a metre behind you, notices everything — ducks,
+benches, laughter, golden light — and presses the few minutes worth keeping into a journal.
+The brand surface (the landing) IS that journal: cream paper with real tooth, pressed
+teal-and-brass inks, typewriter specimen tags, and a scroll that re-enacts the day's sieve.
+The product surface (walk / trip / bench) stays the NIGHT WALK twilight map — the journal
+is how the day is told; the map is where the day lives. Two registers, one story.
 
 ## Colors
 
-Ground (page → raised, all indigo-violet, never gray-black):
+FIELD NOTES (landing + brand surfaces):
 
-- `night` #0f0d23 page · `dusk` #171432 raised sections · `plate` #1f1b40 cards/panels ·
-  `haze` #2a2552 wells & hover fills.
-- Text on dark: `starlight` #f2eefc primary · `moth` #b5aed6 secondary · `faint` #837daa
-  hints/metadata. Body text is always starlight or moth; faint is metadata only, never
-  sentences.
+- Paper: `paper` #faf4e3 page · `vellum` #fffbf0 raised cards. Both wear `.papergrain`.
+- Ink text on paper: `ink` #1b1b18 primary · `ink-soft` #52524a secondary ·
+  `ink-faint` #78786c metadata only, never sentences.
+- Pressed inks: `pine` #16292e (dark grounds) · `spruce` #2c4347 (dark plates) ·
+  `lagoon` #476d73 · `brass` #d5b473 (THE accent: pills, keep-counts, gold moments) ·
+  `moss` #7d7730 · `clay` #cf5e32 (attention: discards, the wordmark's dot, focus rings).
+- Text on pine: `milk` #f6f0df primary · `mist` #a9bdb9 secondary.
+- Gradients exist only as the pine→paper section bleed; never as fills on cards or text.
 
-Light (the afterglow — warmth and action):
-
-- `ember` #ff8e5e — THE accent. Primary buttons, the route, active states. Scarce elsewhere.
-- `gold` #ffc46b — ember's highlight twin; the lit route core, the Kept count.
-- `aurora` #3ee6c0 — live/measured semantics only: the follow pulse, measured chips, nav
-  goals. Never decoration.
-
-Moment inks (each moment owns one, cycled by index — `MOMENT_INKS` in `lib/theme.ts`):
-
-- ember #ff8e5e · gold #ffc46b · aurora #3ee6c0 · orchid #ee6fae · lilac #9d8bfa · sky #6cc5ff.
-- On cards the ink is a small dot beside the metadata line; on the map it fills the pin.
-  Ink `glow` washes are for map halos only — never poured over card imagery.
-
-Rules: no pure #fff or #000 anywhere. Gradients exist only as skies inside the paintings and
-as edge-binding fades (painting → page ground); NEVER as fills or washes on UI surfaces or
-cards.
+NIGHT WALK (walk / trip / bench app screens) — unchanged: `night`/`dusk`/`plate`/`haze`
+grounds, `starlight`/`moth`/`faint` text, ember/gold/aurora semantics, six moment inks.
+The generated map style still derives from these values.
 
 ## Typography
 
-Two families on a real contrast axis — a warm editorial serif against a clean grotesk:
+- One grotesk everywhere: **Schibsted Grotesk** variable (`--font-grotesk`), 400–700.
+  Display weight 500, tracking −0.025em, sentence case. h1 `clamp(2.9rem, 7vw, 6rem)`;
+  section h2 `clamp(2.4rem, 5vw, 4rem)`. The giant wordmark and marquee bands may exceed
+  the heading scale — they are typographic objects, not headings.
+- Specimen tags: **Fragment Mono** (`--font-typewriter`) via `.fnote` — 10.5–13px,
+  uppercase, tracking 0.12–0.32em, tabular numerals, brackets written in the markup:
+  `[ KEPT · 6 ]`, `[ 002 ]`, `[ WHY SHOW THE DISCARDS? ]`. This is the ONLY uppercase in
+  the system, and mono appears nowhere else except real code/JSON panels.
+- App screens keep sentence-case `.tag` metadata separated by middle dots.
 
-- Display: **Fraunces** variable (optical size on), weight ~480–560, tracking −0.015em,
-  sentence case. h1 `clamp(2.7rem, 6vw, 4.75rem)`; section h2 `clamp(2.1rem, 4.2vw, 3.4rem)`.
-  Never bolder than 600, never all-caps, never letterspaced.
-- UI/body: **Instrument Sans** 400–650, 12–17px. Body 15px `moth` or `starlight`.
-- Metadata (`.tag`): Instrument Sans 11–12px, weight 500, sentence case, tabular numerals,
-  facts separated by ` · ` — "3:17 p.m. · 59 s · Silver Lake shore". No brackets, no mono,
-  no uppercase. Mono is permitted ONLY inside actual code/JSON panels.
+## Texture
 
-## Shape
+- `.papergrain` — dark-fleck turbulence, multiply-blended: the paper's tooth. Page and
+  cream sections; never on top of type-heavy dark plates.
+- `.starfield` — light-speck turbulence, screen-blended: the night air on pine grounds
+  and dark plates.
+- `.dotfield` — a halftone print screen (radial-gradient dots, center-masked) on pine
+  heroes. Print, not sci-fi.
 
-One radius scale, small: `--radius-sm` 6px (buttons, chips, kbd) · `--radius-md` 10px
-(plates, cards, panels) · `--radius-lg` 14px (large media, the takeover stage). Pills are
-banned; only status dots and the map's round marks are circles. Plates are crisp: solid fill
-+ hairline ring (`--ring`) + indigo shadow. Nested plates are banned.
+## Shape & components
 
-## Texture & art
-
-- `.starfield` — fine light-speck grain, screen-blended ~0.5 opacity: the night air. Lives
-  on the page and dark sections, never on plates.
-- Key art — generated paintings (`public/hero/keyart-*.webp`, z_image, soft-gouache
-  storybook style). Full-bleed, bound to the page ground with vertical fades at the seams.
-  The hero painting opens the site; art sections keep type in the painting's quiet zones
-  (open sky, dark foreground).
-- Keyframe stand-ins — small painted twilight scenes, always labelled `synthetic`.
-
-## Components
-
-- **Plate**: `plate` fill, hairline ring, 10px radius.
-- **Chips**: quiet sentence-case labels in a hairline 6px box. Three semantics, not colors:
-  neutral metadata · aurora = measured/live · ember = synthetic/attention. Provenance chips
-  are mandatory wherever data could be mistaken for real.
-- **Buttons: two, forever.** Filled ember rectangle (dark text, 6px radius) and quiet plate
-  rectangle with a hairline ring. Hover is a flat color shift; `active` scales to 0.98. No
-  glows, no emboss.
-- **Selection** is reverse-video: a square starlight block, night text, radius 0.
-- **Map pin**: the classic teardrop, filled with the moment's ink, dark numeral, hairline
-  night outline, drop shadow; bottom-anchored. Dimmed to an ink outline until the replay
-  reaches it. Hover scales 1.12 from the tip and floats a small plate label.
-- **Glass budget**: exactly one frosted element — the walk screen's top-left chrome.
-- Icons: lucide-react, `strokeWidth={1.75}`, `currentColor` only. No logo glyph — the
-  wordmark is the word "Spark" set in Fraunces.
+- Radius scale: 6/10/14px for boxes — plus **pills** (`rounded-full`), which are the ONLY
+  fully-round controls and belong to the journal: `.pill-brass` (brass fill, ink text) is
+  the primary action; `.pill-ghost` (hairline ring via currentColor — set a text color on
+  the element, never a `color` in the class) is the quiet one. App screens keep their two
+  rectangle buttons.
+- `.word-chip` — a noticed thing pressed onto the page: mono uppercase, 7px radius, one
+  of seven pressed-ink wardrobes, hard 1px undershadow.
+- Vellum cards: `vellum` fill + inset hairline ring + soft ink shadow. Nested cards banned.
+- `.glass-bar` — the journal's ONE pane of glass, used twice: sticky nav and the finale
+  footer. Tint deep enough that milk text reads over cream sections.
+- Segmented mono toggle (KEPT/DISCARDED): vellum track, spruce active thumb.
+- Icons: lucide-react, `strokeWidth={1.75}` (2 for pill plus-glyphs), `currentColor`.
 
 ## Motion
 
 Exactly two curves, registered in CSS and GSAP CustomEase under the same names:
 
-- `--ease-signature` cubic-bezier(0.785, 0.135, 0.15, 0.86) — all UI state, 0.3s.
-- `--ease-reveal` cubic-bezier(0.5, 0, 0, 1) — entrances and settles, 0.8–2.4s.
+- `--ease-signature` cubic-bezier(0.785, 0.135, 0.15, 0.86) — UI state, 0.3s.
+- `--ease-reveal` cubic-bezier(0.5, 0, 0, 1) — entrances and settles, 0.5–1.4s.
 
-No bounce, no elastic, no third curve. Only `transform` and `opacity` animate. Markup
-defaults are the FINAL state — JS animates *from* elsewhere. The landing's motion is
-restrained cinema: the hero painting settles (scale 1.07 → 1) on arrival and parallaxes on
-scroll, the second painting parallaxes through its window, content reveals once via
-IntersectionObserver, numbers count up once. NO pinned scrub sections — every section
-scrolls normally and owns its own height, so nothing crops under anything. ≤1024px and
-`prefers-reduced-motion` get the complete static page with ambient motion absent, not frozen.
+Markup defaults are the FINAL state — JS animates *from* elsewhere. The landing's
+choreography, in order:
+
+1. **The storm** — the one pinned scrub section (≈280%): NOTICED alone on paper → chips
+   press on in random stagger → the ink cut fades over ("It noticed N things. It kept
+   six."). No-JS and reduced-motion land directly on the ink cut.
+2. **Hero cycle** — the headline's last line blurs out/in every 3.4s (wet ink).
+3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
+   copies wear `.smear` (blur 7px) for the smeared-ink read.
+4. **The dragged statement** — one giant line scrubbed `xPercent` across its section.
+5. Reveals via IntersectionObserver once; count-ups once to the real number.
+
+Lenis smooth scroll is desktop-only. `prefers-reduced-motion` gets the complete static
+page — the storm resting on its cut, marquees still, numbers already true.
 
 ## The map
 
-Real vector tiles (OpenFreeMap Liberty), restyled to twilight by script: ground `night`,
-greens as deep indigo-teal, Silver Lake near-black, paths as faint starlight hairlines,
-labels dimmed. The trip's park-local metre frame is georeferenced onto the actual park
-(`lib/geo.ts`). The walk renders as a two-stroke ribbon — wide ember glow under a crisp gold
-line — replaying at 120× with a small gold dot traveling the real odometry. Trailheads are
-labelled Start/End badges. The map is the app's floor; quiet chrome floats above it.
+Unchanged from v4: real OpenFreeMap Liberty tiles restyled to twilight by script, the walk
+as a two-stroke ember/gold ribbon replayed at 120×, teardrop pins in moment inks.
 
 ## Honesty
 
-Unchanged and non-negotiable: synthetic previews say `synthetic`, discarded candidates stay
-visible in the bench, mock telemetry is labelled. Never dress a stand-in as the real thing.
-Unknown is rendered as unknown, never as zero.
+Unchanged and non-negotiable — and now a landing feature: the [ DISCARDED ] shelf shows
+every rejected candidate with its trigger, score bar and the exact reason it lost. The
+WEIGHED plate draws one bar per real candidate with exactly the kept count above the line.
+Synthetic previews say `synthetic`; unknown renders as unknown, never as zero.
 
 ## Accessibility
 
-WCAG AA on dark: body ≥4.5:1 against `night`/`dusk` (starlight 15.8:1, moth 8.1:1); moment
-inks pass ≥3:1 for large/graphic use. Color never the sole carrier — labels ride every ink.
-Keyboard: ⌘K palette, tabbable pins and rows, visible focus (2px aurora offset ring). Full
-`prefers-reduced-motion` alternatives: replays and reveals land on final state.
+WCAG AA both registers. On paper: ink 16.6:1, ink-soft 7.1:1, ink-faint metadata-only.
+On pine: milk 14.9:1, mist 7.4:1. Brass and clay are large-text/graphic only on their
+grounds. Color never the sole carrier — every ink rides with a label. Keyboard: tabbable
+pills, tabs and accordion buttons; focus is a 2px clay ring on the journal, aurora in the
+app. Full `prefers-reduced-motion` alternatives: everything lands on final state.

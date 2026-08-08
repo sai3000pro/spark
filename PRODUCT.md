@@ -24,9 +24,11 @@ and the detection → candidate → moment chain can be audited from any screen.
 
 ## Brand Personality
 
-A night-sky park poster you can step into. The robot keeps the glowing parts of a day, and
-the interface is the hour after sunset: a real park gone indigo, everything kept still
-glowing on it. Three words: luminous, calm, honest.
+The robot is a field naturalist and the site is its journal (FIELD NOTES, DESIGN.md v5):
+grainy cream paper, pressed pine-and-brass inks, typewriter specimen tags, and a scroll
+that re-enacts the day's sieve. The walk itself still lives on the twilight map — the
+journal tells the day, the map is where the day happened. Three words: crafted, warm,
+honest.
 
 ## Anti-references
 

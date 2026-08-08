@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 /*
-  SPARK — the NIGHT WALK system, v4 (see /DESIGN.md).
+  SPARK — the FIELD NOTES system, v5 (see /DESIGN.md).
 
-  The product material is light: Gaussian splats are point clouds of captured
-  light, so the whole app lives at blue hour — deep indigo grounds, a warm
-  ember/gold afterglow for action, aurora teal for anything live and measured.
-  The voice is calm and editorial: Fraunces for headlines, Instrument Sans for
-  everything else. No all-caps telemetry, no brackets — metadata is quiet
-  sentence-case text separated by middle dots.
+  The robot is a field naturalist: it walks behind you, notices things, and
+  presses the ones worth keeping into a journal. The site is that journal —
+  grainy cream paper, deep pine ink, brass/moss/clay specimen tags set in a
+  typewriter mono. The landing is scroll cinema (Lenis + GSAP); the app
+  screens keep their twilight map (the NIGHT WALK tokens below survive for
+  them — the walk itself still happens after sunset).
 
   SVG, canvas, WebGL and MapLibre can't read Tailwind classes, so every value
   here is mirrored in lib/theme.ts — change one, change both. The map style in
@@ -16,6 +16,28 @@
   scripts/build-map-style.mjs; re-run it after palette changes.
 */
 @theme {
+  /* ── FIELD NOTES — the journal (landing + brand surfaces) ─────────────── */
+  /* Paper */
+  --color-paper: #faf4e3;
+  --color-vellum: #fffbf0;
+  --color-ink: #1b1b18;
+  --color-ink-soft: #52524a;
+  --color-ink-faint: #78786c;
+
+  /* Pressed inks */
+  --color-pine: #16292e;
+  --color-spruce: #2c4347;
+  --color-lagoon: #476d73;
+  --color-brass: #d5b473;
+  --color-brass-deep: #8a6d2f;
+  --color-moss: #7d7730;
+  --color-clay: #cf5e32;
+
+  /* Text on pine */
+  --color-milk: #f6f0df;
+  --color-mist: #a9bdb9;
+
+  /* ── NIGHT WALK — the twilight map app (walk / trip / bench) ──────────── */
   /* Grounds — indigo-violet, never gray-black. */
   --color-night: #0f0d23;
   --color-dusk: #171432;
@@ -41,8 +63,9 @@
   --color-lilac: #9d8bfa;
   --color-sky: #6cc5ff;
 
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
-  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-typewriter), ui-monospace, "SF Mono", monospace;
 
   /* One radius scale. Nothing is a pill except status dots. */
   --radius-sm: 6px;
@@ -61,6 +84,10 @@
      Strength knob: the feColorMatrix alpha row (k 0 0 0 -c) → peak alpha k−c.
      Keep k−c ≥ 0.1 or the texture stops reading. */
   --starfield: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.93 0 0 0 0 0.99 0.55 0 0 0 -0.41'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23s)'/%3E%3C/svg%3E");
+
+  /* Paper grain — the same turbulence rendered as DARK flecks for cream
+     grounds, multiply-blended. The journal's tooth. */
+  --papergrain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.12 0 0 0 0 0.1 0.5 0 0 0 -0.42'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23p)'/%3E%3C/svg%3E");
 
   /* Hairline ring for plates — crisp edge without a border box. */
   --ring: 0 0 0 1px rgb(242 238 252 / 0.12);
@@ -86,14 +113,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Headlines: Fraunces at display optical size — medium weight, near-normal
-   tracking. Warm and bookish, never shouting. */
+/* Headlines: one grotesk, medium weight, gently tightened. The voice is a
+   clean modern journal — confident, never shouting. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 520;
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
@@ -114,6 +141,125 @@ h3 {
 }
 
 @layer utilities {
+  /* ════ FIELD NOTES utilities (landing + brand surfaces) ═══════════════ */
+
+  /* Paper tooth — dark flecks, multiply-blended. Give the host position. */
+  .papergrain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--papergrain);
+    mix-blend-mode: multiply;
+    opacity: 0.36;
+    border-radius: inherit;
+    z-index: 1;
+  }
+
+  /* Halftone dot field for pine grounds — a print screen, not sci-fi. */
+  .dotfield::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle at center,
+      rgb(246 240 223 / 0.16) 1.1px,
+      transparent 1.6px
+    );
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(
+      120% 90% at 50% 40%,
+      transparent 0%,
+      transparent 34%,
+      black 78%
+    );
+    mask-image: radial-gradient(120% 90% at 50% 40%, transparent 0%, transparent 34%, black 78%);
+  }
+
+  /* Specimen tag — the journal's label voice: typewriter mono, uppercase,
+     letterspaced. Brackets are written in the markup: [ KEPT ]. */
+  .fnote {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Word chip — a noticed thing, pressed onto the page. The intro storm and
+     any inline specimen use the same anatomy. */
+  .word-chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding: 7px 13px;
+    border-radius: 7px;
+    box-shadow: 0 1px 0 rgb(27 27 24 / 0.18), 0 6px 14px -8px rgb(27 27 24 / 0.45);
+  }
+
+  /* ── Pills: the ONLY rounded-full controls in the journal ───────────── */
+  .pill-brass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    background: var(--color-brass);
+    color: var(--color-ink);
+    font-weight: 550;
+    transition:
+      background-color 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
+  }
+  .pill-brass:hover {
+    background: #e3c98e;
+  }
+  .pill-brass:active {
+    transform: scale(0.97);
+  }
+  /* Inherits its color — set text-* on the element; ring follows via
+     currentColor. (No `color:` here: it would out-cascade text utilities.) */
+  .pill-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 55%, transparent);
+    transition:
+      box-shadow 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
+  }
+  .pill-ghost:hover {
+    box-shadow: inset 0 0 0 1px currentColor;
+  }
+  .pill-ghost:active {
+    transform: scale(0.97);
+  }
+
+  /* Frosted footer / nav bar — the journal's one pane of glass. Tint deep
+     enough that milk text stays readable over the cream sections too. */
+  .glass-bar {
+    background: rgb(22 41 46 / 0.66);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: inset 0 0 0 1px rgb(246 240 223 / 0.16);
+  }
+
+  /* The blurred echo behind marquee headlines — virio's smeared-ink read. */
+  .smear {
+    filter: blur(7px);
+    opacity: 0.55;
+  }
+
+  /* ════ NIGHT WALK utilities (the twilight map app) ════════════════════ */
+
   /* ── Texture: belongs to the FIELD, never the plate ─────────────────── */
   .starfield::after {
     content: "";
@@ -362,7 +508,10 @@ html.reveal-armed [data-reveal][data-state="in"] {
   }
 }
 .marquee-track {
-  animation: marquee 52s linear infinite;
+  animation: marquee var(--marquee-dur, 52s) linear infinite;
+}
+.marquee-track-reverse {
+  animation: marquee var(--marquee-dur, 52s) linear infinite reverse;
 }
 
 /* The soft breath of a live light — the follow pulse and the robot dot. */
@@ -378,6 +527,19 @@ html.reveal-armed [data-reveal][data-state="in"] {
 
 ::selection {
   background: color-mix(in oklab, var(--color-ember) 55%, transparent);
+}
+
+/* The journal reads light-on-cream: its own selection, focus and scheme. */
+.field-site {
+  color-scheme: light;
+}
+.field-site ::selection {
+  background: color-mix(in oklab, var(--color-brass) 60%, transparent);
+  color: var(--color-ink);
+}
+.field-site :focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
 }
 
 /* MapLibre chrome: the map is the poster's floor, not a navigation app. */

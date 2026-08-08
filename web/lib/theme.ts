@@ -7,6 +7,22 @@
  * scripts/build-map-style.mjs imports these values when regenerating the map.
  */
 
+/* ── FIELD NOTES — the journal (landing + brand surfaces) ────────────────── */
+
+export const PAPER = "#faf4e3";
+export const VELLUM = "#fffbf0";
+export const INK = "#1b1b18";
+export const PINE = "#16292e";
+export const SPRUCE = "#2c4347";
+export const LAGOON = "#476d73";
+export const BRASS = "#d5b473";
+export const MOSS = "#7d7730";
+export const CLAY = "#cf5e32";
+export const MILK = "#f6f0df";
+export const MIST = "#a9bdb9";
+
+/* ── NIGHT WALK — the twilight map app (walk / trip / bench) ─────────────── */
+
 /** Grounds — indigo-violet, never gray-black. */
 export const NIGHT = "#0f0d23";
 export const DUSK = "#171432";
