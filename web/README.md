@@ -57,30 +57,46 @@ Real, and load-bearing:
 
 Mocked:
 
-- `lib/mock/trip-waterloo-park.ts` — one authored trip. It authors only the **human** layer
-  (titles, transcripts, music, vibe). Candidates, moment spans, object sightings, keyframes and the
-  object index are all produced by *actually running the pipeline* over generated detections. That
-  is why the three timeline lanes agree with each other, and `npm run verify` asserts it. **Please
-  don't "simplify" this into hand-authored moments** — the consistency is the whole pitch.
+- `lib/mock/trips/*.ts` — seven authored trips. They author only the **human** layer (titles,
+  transcripts, music, vibe). Candidates, moment spans, object sightings, keyframes and the object
+  index are all produced by *actually running the pipeline* over generated detections. That is why
+  the three timeline lanes agree with each other, and `npm run verify` asserts it. **Please don't
+  "simplify" this into hand-authored moments** — the consistency is the whole pitch.
 - Keyframe images — procedural SVG stand-ins seeded per frame (`lib/mock/placeholder.ts`). Set
   `url` on a `Keyframe` and the real photo renders instead; nothing else changes.
-- Robot telemetry in the status bar (follow mode, 78% battery).
+- Robot telemetry in the app bar (follow pill, battery). Driven by the live session, but no robot
+  is connected — the tooltip says so.
+- **Live trip counters**, until a robot reports in. See "Starting a trip" below.
+
+There is **no sign-in and no user accounts.** The app opens straight onto the albums. A live trip
+therefore belongs to the installation rather than to a person, which is what a robot sitting in
+someone's hallway actually is — see the header of `lib/liveTrip.ts` for where a `userId` would go if
+accounts ever arrive.
 
 ## Design
 
-The visual language comes from the Figma Make iteration: dark cinematic / spatial observatory,
-Outfit + Inter + JetBrains Mono, luminous teal primary and amber accent.
+Aurora night, from the brand sheet in `../design/`: navy `#0B0F1E`, brand orange `#F5A623`,
+Poppins for display, Inter for prose, JetBrains Mono for every micro-label.
 
 Tokens live in **`app/globals.css`** and are mirrored as raw hex in **`lib/theme.ts`** for SVG,
 canvas and WebGL, which can't use Tailwind classes. Change one, change both.
 
-Two accent families, and the split carries meaning:
+Three colour families, and the last two are only ΔE 5.5 apart, so they are kept apart by **rule**
+rather than by hue:
 
 | family | means |
 |---|---|
+| `brand-*` (orange) | **a form, never a category.** Solid fills on primary actions, rings, focus, the glyph. Never in a chart, legend, chip or timeline. |
 | `machine-*` (teal) | the robot layer — detections, tracks, confidence, nav |
-| `memory-*` (amber) | the human layer — moments, places, music, transcript |
+| `memory-*` (amber) | **a category, never a fill.** Text and 10–12% tint chips, always beside a label. Never a solid button. |
 | `signal` / `compute` / `warn` / `fail` | ready · reconstructing · stand-in data · failed |
+
+The only two tones that can share a visual field are brand-400 solid and memory-300 text — ΔE 28.0,
+unmistakable. The 5.5 pair can never co-occur. If you break that rule the palette collapses into
+"two oranges that look like a mistake".
+
+The ink ramp moves as a unit. `#0B0F1E` is *lighter* than the old near-black, so lifting only `--bg`
+would collapse the 950↔900 separation from 1.057 to ~1.01 and flatten every card in the app.
 
 Label-family colours in `lib/mock/labels.ts` are a separate, **validated** categorical scale:
 all 21 pairs checked on all three dark surfaces (min contrast 3.63:1, protan ΔE 8.7, deutan ΔE 7.5).
@@ -88,15 +104,121 @@ Re-run that check before hand-picking a replacement.
 
 ## Adding a trip
 
-1. Copy `lib/mock/trip-waterloo-park.ts`. Author only the human layer: the `SPECS` array (title,
-   summary, time window, people, transcript, music, vibe) plus the object tracks you want present.
-2. Let `buildTrip()` run `scoreCandidates` / `promoteToMoment` over generated detections as it
+1. Copy one of the light trips in `lib/mock/trips/` (Waterloo Park is the deep one; the rest are
+   ~120-line postcards). Author only the human layer plus the object tracks you want present.
+2. Add it to `TRIP_SPECS` in `lib/mock/trips/index.ts`. That is the only registration step —
+   `listTrips()`, the globe and the cross-trip search all read from there.
+3. Let `buildTrip(spec)` run `scoreCandidates` / `promoteToMoment` over generated detections as it
    already does. Don't hand-write `MomentCandidate`s.
-3. Add it to `listTrips()` in `lib/tripData.ts`.
-4. Extend `scripts/verify-pipeline.ts` to cover it.
+4. Run `npm run verify`. It asserts `trip.moments.length === spec.moments.length`, so a moment that
+   silently failed to promote is caught immediately.
 
-`buildTrip()` is currently hardcoded to the one trip and memoized. Making it take a `TripSpec`
-argument is the natural next refactor and would give the albums grid more than one card.
+**A moment is not guaranteed to exist just because you wrote one** — it has to earn promotion
+through `scoreCandidates()`. The eight authoring rules that make that reliable (give every moment a
+`laughterAt`, two `person` tracks, ≥45s windows, only labels in `LABEL_FAMILIES`, …) are documented
+at the top of **`lib/mock/buildTrip.ts`**. Read them before authoring.
+
+Waterloo Park's RNG seeds are **pinned** to their historical literals. `verify` asserts a dozen
+specific facts about that trip; changing a seed reshuffles its detections and breaks all of them.
+
+## Starting a trip
+
+The toolbar's record control opens a real session: `POST /api/trip/start` → `/api/trip/active`
+(polled) → `POST /api/trip/stop`. `lib/liveTrip.ts` holds it in a `globalThis` singleton, which
+survives HMR but **not** a server restart, and is single-process only. Its header spells out the
+limits and the one-file path to a database.
+
+**The rover-follow behaviour is not implemented.** The start response says so in the payload
+(`followMode: false`) rather than only in a comment.
+
+While no robot is connected the counters are *extrapolated* from elapsed time — using the real
+`PIPELINE_CONFIG` tunables and the demo trip's own promotion rates, so the live readout and the
+finished albums agree — and the card is badged `simulated counters · no robot connected`. The moment
+the robot POSTs to `/api/ingest/detections` with the session's `tripId`, `noteIngest()` attaches it,
+`simulated` flips to false and the numbers become measured, **with no other code change**.
+
+Stopping a session with no robot attached produces **no album**, and says so: *"Nothing was
+captured."* Fabricating one would be the exact lie `lib/splat/syntheticCloud.ts` refuses.
+
+## The landing scene
+
+`/` opens on a full-viewport aurora scene with the blob companion standing on the lit path; the
+album library sits directly beneath it, reached by scrolling or by the cue's `#albums` anchor.
+
+**The art is generated, not hand-placed.** `npm run build:design` reads the 14.9 MB of source PNGs
+in `../design/` and writes `public/hero/*` plus `lib/heroAssets.ts`. It is the same contract as
+`build:landmask`: outputs are **committed**, so `next build` never runs sharp and never reads
+`design/`. (sharp is only present as a transitive dep of transformers.js and is deliberately not in
+`package.json`.)
+
+Three things that script gets right and a naive version would not:
+
+- **The blob has no alpha channel.** It is keyed with a linear solve, not a threshold:
+  `a = (Y − Y_bg) / (Y_body − Y_bg)`, then un-premultiplied as `F = (C − (1−a)·B) / a`. The
+  un-premultiply is what removes the halo — the edge feather is 14–20 px at full resolution, so a
+  luminance threshold cuts through the middle of it and leaves a navy rim on every frame. The report
+  prints the mean recovered edge luminance; below 180 it fails the build.
+- **Interior holes are filled**, or the blob renders with transparent eyes (~2% of body area).
+- **Only the largest connected component survives.** The fireflies beside each pose key out as their
+  own components, glow included, and one moving with the sprite reads as a bug.
+
+**The aurora and the fireflies are code, not paint.** The shipped plate
+(`Night forest _ no aurora_ no fireflies.png`) has an empty sky;
+`components/hero/HeroSky.tsx` draws four blurred gradient ribbons and thirteen
+drifting fireflies over it. Both are still *measured* from the original artwork:
+
+- The aurora colour is the light the painted curtains **add** — the difference
+  between the painted plate and the stripped one. Sampling the painted pixels
+  directly gives a blue-dominant `rgb(46,76,103)`, which is not the aurora's
+  colour but the aurora composited over a blue night sky.
+- The delta is emitted **raw, not normalised**. Scaling it to full saturation
+  turns `rgb(27,50,41)` into `rgb(138,255,209)`, which `screen`-blends into a
+  solid teal wash that erases the forest. The dimness *is* the measurement.
+- The fireflies sit where the artist put them, recovered by differencing the two
+  plates and keeping the small warm dots.
+
+Two rendering traps this cost real time to find, both worth knowing:
+
+- **The hero `<img>` uses `decoding="sync"`.** The aurora blends with it via
+  `mix-blend-mode`; if the image is still decoding when that blend group first
+  rasterises, Chrome composites against an empty backdrop and never re-composites.
+  The entire scene renders black until something forces a repaint.
+- **`.h-hero` uses `height`, not `min-height`.** `.hero-stage` is a
+  `container-type: size` query container, which needs a definite block size —
+  with only a min-height, `100cqh` resolved to `0` and the plate box came out
+  347×463 instead of 578×770, covering half the phone screen.
+
+The plate is **mirrored** at build time. The lit path is nearly white (p90 luminance 95–146, i.e.
+1.1–2.8:1 against our text) and the reference composition puts the headline straight on top of it.
+Flipping moves the path and the blob right and hands the copy the dark left third at ~9:1 — which
+buys legibility without dimming the illustration. Every fraction in `lib/heroAssets.ts` is in
+flopped plate space.
+
+**The blob's position is measured, not guessed.** Difference-keying the two plate renders does not
+work — they are separate renders, not one plate with a blob composited on, so the diff covers the
+whole frame. Instead the blob is found by its own signature: bright *and* neutral, where the lit
+path is equally bright but warm, gated on aspect ratio so the horizon glow doesn't win.
+
+The hero reproduces `object-fit: cover` as an explicitly sized box (`.hero-plate-box`) so that
+percentages inside it are **plate** percentages. That is what keeps the blob glued to the painted
+path from 362 px to ultrawide; a real `object-fit` crops inside the element and would let it drift.
+
+Run `npm run build:design` and read the **ASCII alpha maps on stderr** — an inverted key, a halo or
+a mis-detected frame is instantly visible there, the same way the landmask script prints an ASCII
+Earth.
+
+## The globe
+
+`/globe` is hand-built on three + R3F — no map library. Earth is a **point cloud**, rendered with the
+same custom shader as the splat stage, because Spark perceives the world as points.
+
+Coastlines come from a 1-bit 512×256 land mask (`lib/globe/landmask.ts`, ~23 KB) baked from Natural
+Earth 1:110m by `npm run build:landmask`. The generator prints an **ASCII map to stderr** — a
+mirrored or upside-down Earth is invisible in a base64 blob and instantly obvious as text.
+
+`lib/geo.ts` owns the one coordinate convention in the app (`+x` east, `+z` south; lng 0 → +Z).
+`verify` asserts the inverse round-trip plus named spot checks (central Africa is land, the
+mid-Pacific is not), because a mirrored globe passes every round-trip test ever written.
 
 ## Tuning the detector → moment behaviour
 
@@ -126,6 +248,9 @@ Change a weight and run `npm run verify`; it fails loudly if a moment stops bein
 | `components/trip/TripMap.tsx` | Keep `{ path, moments }`; swap internals for MapLibre if you get GPS. |
 | `lib/momentQA.ts` / `lib/tripQA.ts` | Replace the templated `run()` bodies with a Claude call; keep the citation ids. |
 | `components/moment/NowPlaying.tsx` | The play button opens `music.spotifyUri`; wire the playback SDK here. |
+| `lib/liveTrip.ts` | In-memory session store. Make its four exports async and add `await` in three routes. |
+| `POST /api/trip/{start,stop}` | Open/close a session. `followMode: false` — nothing drives the robot yet. |
+| `lib/geo.ts` | `Trip.place.origin` is the only real-world coordinate. Real GPS changes that one field. |
 
 The splat stage probes the asset with a `HEAD` request first and falls back to a synthetic point
 cloud built from each object's `worldPos`, badged honestly as `synthetic preview`. So the demo works
@@ -133,19 +258,27 @@ with zero assets and upgrades itself the moment a real capture appears.
 
 ## Demo path
 
-1. `/` → **Memory Albums**, the trip as a card.
-2. Trip view → **Map** tab: hover the moment list and the pins light up together; click one for the
-   panel → *Relive in 3D*.
-3. **Timeline** tab is the thing to point judges at: dense detections → candidate windows →
+1. `/` → the **aurora scene**, drifting. The blob is asleep: hover it and it walks, then asks
+   "Start a new journey" and holds the offer for 6s after you leave. The mono line under the
+   headline is the newest real trip, not a slogan. Scroll (or hit the **Albums** cue) → the
+   library, tiles animating in as they arrive.
+2. Toolbar → **Globe**: spin the Earth, click a pin, the camera flies to it → *Open album*. The
+   New York pin holds two albums.
+3. Open an album → lands on **Moments**: a photo grid sectioned by part of day (in the *trip's*
+   local time — Kyoto reads 5:50 a.m.). Drag the time scrubber; tiles outside the window dim.
+4. **Map** tab: hover the moment list and the pins light up together; click one for the panel →
+   *Relive in 3D*. The scrubber's window dims pins here too.
+5. **Timeline** tab is the thing to point judges at: dense detections → candidate windows →
    promoted moments, with discarded windows ghosted. Hover any window to see what fired and, for
    the rejects, why it was dropped.
-4. **Ask Spark** tab: "where is my nalgene" (alias → bottle, with a nav pose), "what did we decide
-   on the bench" (real quotes from the transcript).
-5. Moment page → click an object chip → the camera flies to that anchor.
-6. `⌘K` → "where is my water bottle" → *Show me in 3D* → lands on the picnic-table moment with the
-   bottle anchor focused → *Send robot here* shows the nav pose.
-7. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate.
-8. The **Phone** toggle (bottom right) shows the on-robot view.
+6. **Ask Spark** tab: "where is my nalgene", "what did we decide on the bench" (real quotes).
+7. Moment page → click an object chip → the camera flies to that anchor.
+8. `⌘K` from *anywhere* → "where is my water bottle" → the answer names the trip and the date,
+   because the palette searches every journey → *Show me in 3D* lands on the picnic-table moment.
+9. **Start a trip** in the toolbar → live timer, pipeline counters, `simulated` badge → *Stop* →
+   confirm → *Building the album…* → **"Nothing was captured."** That honesty is the point.
+10. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate.
+11. The **Phone** toggle (bottom right) shows the on-robot view.
 
 ## Gotchas
 
@@ -163,3 +296,33 @@ with zero assets and upgrades itself the moment a real capture appears.
   Verified working: `Xenova/yolos-tiny` (default) and `Xenova/detr-resnet-50`.
 - `Journey Moment Capture App/` is the Figma Make export, kept locally as a design reference and
   gitignored. It's a separate Vite app — not part of this build, and excluded from tsconfig/eslint.
+- **If you ever add middleware, the file is `proxy.ts`.** That convention is deprecated and renamed
+  in Next 16, and the export is named `proxy`. Read `node_modules/next/dist/docs/` before touching
+  routing — this is not the Next.js you remember, and `web/AGENTS.md` says so for a reason.
+- The first request to `/` builds all seven trips — the full pipeline over ~35k detections. It is a
+  one-time per-process cost absorbed by `buildTrip`'s cache. Measure it on `build && start`.
+- **`prefers-reduced-motion` is a trap here, in a way that is not obvious.** The global block in
+  `globals.css` forces `animation-duration: 0.01ms !important`. For a normal animation that means
+  "finish instantly", which is right. For a **scroll-driven** animation duration scales *progress*,
+  so it snaps to the END keyframe and stays there — the hero would freeze in its scrolled-away
+  state. Every scroll-driven and stepped animation is therefore nested inside
+  `@media (prefers-reduced-motion: no-preference)` and never relies on the global override.
+  The album reveal has the mirror-image problem: the global block zeroes durations but does nothing
+  to a static `opacity: 0`, so it needs *both* a JS gate and an explicit `[data-reveal]` override.
+  Neither defence is redundant; don't delete either.
+- **The album reveal is inverted from the usual pattern on purpose.** The stylesheet only reacts to
+  a `data-reveal` attribute that JS itself writes, so a 404'd bundle, a hydration error, a missing
+  `IntersectionObserver` or JS-off all render the full grid. Never put `opacity: 0` in the
+  stylesheet and hope JS arrives.
+- The app bar declares its height (`--appbar-h`) because the hero subtracts it, and an emergent
+  height cannot be subtracted. Change the bar's contents → re-measure and update the token.
+- **`.hero-copy` is `pointer-events: none`** with its children opting back in. It is full-width and
+  sits above the blob in z-order, so without that the primary action on the page is silently
+  unclickable — the character simply never responds and nothing on screen explains why.
+- **`color-mix()` must name a `--color-*` token directly, never `--bg`.** Lightning CSS cannot
+  resolve the mix through that indirection and silently drops the alpha; the hero scrim became an
+  opaque navy band instead of a fade. For the same reason the app bar fades a pseudo-element's
+  `opacity` rather than animating a `color-mix()` whose percentage depends on a custom property —
+  that one constant-folds to a fully solid bar.
+- Phone preview opens a **second WebGL context** on `/globe`. Two globes at once works fine; if a
+  browser runs out of contexts, the flat SVG fallback takes over.

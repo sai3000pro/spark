@@ -19,6 +19,22 @@
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
 
+/**
+ * WGS84 degrees. The ONLY real-world coordinate in this contract.
+ *
+ * Geo is anchored exactly once, at `Trip.place.origin`. Everything else —
+ * TrackPoint.pos, Moment.place.pos, ObjectSighting.worldPos — stays in the
+ * robot's local metric frame, because that is the frame it actually navigates
+ * in. lib/geo.ts converts between the two when a map or the globe needs it.
+ *
+ * Putting a lat/lng on every moment instead would be derived data that can drift
+ * from `pos`, and it would double the payload crossing the RSC boundary.
+ */
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
 /** Normalized to the frame: [x, y, w, h], each 0..1, origin top-left. */
 export type BBox = [number, number, number, number];
 
@@ -208,7 +224,20 @@ export interface Trip {
   title: string;
   startedAt: string;
   endedAt: string;
-  place: { label: string; region: string };
+  place: {
+    label: string;
+    region: string;
+    country: string;
+    /**
+     * Where this trip's local metric frame sits on Earth. Local ground metres are
+     * [east, south] — +x east, +z south — so a y-down SVG map is north-up with no
+     * transform, and `localToGeo` needs only this one anchor.
+     *
+     * Today these are authored. Tomorrow the robot's first GPS fix writes it, and
+     * nothing else in the contract moves.
+     */
+    origin: GeoPoint;
+  };
   path: TrackPoint[];
   moments: Moment[];
   /** Kept alongside promoted moments so the timeline can show what was rejected. */
@@ -236,6 +265,15 @@ export interface IndexedSighting extends ObjectSighting {
   momentId: string;
   momentTitle: string;
   placeLabel: string;
+  /** Which trip this sighting belongs to — the index spans all of them. */
+  tripId: string;
+  tripTitle: string;
+  /**
+   * Absolute wall-clock of `lastSeenT`. Trip-relative seconds are NOT comparable
+   * across trips — "seen at 3900s" means nothing without knowing which trip — so
+   * cross-trip recency ranking has to use this.
+   */
+  lastSeenAt: string;
   /** Enough to render the frame it was seen in, without loading the whole moment. */
   thumbnail: { placeholderSeed: number; hue?: number; url?: string };
 }
@@ -243,8 +281,16 @@ export interface IndexedSighting extends ObjectSighting {
 export interface ObjectIndexEntry {
   label: string;
   sightings: IndexedSighting[];
-  /** Most recent sighting time — "you last saw it 20 minutes in". */
+  /**
+   * Most recent sighting time — "you last saw it 20 minutes in".
+   *
+   * Trip-relative, so it is only meaningful alongside `best.tripId`. In a merged
+   * cross-trip index this is the offset within whichever trip `best` came from;
+   * use `lastSeenAt` for anything that compares across trips.
+   */
   lastSeenT: number;
+  /** Absolute wall-clock of the most recent sighting. Comparable across trips. */
+  lastSeenAt: string;
   /** Highest-confidence sighting; what "show me in 3D" jumps to. */
   best: IndexedSighting;
   /**

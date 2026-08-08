@@ -33,6 +33,13 @@ interface Props {
   navMarker?: { pos: Vec2; label: string } | null;
   /** Highlighted without being selected — the sidebar list hovering a moment. */
   selectedMomentId?: string | null;
+  /**
+   * Moments outside the time scrubber's window, faded rather than removed.
+   *
+   * Deliberately a dim-set instead of a filtered `moments` array: filtering would
+   * make the map re-fit its bounds and jump on every frame of a scrubber drag.
+   */
+  dimmedMomentIds?: Set<string>;
   className?: string;
 }
 
@@ -46,6 +53,7 @@ export function TripMap({
   onSelectMoment,
   navMarker,
   selectedMomentId,
+  dimmedMomentIds,
   className = "",
 }: Props) {
   const geo = useMemo(() => {
@@ -148,6 +156,7 @@ export function TripMap({
               index={i}
               label={m.title}
               hasMusic={m.hasMusic}
+              dimmed={dimmedMomentIds?.has(m.id)}
               selected={selectedMomentId === m.id || activeMomentId === m.id}
               recent={i === moments.length - 1}
               onHover={(hovering) => onHoverMoment?.(hovering ? m.id : null)}

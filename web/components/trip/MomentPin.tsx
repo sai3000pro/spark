@@ -19,7 +19,7 @@
  * segment running into the pin, and that segment is the whole point — it is where
  * the robot stopped, which is what the dwell trigger fired on.
  */
-import { MACHINE, MEMORY } from "@/lib/theme";
+import { INK, MACHINE, MEMORY } from "@/lib/theme";
 
 const colorFor = (hasMusic: boolean) => (hasMusic ? MEMORY[400] : MACHINE[400]);
 const radiusFor = (selected: boolean) => (selected ? 11 : 9);
@@ -53,6 +53,8 @@ interface Props {
   label: string;
   hasMusic: boolean;
   selected: boolean;
+  /** Outside the time scrubber's window. Faded, but still hoverable and clickable. */
+  dimmed?: boolean;
   /** The last moment of the trip pulses even when unselected, as in the design. */
   recent?: boolean;
   onHover?: (hovering: boolean) => void;
@@ -66,6 +68,7 @@ export function MomentPin({
   label,
   hasMusic,
   selected,
+  dimmed,
   recent,
   onHover,
   onSelect,
@@ -75,7 +78,8 @@ export function MomentPin({
 
   return (
     <g
-      className="cursor-pointer"
+      className="cursor-pointer transition-opacity duration-200"
+      opacity={dimmed ? 0.25 : 1}
       role="button"
       tabIndex={0}
       aria-label={`Moment ${index + 1}: ${label}${hasMusic ? ", has music" : ""}`}
@@ -112,7 +116,7 @@ export function MomentPin({
         dominantBaseline="central"
         fontSize={selected ? 11 : 10}
         fontWeight={700}
-        fill="#09090e"
+        fill={INK[950]}
         className="pointer-events-none select-none font-mono"
       >
         {index + 1}
@@ -125,7 +129,7 @@ export function MomentPin({
             cy={y - r * 0.82}
             r={5.2}
             fill={MEMORY[300]}
-            stroke="#09090e"
+            stroke={INK[950]}
             strokeWidth={1.2}
           />
           <text
@@ -134,7 +138,7 @@ export function MomentPin({
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={7}
-            fill="#09090e"
+            fill={INK[950]}
           >
             ♪
           </text>

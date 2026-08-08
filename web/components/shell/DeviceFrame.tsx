@@ -36,7 +36,18 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
   // so the dynamic island doesn't sit on the status bar, the same way a real
   // iPhone's safe area works.
   if (nested) {
-    return <div className="flex min-h-screen flex-col pt-[46px]">{children}</div>;
+    // --frame-inset tells the landing hero how much vertical room the notch
+    // padding has already taken, so it still ends exactly at the preview's fold.
+    // Without it, ~46px of the hero — including the scroll cue — sits below the
+    // fold in the one view that gets demoed.
+    return (
+      <div
+        className="flex min-h-screen flex-col pt-[46px]"
+        style={{ "--frame-inset": "46px" } as React.CSSProperties}
+      >
+        {children}
+      </div>
+    );
   }
 
   return (

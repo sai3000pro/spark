@@ -1,15 +1,32 @@
 @import "tailwindcss";
 
 /*
-  Spark's palette. Dark cinematic / spatial observatory — mission control for
-  your memories.
+  Spark's palette. Aurora night — the world the robot walked you through.
 
-  Two deliberate accent families, and the split is the whole point:
-    cool (--color-machine-*)  = the robot layer — detections, tracks, confidence, nav
-    warm (--color-memory-*)   = the human layer — moments, places, music, transcript
-  A glance at any screen tells you what was perceived versus what is remembered.
+  THREE families, and the distinction between the last two is load-bearing:
 
-  State colors are hue-separated from both so they never read as either layer:
+    --color-brand-*    orange  the BRAND. Interactive chrome only.
+    --color-machine-*  teal    the robot layer — detections, tracks, confidence, nav
+    --color-memory-*   amber   the human layer — moments, places, music, transcript
+
+  Brand orange (#f5a623) and memory amber (#f59e0b) are only ΔE 5.5 apart —
+  noticeably different, but not "a different colour". No hue tweak fixes that
+  inside the brand, so the two are kept apart STRUCTURALLY instead:
+
+    Brand orange is a FORM, never a CATEGORY.
+      Solid pill fills on primary actions, 1px rings on interactive surfaces,
+      focus rings, the brand glyph. It NEVER encodes a value — never in a chart,
+      a legend, a chip, or the timeline.
+
+    Memory amber is a CATEGORY, never a FILL.
+      text-memory-300 and 10–12% tint chips, always adjacent to a label.
+      It is never a solid button.
+
+  The rule holds because the only two tones that can ever share a visual field
+  are brand-400 (solid) and memory-300 (text) — ΔE 28.0, unmistakable. The
+  5.5-ΔE pair can never co-occur.
+
+  State colors stay hue-separated from all three so they never read as a layer:
     signal  green   ready, promoted, navigable
     compute violet  reconstructing — the splat is still being computed
     warn    yellow  stand-in data, nothing was actually captured here
@@ -19,18 +36,31 @@
   mirrored in lib/theme.ts. Change one, change both.
 */
 @theme {
-  --color-ink-950: #09090e;
-  --color-ink-900: #111118;
-  --color-ink-850: #16161f;
-  --color-ink-800: #1a1a24;
-  --color-ink-700: #1e1b2e;
-  --color-ink-600: #272433;
-  --color-ink-500: #3a3550;
+  /* The ink ramp is rebased on the brand navy #0b0f1e with the ORIGINAL ramp's
+     L* deltas preserved, hue locked to 284°. It has to move as a unit: #0b0f1e
+     is lighter than the old #09090e (L* 4.6 vs 2.6), so lifting only --bg would
+     collapse the 950↔900 separation from 1.057 to ~1.01 and flatten every card
+     in the app. Verified after: 950↔900 is 1.057, 900↔850 is 1.042. */
+  --color-ink-950: #0b0f1e;
+  --color-ink-900: #111624;
+  --color-ink-850: #151a2a;
+  --color-ink-800: #191e30;
+  --color-ink-700: #1b2133;
+  --color-ink-600: #23293e;
+  --color-ink-500: #353c55;
 
   --color-fog-400: #6b6880;
   --color-fog-300: #a8a3c2;
   --color-fog-200: #c8c4dc;
   --color-fog-100: #e8e6f0;
+
+  /* Brand — interactive chrome ONLY. See the rule above.
+     brand-400 is 9.41:1 on the new background, and `bg-brand-400 text-ink-950`
+     is 9.41:1 the other way, so the solid-pill idiom passes AAA. */
+  --color-brand-300: #ffc45c;
+  --color-brand-400: #f5a623;
+  --color-brand-500: #d98613;
+  --color-brand-600: #a8620a;
 
   --color-machine-300: #7ff0e2;
   --color-machine-400: #2dd4bf;
@@ -50,6 +80,9 @@
   --color-fail-400: #fb7185;
 
   --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  /* The landing hero's face. Falls back to the display face, so a font failure
+     degrades to Outfit rather than to Times. */
+  --font-hero: var(--font-poppins), var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
@@ -66,10 +99,30 @@
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.12);
   --radius: 12px;
+
+  /* The app bar's declared height. AppBar sets its own box from this, and the
+     landing hero subtracts it to fill exactly one viewport. Measured from the
+     bar's contents (a 40px ViewSwitch plus 20px of padding); re-measure if the
+     bar's contents change. */
+  --appbar-h: 60px;
+  /* Zero in a browser. DeviceFrame's phone preview overrides it to its notch
+     safe-area padding so the hero still ends exactly at the preview's fold. */
+  --frame-inset: 0px;
 }
 
 html {
   background: var(--bg);
+  /* The scroll cue is a plain in-page anchor, so smoothness belongs here rather
+     than in a JS scrollIntoView — the browser also disables it automatically
+     under prefers-reduced-motion, which JS would have to check for itself.
+     REQUIRES data-scroll-behavior="smooth" on <html>: Next 16 no longer
+     overrides a global smooth scroll during route transitions, so without that
+     attribute every navigation smooth-scrolls a full page height. */
+  scroll-behavior: smooth;
+  /* One rule fixes every in-page anchor in the app, present and future — the
+     alternative is scroll-margin-top on each individual target. The +8px keeps
+     the landing edge off the bar's border. */
+  scroll-padding-top: calc(var(--appbar-h) + 8px);
 }
 
 body {
@@ -136,10 +189,862 @@ h6 {
     scrollbar-width: thin;
     scrollbar-color: var(--color-ink-600) transparent;
   }
+
+  /*
+    Exactly one viewport, with the app bar floating OVER it.
+
+    The negative margin is what pulls the scene up underneath the sticky bar, so
+    the artwork is genuinely full-bleed and the bar reads as chrome laid on top
+    of it rather than a band above it. Without this the bar's transparent state
+    just reveals the page background, which is pointless. The bar is z-30 and
+    everything in the hero is z-3 or below, so it stays on top; and the top 9% of
+    the plate measures 14.8:1 against our text, so the bar needs no scrim there.
+
+    svh, not dvh or vh. dvh re-resolves as mobile browser chrome collapses — and
+    it collapses WHILE you are scrolling out of the hero, so the page would jump
+    under your finger. svh is the smallest (chrome-expanded) viewport, so the
+    scroll cue is guaranteed to be above the fold in the worst case and the hero
+    never resizes mid-gesture.
+
+    `height`, NOT `min-height`, and that is load-bearing rather than stylistic.
+    .hero-stage is a `container-type: size` query container, which requires a
+    DEFINITE size in both axes; with only a min-height its block size still
+    depends on its contents, so `100cqh` resolved to 0. The plate box then sized
+    itself from width alone and came out 347x463 instead of 578x770 — the scene
+    covered barely half the phone screen with black above and below it. Nothing
+    inside the hero is in flow (the copy, the blob and the cue are all absolutely
+    positioned), so a definite height costs nothing.
+
+    The calc() has to live HERE rather than in a :root variable: var() would
+    substitute --frame-inset against :root, so DeviceFrame's override on a
+    descendant would never re-resolve.
+  */
+  .h-hero {
+    height: calc(100svh - var(--frame-inset));
+    margin-top: calc(-1 * var(--appbar-h));
+  }
 }
 
 ::selection {
   background: color-mix(in oklab, var(--color-machine-500) 34%, transparent);
+}
+
+/* The sweep on the recording card. A CSS animation on purpose, so the
+   prefers-reduced-motion block below neutralises it for free. */
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDING HERO
+
+   Lives here rather than in a CSS module because several rules are
+   cross-component: the reduced-motion overrides have to sit beside the global
+   block they interact with, and splitting half the hero's CSS into a module
+   would be worse than either.
+
+   THE REDUCED-MOTION TRAP, up front, because it is not obvious:
+   the global block at the bottom of this file forces
+   `animation-duration: 0.01ms !important` on everything. For a normal animation
+   that means "finish instantly", which is what we want. But for a SCROLL-DRIVEN
+   animation, duration scales progress — 0.01ms makes it snap to its END keyframe
+   and stay there, which would leave the hero permanently frozen in its
+   scrolled-away state. And for an infinite steps() sprite it means spinning at
+   an absurd rate. So every scroll-driven and stepped animation below is nested
+   inside `@media (prefers-reduced-motion: no-preference)` and never relies on
+   the global override.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.hero-stage {
+  position: relative;
+  overflow: hidden;
+  /* Enables cqw/cqh below, so the plate box can size itself against the stage
+     rather than the viewport (which the app bar has already eaten into). */
+  container-type: size;
+}
+
+/*
+  object-fit: cover, reproduced explicitly.
+
+  The point is that everything inside this box addresses PLATE coordinates, so
+  the blob can be positioned at the fraction where it is actually painted and
+  stay glued to the path at any viewport size. A real object-fit crops inside the
+  element and would make that impossible.
+
+  For both shipped variants the stage is narrower than the plate, so height
+  resolves to 100cqh and only width overflows — which means vertical percentages
+  in here are true viewport percentages.
+*/
+.hero-plate-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: max(100cqw, calc(100cqh * var(--plate-ar)));
+  height: max(100cqh, calc(100cqw / var(--plate-ar)));
+  /* Declare the blend group explicitly: the aurora's `screen` blends with the
+     plate image and nothing beyond this box. Without an explicit isolation the
+     group is implicit and the browser is free to rasterise it before the image
+     has decoded — see the note on .hero-aurora. */
+  isolation: isolate;
+}
+
+.hero-plate {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* the box is already the right shape */
+}
+
+/* Portrait swaps both the artwork and the geometry in one place, so the two can
+   never disagree about which crop is on screen. */
+@media (max-aspect-ratio: 4/5) {
+  .hero-plate-box {
+    --plate-ar: var(--plate-ar-tall);
+    --blob-cx: var(--blob-cx-tall);
+  }
+}
+
+/* Ultra-wide crops the plate VERTICALLY, which would push the blob below the
+   fold. Anchor to the ground instead of the centre and lose sky, not path. */
+@media (min-aspect-ratio: 16/9) {
+  .hero-plate-box {
+    top: auto;
+    bottom: 0;
+    translate: -50% 0;
+  }
+}
+
+/* One gradient. It is the fold that hands the scene to the library, not a
+   decorative vignette — which is why there is one and not three. */
+/*
+  NOTE THE TOKEN: --color-ink-950, not --bg.
+
+  They are the same colour (:root sets --bg: var(--color-ink-950)), but --bg is
+  an indirection and Lightning CSS cannot resolve color-mix() through it — it
+  silently drops the alpha and emits the base colour, which turned this fade into
+  an opaque navy band across the bottom 13% of the scene. Every other color-mix()
+  in this file names a --color-* token directly for the same reason.
+*/
+.hero-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    var(--color-ink-950) 0%,
+    color-mix(in srgb, var(--color-ink-950) 86%, transparent) 5%,
+    color-mix(in srgb, var(--color-ink-950) 42%, transparent) 13%,
+    transparent 26%
+  );
+}
+
+/* Portrait needs no stronger scrim, because the copy moves out of the bright
+   band entirely rather than being darkened into it — see .hero-copy below. */
+
+/* ── The living sky ────────────────────────────────────────────────────────
+   Aurora and fireflies, painted by CSS over an empty-sky plate. Colours and
+   positions come from lib/heroAssets.ts, measured off the original artwork —
+   see components/hero/HeroSky.tsx for why the colour is the light the aurora
+   ADDS rather than how it appears. */
+
+.hero-aurora {
+  position: absolute;
+  /* Wider than the box so a drifting ribbon never reveals its own edge. */
+  left: -18%;
+  right: -18%;
+  pointer-events: none;
+  /* `screen` is additive, which is how light works and why the measured colour
+     is a delta. Over the navy sky it glows; over the black treeline it does
+     almost nothing, which is exactly right. */
+  mix-blend-mode: screen;
+  /* Fade in at the top of the band and out well before the horizon, so the
+     curtains never sit on top of the trees. */
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 58%, transparent 100%);
+  /*
+    NO `contain: paint` here, deliberately.
+
+    It forces an isolated paint container, and combined with mix-blend-mode the
+    blend group rasterises once — against the plate image before it has decoded —
+    and never re-composites when the image arrives. The whole scene renders black
+    until something forces a repaint. Toggling `display` "fixed" it, which is the
+    tell that it was a compositing-invalidation bug rather than a colour one.
+  */
+}
+
+.hero-aurora__ribbon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* One soft band of light. The double core stop either side of the glow is
+     what gives a curtain its bright spine instead of a flat wash. */
+  background: linear-gradient(
+    var(--angle),
+    transparent 26%,
+    var(--au-core) 42%,
+    var(--au-glow) 50%,
+    var(--au-core) 58%,
+    transparent 76%
+  );
+  filter: blur(var(--blur));
+}
+
+.hero-flies {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-fly {
+  position: absolute;
+  /* Size follows the painted dot's radius (a fraction of plate width), clamped
+     so the largest painted glow does not become a headlight. */
+  width: clamp(5px, calc(var(--fr) * 200%), 20px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    var(--color-warn-400) 0%,
+    color-mix(in srgb, var(--color-warn-400) 45%, transparent) 38%,
+    transparent 70%
+  );
+  opacity: 0.75;
+}
+
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(-5%, 0, 0) scaleY(1);
+  }
+  to {
+    transform: translate3d(5%, 0, 0) scaleY(1.12);
+  }
+}
+
+@keyframes fly-drift {
+  from {
+    translate: -50% -50%;
+  }
+  to {
+    translate: calc(-50% + var(--swing)) calc(-50% - var(--swing));
+  }
+}
+
+@keyframes fly-twinkle {
+  from {
+    opacity: 0.32;
+  }
+  to {
+    opacity: 0.95;
+  }
+}
+
+/* ── Copy ──────────────────────────────────────────────────────────────── */
+
+/* The bottom padding clears the scroll cue, which is 20px off the bottom edge
+   and about 44px tall. Without the extra room the stat line and the cue sit
+   ~16px apart and read as one crowded block. */
+.hero-copy {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 0 1rem 6.5rem;
+  width: 100%;
+  /*
+    The copy block is full-width and sits ABOVE the blob in z-order, so without
+    this it swallows every pointer event over the character — the primary action
+    on the page was unhoverable and unclickable, with nothing visible to explain
+    why. Children opt back in so the text is still selectable, and each of them
+    is width-constrained so none of them reach the blob.
+  */
+  pointer-events: none;
+}
+
+.hero-copy > * {
+  pointer-events: auto;
+}
+
+@media (min-width: 640px) {
+  .hero-copy {
+    padding: 0 2.5rem 7rem;
+  }
+}
+
+.hero-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(2.25rem, 6.4vw, 6.5rem);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  color: var(--color-fog-100);
+  /* Capped so the measure stays clear of the bright spot the plate carries at
+     x 0.52-0.58, which measures 2.4:1 even for display type. Two huge lines is
+     better typography than one enormous one anyway. */
+  max-width: 52%;
+}
+
+.hero-lede {
+  margin-top: 1.25rem;
+  max-width: 46ch;
+  font-size: clamp(0.9375rem, 1.15vw, 1.125rem);
+  line-height: 1.6;
+  color: var(--color-fog-300);
+}
+
+.hero-stat {
+  margin-top: 1.5rem;
+  color: var(--color-fog-400);
+  /* Shrink-to-fit so this line does not stretch across the scene and back over
+     the blob — see the pointer-events note on .hero-copy. */
+  max-width: max-content;
+}
+
+/*
+  Portrait rearranges the composition rather than shrinking it.
+
+  Bottom-anchored copy would run straight through the blob: the tall crop centres
+  the character horizontally and stands it near the foot of the frame, which is
+  exactly where full-width copy wants to be. So in portrait the copy moves to the
+  TOP — over the empty aurora sky, which is the darkest part of the plate — and
+  the blob owns the lower third with its label. That is also the conventional
+  reading order on a phone: statement first, character beneath it.
+*/
+@media (max-aspect-ratio: 4/5) {
+  .hero-copy {
+    /* Clear of the app bar, which now floats over the scene. */
+    top: calc(var(--appbar-h) + 3%);
+    bottom: auto;
+    padding: 0 1rem;
+  }
+  /* One step brighter than the desktop stat line: in portrait it sits over the
+     aurora rather than over the dark lake, and fog-400 measures ~2.3:1 there. */
+  .hero-stat {
+    color: var(--color-fog-300);
+  }
+  .hero-title {
+    /* No bright spot to dodge in the tall crop, and 52% of 362px is unusable. */
+    max-width: 100%;
+    font-size: clamp(2rem, 9.5vw, 3rem);
+  }
+  .hero-lede {
+    margin-top: 0.875rem;
+    font-size: 0.9375rem;
+  }
+  .hero-stat {
+    margin-top: 1rem;
+  }
+}
+
+/* ── Scroll cue ────────────────────────────────────────────────────────── */
+
+.hero-cue {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 3;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  /* ~44px tall hit target around ~28px of ink. */
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--color-fog-400);
+}
+
+.hero-cue__chevron {
+  opacity: 0.7;
+}
+
+@keyframes cue-nudge {
+  0%,
+  22% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  46% {
+    transform: translateY(5px);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+}
+
+/* ── The blob ──────────────────────────────────────────────────────────── */
+
+.hero-blob {
+  position: absolute;
+  left: calc(var(--blob-cx) * 100%);
+  bottom: calc((1 - var(--blob-feet-y)) * 100%);
+  translate: -50% 0;
+  z-index: 2;
+  /* Height comes from the measured anchor; width from the sprite's cell aspect,
+     so the sprite can never be stretched. */
+  height: calc(var(--blob-h) * 100%);
+  aspect-ratio: var(--cell-ar);
+  transform-origin: 50% 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  border-radius: 28px;
+  cursor: pointer;
+  transition: translate 160ms var(--ease-out-soft);
+}
+
+.hero-blob:disabled {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.hero-blob:hover,
+.hero-blob:focus-visible {
+  translate: -50% -6px;
+}
+
+.hero-blob:focus-visible {
+  outline: none;
+  /* A plain ring floats oddly around an irregular sprite, and Tailwind's
+     ring-offset needs an opaque backdrop it does not have over the plate. The
+     second, darker ring is that backdrop. */
+  box-shadow:
+    0 0 0 2px var(--color-brand-300),
+    0 0 0 6px color-mix(in srgb, var(--color-ink-950) 70%, transparent);
+}
+
+.hero-blob__sprite {
+  position: absolute;
+  inset: 0;
+  background-image: var(--walk-src);
+  background-repeat: no-repeat;
+  /* Six cells across: the sheet is 600% of one cell, so frame k sits at
+     background-position-x: k * (100 / 5)%. */
+  background-size: calc(var(--walk-frames) * 100%) 100%;
+  background-position-x: calc(var(--idle-frame) * var(--walk-step));
+  background-position-y: center;
+}
+
+/* The blob's own light on the ground. One gradient, tinted with the brand token
+   so the character and the CTA colour are visibly the same thing. */
+.hero-glow {
+  position: absolute;
+  left: calc(var(--blob-cx) * 100%);
+  bottom: calc((1 - var(--blob-feet-y)) * 100% - 2%);
+  translate: -50% 0;
+  width: calc(var(--blob-h) * 100% * 2.2);
+  height: calc(var(--blob-h) * 100% * 0.42);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--color-brand-400) 20%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+/* Fireflies. They belong to the BUTTON, not the plate, and they have a job:
+   at rest they drift, and on hover they converge on the blob. That makes them
+   feedback rather than decoration. The plate's own painted fireflies stay put. */
+.hero-blob__fly {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--color-warn-400) 0%, transparent 70%);
+  opacity: 0.85;
+  transition: translate 420ms var(--ease-out-soft);
+}
+.hero-blob__fly--a {
+  left: -14%;
+  top: 34%;
+}
+.hero-blob__fly--b {
+  right: -10%;
+  top: 18%;
+}
+.hero-blob__fly--c {
+  right: -18%;
+  top: 62%;
+}
+.hero-blob:hover .hero-blob__fly--a,
+.hero-blob:focus-visible .hero-blob__fly--a {
+  translate: 52% -40%;
+}
+.hero-blob:hover .hero-blob__fly--b,
+.hero-blob:focus-visible .hero-blob__fly--b {
+  translate: -60% 24%;
+}
+.hero-blob:hover .hero-blob__fly--c,
+.hero-blob:focus-visible .hero-blob__fly--c {
+  translate: -70% -34%;
+}
+
+/*
+  The invitation is hidden while the blob sleeps.
+
+  `visibility` as well as opacity, so the label is not a hover target while it is
+  invisible — a 200px-wide phantom hitbox floating above the character would keep
+  waking it from a place with nothing in it.
+*/
+.hero-blob__label {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 260ms var(--ease-out-soft),
+    visibility 0s linear 260ms,
+    translate 160ms var(--ease-out-soft),
+    border-color 160ms var(--ease-out-soft);
+}
+
+.hero-blob__label[data-shown] {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* No hover on a touch screen, so the blob can never be roused. Show the offer. */
+@media (hover: none) {
+  .hero-blob__label {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.hero-blob__label {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  translate: -50% -14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: clamp(0.8125rem, 1.15vw, 1.0625rem);
+  padding: 7px 15px;
+  border-radius: 999px;
+  color: var(--color-fog-100);
+  background: color-mix(in srgb, var(--color-ink-950) 62%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-brand-400) 38%, transparent);
+  /* The glow IS the shadow, tinted with the token — not a stack of drop-shadows. */
+  box-shadow: 0 10px 34px -8px color-mix(in srgb, var(--color-brand-400) 55%, transparent);
+  backdrop-filter: blur(6px);
+  transition:
+    translate 160ms var(--ease-out-soft),
+    border-color 160ms var(--ease-out-soft);
+}
+
+.hero-blob:hover .hero-blob__label,
+.hero-blob:focus-visible .hero-blob__label {
+  translate: -50% -18px;
+  border-color: color-mix(in srgb, var(--color-brand-300) 70%, transparent);
+}
+
+/* Live states borrow the app's state colours rather than the brand. */
+.hero-blob[data-state="recording"] .hero-blob__label {
+  border-color: color-mix(in srgb, var(--color-signal-500) 55%, transparent);
+  box-shadow: 0 10px 34px -8px color-mix(in srgb, var(--color-signal-500) 45%, transparent);
+}
+.hero-blob[data-state="processing"] .hero-blob__label {
+  border-color: color-mix(in srgb, var(--color-compute-500) 55%, transparent);
+  box-shadow: 0 10px 34px -8px color-mix(in srgb, var(--color-compute-500) 45%, transparent);
+}
+.hero-blob[data-state="processing"] .hero-blob__sprite {
+  filter: saturate(0.82);
+}
+.hero-blob[data-state="error"] .hero-blob__label {
+  border-color: color-mix(in srgb, var(--color-fail-400) 55%, transparent);
+  box-shadow: none;
+  color: var(--color-fail-400);
+}
+
+.hero-blob__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+}
+.hero-blob__dot--live {
+  background: var(--color-signal-400);
+}
+.hero-blob__dot--work {
+  background: var(--color-compute-400);
+}
+
+@keyframes blob-walk {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    /* frames/(frames-1) * 100% — one step past the last cell, so steps() lands
+       evenly on all six. */
+    background-position-x: 120%;
+  }
+}
+
+@keyframes blob-breathe {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.014);
+  }
+}
+
+/*
+  Everything that moves lives in here. See the trap note at the top of this
+  block: the global reduced-motion override would break scroll timelines and
+  steps() animations rather than neutralise them.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  /* The aurora and the fireflies stay VISIBLE under reduced motion — they are
+     part of the scene, and removing them would change the composition rather
+     than calm it. Only their movement is gated. */
+  .hero-aurora__ribbon {
+    animation: aurora-drift var(--dur) ease-in-out var(--delay) infinite alternate;
+  }
+  .hero-fly {
+    animation:
+      fly-drift var(--drift) ease-in-out var(--delay) infinite alternate,
+      fly-twinkle var(--twinkle) ease-in-out var(--delay) infinite alternate;
+  }
+
+  .hero-cue__chevron {
+    animation: cue-nudge 2.4s var(--ease-out-soft) infinite;
+  }
+
+  .hero-blob__sprite {
+    animation: blob-breathe 3.6s ease-in-out infinite alternate;
+    transform-origin: 50% 100%;
+  }
+
+  /* 8-12 fps is the stylised-character band. 24 fps on a six-frame cycle reads
+     as a glitch rather than as walking.
+
+     It walks only while WAKING. Once awake it settles back to the idle frame and
+     breathes while the offer stands — a character that keeps marching on the spot
+     the whole time it is asking you something reads as a loading spinner. */
+  .hero-blob[data-wake="waking"] .hero-blob__sprite {
+    animation: blob-walk 0.72s steps(var(--walk-frames)) infinite;
+  }
+  .hero-blob[data-state="pending"] .hero-blob__sprite {
+    animation: blob-walk 0.52s steps(var(--walk-frames)) infinite;
+  }
+  .hero-blob[data-state="recording"] .hero-blob__sprite {
+    animation: blob-walk 0.62s steps(var(--walk-frames)) infinite;
+  }
+
+  /* Parallax from the three real DOM layers we already have. No JS, so no
+     scroll listener and no exposure to the react-hooks rules. Browsers without
+     scroll timelines simply get a static hero, which is a fine hero. */
+  @supports (animation-timeline: scroll()) {
+    .hero-plate,
+    .hero-blob,
+    .hero-glow,
+    .hero-copy {
+      animation-timeline: scroll(root);
+      animation-range: 0 100vh;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+    }
+    .hero-plate {
+      animation-name: hero-plate-out;
+    }
+    .hero-blob,
+    .hero-glow {
+      animation-name: hero-blob-out;
+    }
+    .hero-copy {
+      animation-name: hero-copy-out;
+    }
+  }
+}
+
+/* ── The app bar over the hero ─────────────────────────────────────────────
+   No JS at all: an IntersectionObserver would force "use client" onto AppBar and
+   split its Suspense-streamed search index, and a scroll listener is the thing
+   this codebase's lint rules exist to prevent.
+
+   The DEFAULT is the normal glass bar and the transparency is opt-in, so a
+   browser without scroll timelines gets an always-glass bar — never the broken
+   "transparent bar over a bright gallery". The transparent state itself needs no
+   scrim: the top 9% of the plate measures 14.8:1 against our text. */
+/*
+  The bar fades its GLASS onto a pseudo-element rather than animating a colour.
+
+  The obvious version — color-mix(… calc(88% * var(--bar-alpha)) …) driven by an
+  @property number — does not survive the build. A calc() that depends on a
+  runtime custom property is not statically resolvable, so Lightning CSS discards
+  the mix and emits the base colour at FULL opacity: the bar came out permanently
+  solid navy over the scene, which is worse than not doing it at all.
+
+  Animating `opacity` on a ::before sidesteps the whole problem. Opacity is a
+  plain animatable property, needs no @property registration, and cannot be
+  constant-folded into the wrong thing.
+
+  Gated behind no-preference for the same reason as the hero's parallax: under
+  reduced motion the global block forces animation-duration to 0.01ms, and on a
+  progress-based timeline that snaps to the END keyframe rather than doing
+  nothing. Reduced-motion users get the plain .glass bar, unconditionally.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    /* Hand the glass off to the pseudo-element... */
+    body:has([data-hero]) [data-appbar] {
+      background: transparent;
+      border-bottom-color: transparent;
+      backdrop-filter: none;
+    }
+    /* ...which fades in over the first 72px of scroll. z-index -1 keeps it
+       behind the bar's own contents; the bar is sticky with z-index 30, so it
+       already has a stacking context and this cannot escape behind the page. */
+    body:has([data-hero]) [data-appbar]::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: color-mix(in srgb, var(--color-ink-950) 88%, transparent);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      opacity: 0;
+      animation: bar-solidify linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 72px;
+    }
+  }
+}
+
+@keyframes bar-solidify {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hero-plate-out {
+  to {
+    transform: translateY(6%) scale(1.06);
+  }
+}
+@keyframes hero-blob-out {
+  to {
+    transform: translateY(9%);
+  }
+}
+@keyframes hero-copy-out {
+  to {
+    transform: translateY(-4%);
+    opacity: 0.12;
+  }
+}
+
+/* ── Album tiles ───────────────────────────────────────────────────────────
+   Photos density: the tile IS the photograph. The date rides on the cover and
+   the name only appears on hover, so nothing below a tile takes vertical space
+   and the rows can sit close together. */
+
+.album-tile__date {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  /* A shadow, not a scrim. A scrim would dim the photograph to make room for
+     eleven characters; a shadow costs no visual area at all. */
+  text-shadow:
+    0 1px 3px rgb(0 0 0 / 0.6),
+    0 0 10px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.album-tile__name {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* The gradient covers the lower third only — at rest the cover is untouched. */
+  padding: 22px 9px 8px;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.72), transparent);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+  opacity: 0;
+  translate: 0 6px;
+  transition:
+    opacity 200ms var(--ease-out-soft),
+    translate 200ms var(--ease-out-soft);
+  pointer-events: none;
+}
+
+.album-tile:hover .album-tile__name,
+.album-tile:focus-visible .album-tile__name {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.album-tile__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: rgb(255 255 255 / 0.72);
+}
+
+/* Touch has no hover, so a name that only exists on hover does not exist. */
+@media (hover: none) {
+  .album-tile__name {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* ── Album tiles entering the viewport ─────────────────────────────────────
+   The hidden state is applied by JS and ONLY by JS — the server-rendered HTML
+   carries no data-reveal attribute, so if the bundle never loads the grid is
+   simply visible. See components/album/RevealGrid.tsx. */
+@keyframes album-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    /* `none`, not an identity transform, so no compositor layer stays promoted. */
+    transform: none;
+  }
+}
+
+[data-reveal="out"] {
+  opacity: 0;
+}
+
+/* A keyboard user must never focus something they cannot see. */
+[data-reveal="out"]:focus-within {
+  opacity: 1;
+  animation: none;
+}
+
+[data-reveal="in"] {
+  /* `both`: backwards holds the from-state through the stagger delay so a tile
+     cannot flash visible before its turn; forwards holds the end state after. */
+  animation: album-reveal 460ms var(--ease-out-soft) var(--reveal-delay, 0ms) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -148,5 +1053,18 @@ h6 {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* NOT redundant with the rule above — do not delete as duplication.
+     The rules above only zero DURATIONS. `[data-reveal="out"]` is a static
+     opacity: 0, which a zeroed duration does nothing to. RevealGrid's JS gate
+     already prevents the attribute from ever being written, but that gate is
+     evaluated once at mount; this covers anyone who turns the OS setting on
+     while the page is already open, who would otherwise be left looking at a
+     screen of invisible albums. */
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
   }
 }

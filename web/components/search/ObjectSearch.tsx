@@ -11,18 +11,23 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Keyframe } from "@/components/Keyframe";
 import { Chip, ConfidenceBar, LabelDot } from "@/components/ui";
-import { beforeEnd, intoTrip, timecode } from "@/lib/format";
+import { shortDate, timecode } from "@/lib/format";
 import { searchObjects, suggestedQueries } from "@/lib/objectIndex";
 import type { ObjectIndexEntry, ObjectSearchResult } from "@/lib/types";
 
 interface Props {
   entries: ObjectIndexEntry[];
-  durationSec: number;
-  tripId: string;
+  /**
+   * The trip currently on screen, if any. Results from a DIFFERENT trip hide the
+   * nav pose: `navTarget` is a coordinate in its own trip's local metric frame,
+   * so offering to drive to (480, 60) m while you are looking at another park is
+   * not a smaller version of the right answer — it is a wrong one.
+   */
+  activeTripId?: string;
   onClose: () => void;
 }
 
-export function ObjectSearch({ entries, durationSec, tripId, onClose }: Props) {
+export function ObjectSearch({ entries, activeTripId, onClose }: Props) {
   const [query, setQuery] = useState("");
   // The cursor is stored with the query it belongs to, so a new query resets it to
   // the top during render. An effect calling setSelected(0) would work but costs a
@@ -99,15 +104,15 @@ export function ObjectSearch({ entries, durationSec, tripId, onClose }: Props) {
                 ))}
               </div>
               <p className="mt-4 border-t border-ink-800 pt-3 text-[11px] leading-relaxed text-fog-400">
-                Searching {entries.length} distinct objects the robot tracked across the trip. Matching
-                is local and instant — everyday words are mapped onto the detector&apos;s COCO
-                classes, so &ldquo;nalgene&rdquo; finds a <span className="font-mono">bottle</span>.
+                Searching {entries.length} distinct objects the robot tracked across every journey.
+                Matching is local and instant — everyday words are mapped onto the detector&apos;s
+                COCO classes, so &ldquo;nalgene&rdquo; finds a <span className="font-mono">bottle</span>.
               </p>
             </div>
           ) : results.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-[13px] text-fog-300">
-                Nothing matching &ldquo;{query}&rdquo; was tracked on this trip.
+                Nothing matching &ldquo;{query}&rdquo; has ever been tracked.
               </p>
               <p className="mt-1.5 text-[11px] text-fog-400">
                 The robot can only find things its detector had a class for.
@@ -119,8 +124,7 @@ export function ObjectSearch({ entries, durationSec, tripId, onClose }: Props) {
                 <ResultRow
                   key={r.entry.label}
                   result={r}
-                  tripId={tripId}
-                  durationSec={durationSec}
+                  activeTripId={activeTripId}
                   active={i === selected}
                   onHover={() => moveCursor(() => i)}
                   onNavigate={onClose}
@@ -136,15 +140,13 @@ export function ObjectSearch({ entries, durationSec, tripId, onClose }: Props) {
 
 function ResultRow({
   result,
-  tripId,
-  durationSec,
+  activeTripId,
   active,
   onHover,
   onNavigate,
 }: {
   result: ObjectSearchResult;
-  tripId: string;
-  durationSec: number;
+  activeTripId?: string;
   active: boolean;
   onHover: () => void;
   onNavigate: () => void;
@@ -152,6 +154,9 @@ function ResultRow({
   const { entry, matchedOn } = result;
   const best = entry.best;
   const [showNav, setShowNav] = useState(false);
+  // A pose only means something in the frame it was measured in.
+  const navigable = !!entry.navTarget && best.tripId === activeTripId;
+  const tripCount = new Set(entry.sightings.map((s) => s.tripId)).size;
 
   return (
     <li
@@ -194,29 +199,30 @@ function ResultRow({
           </div>
 
           <p className="mt-1 text-[12px] leading-snug text-fog-200">
-            Last seen <span className="text-fog-100">{intoTrip(entry.lastSeenT)}</span> at{" "}
-            <span className="text-fog-100">{best.placeLabel}</span> —{" "}
-            {beforeEnd(entry.lastSeenT, durationSec)}.
+            Last seen at <span className="text-fog-100">{best.placeLabel}</span> on{" "}
+            <span className="text-fog-100">{shortDate(best.lastSeenAt)}</span> —{" "}
+            {best.tripTitle}.
           </p>
           <p className="mt-0.5 text-[11px] text-fog-400">
             {entry.sightings.length === 1
               ? "Seen once"
               : `Seen in ${entry.sightings.length} moments`}
+            {tripCount > 1 && ` across ${tripCount} journeys`}
             {" · "}
             {best.detectionCount} frames
             {" · "}
-            <span className="tnum font-mono">{timecode(best.lastSeenT)}</span>
+            <span className="tnum font-mono">{timecode(best.lastSeenT)}</span> into that trip
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Link
-              href={`/trip/${tripId}/moment/${best.momentId}?anchor=${best.trackId}`}
+              href={`/trip/${best.tripId}/moment/${best.momentId}?anchor=${best.trackId}`}
               onClick={onNavigate}
               className="rounded-md border border-memory-500/50 bg-memory-500/10 px-2.5 py-1 text-[11px] font-medium text-memory-300 transition-colors hover:bg-memory-500/20"
             >
               Show me in 3D →
             </Link>
-            {entry.navTarget && (
+            {navigable && (
               <button
                 type="button"
                 onClick={() => setShowNav((v) => !v)}
@@ -227,15 +233,18 @@ function ResultRow({
             )}
           </div>
 
-          {showNav && entry.navTarget && (
+          {showNav && navigable && entry.navTarget && (
             <div className="mt-2 rounded-md border border-signal-500/30 bg-signal-500/5 p-2">
               <p className="text-[11px] text-signal-400">
                 Nav goal queued — the robot would drive back to this spot.
               </p>
+              {/* navTarget.heading is ALREADY a compass bearing in degrees — see the
+                  note on ObjectIndexEntry. It used to be re-multiplied by 180/π
+                  here, which rendered a 214° bearing as 12262°. */}
               <p className="tnum mt-1 font-mono text-[10px] text-fog-400">
                 target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
-                heading {(entry.navTarget.heading * (180 / Math.PI)).toFixed(0)}° · rejoins the route
-                at {timecode(entry.navTarget.approachFromT)}
+                heading {entry.navTarget.heading}° · rejoins the route at{" "}
+                {timecode(entry.navTarget.approachFromT)}
               </p>
             </div>
           )}

@@ -36,15 +36,24 @@ export const familyOf = (label: string): LabelFamily =>
  * and DOM stay in sync. (Brand colors live in lib/theme.ts; these are deliberately
  * separate because a categorical scale has different constraints than a palette.)
  *
- * Validated against Spark's three dark surfaces (#09090e, #111118, #16161f) over
- * ALL 21 pairs — not just adjacent slots:
- *   min contrast 3.63:1  ·  normal ΔE 33.9  ·  protan ΔE 8.7  ·  deutan ΔE 7.5
+ * Validated against Spark's three dark surfaces — now the brand navy
+ * (#0b0f1e, #111624, #151a2a) — over ALL 21 pairs, not just adjacent slots:
+ *   min contrast 4.34:1  ·  normal ΔE 33.9  ·  protan ΔE 8.7  ·  deutan ΔE 7.5
  *
  * `furniture` was moved off violet (#9085e9): against `people` blue it collapsed to
  * protan ΔE 2.0 — effectively identical for a red-blind viewer — and it also
  * collided with the new compute-state violet. The desaturated cool grey reads as
  * the static built environment (benches, tables) and lifts protan to 15.7 for
  * that pair.
+ *
+ * `vehicle` was moved off #008300 when the background became navy. That green sat
+ * at 3.63:1 on the old near-black and fell to 3.50:1 on the lighter navy — still
+ * over the 3:1 floor that applies to graphical objects, but it was the palette's
+ * weakest slot and the fix was one hex. #0f9412 restores 4.34:1, and re-running
+ * the all-pairs check showed it does not cost separation anywhere: the normal-
+ * vision floor is personal/sport and the deutan floor is animal/food, neither of
+ * which involves vehicle, and protan separation actually IMPROVES (its floor
+ * moves off personal/vehicle entirely).
  *
  * Family color is always shown NEXT TO the label text (chips, legends, tooltips),
  * never as the sole carrier of identity — which is what lets the 7.5 deutan floor
@@ -56,7 +65,7 @@ export const FAMILY_COLOR: Record<LabelFamily, string> = {
   animal: "#199e70",
   sport: "#c98500",
   food: "#d55181",
-  vehicle: "#008300",
+  vehicle: "#0f9412",
   furniture: "#8d94a8",
 };
 

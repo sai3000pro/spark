@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify-pipeline.ts"
+    "verify": "tsx scripts/verify-pipeline.ts",
+    "build:landmask": "tsx scripts/build-landmask.ts > lib/globe/landmask.ts",
+    "build:design": "tsx scripts/build-design-assets.ts > lib/heroAssets.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

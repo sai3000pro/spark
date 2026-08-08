@@ -9,13 +9,13 @@
  * validated categorical scale rather than part of the brand palette.
  */
 export const INK = {
-  950: "#09090e",
-  900: "#111118",
-  850: "#16161f",
-  800: "#1a1a24",
-  700: "#1e1b2e",
-  600: "#272433",
-  500: "#3a3550",
+  950: "#0b0f1e",
+  900: "#111624",
+  850: "#151a2a",
+  800: "#191e30",
+  700: "#1b2133",
+  600: "#23293e",
+  500: "#353c55",
 } as const;
 
 export const FOG = {
@@ -23,6 +23,21 @@ export const FOG = {
   300: "#a8a3c2",
   200: "#c8c4dc",
   100: "#e8e6f0",
+} as const;
+
+/**
+ * The brand. Interactive chrome ONLY — solid fills on primary actions, rings on
+ * interactive surfaces, focus rings, the brand glyph.
+ *
+ * Deliberately NOT a data colour, despite sitting only ΔE 5.5 from MEMORY[400].
+ * See the rule in app/globals.css: brand orange is a form, memory amber is a
+ * category, and the two can never appear in the same visual field.
+ */
+export const BRAND = {
+  300: "#ffc45c",
+  400: "#f5a623",
+  500: "#d98613",
+  600: "#a8620a",
 } as const;
 
 /** Cool — the robot layer. */

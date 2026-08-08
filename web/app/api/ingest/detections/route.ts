@@ -6,6 +6,7 @@
  * section for a DB insert and the client contract does not change.
  */
 import { NextResponse } from "next/server";
+import { noteIngest } from "@/lib/liveTrip";
 import { scoreCandidates } from "@/lib/pipeline";
 import { validateDetections } from "@/lib/validate";
 
@@ -50,10 +51,19 @@ export async function POST(request: Request) {
 
   // ── TODO(day 2): persist here. `await db.detections.insertMany(detections)` ──
 
+  // If this batch belongs to the trip currently recording, the toolbar's counters
+  // stop being extrapolated and become measured. That is the entire seam: no
+  // other code changes when a real robot starts reporting.
+  const attachedToActiveTrip = noteIngest(detections[0].tripId, {
+    detections: detections.length,
+    candidates: candidates.length,
+  });
+
   return NextResponse.json(
     {
       accepted: detections.length,
       tripId: detections[0].tripId,
+      attachedToActiveTrip,
       timeRange: [Math.min(...detections.map((d) => d.t)), tMax],
       distinctLabels: [...new Set(detections.map((d) => d.label))].sort(),
       distinctTracks: new Set(detections.map((d) => d.trackId ?? d.id)).size,

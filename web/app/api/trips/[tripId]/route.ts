@@ -6,23 +6,24 @@
  * rows; the binned lane is what the UI needs).
  */
 import { NextResponse } from "next/server";
-import { getObjectIndexView, getTripView } from "@/lib/tripData";
+import { getObjectIndexView, getTripView, listTripIds } from "@/lib/tripData";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ tripId: string }> },
 ) {
   const { tripId } = await params;
-  const trip = getTripView();
+  const trip = getTripView(tripId);
 
-  if (trip.id !== tripId) {
+  if (!trip) {
     return NextResponse.json(
-      { error: "trip not found", known: [trip.id] },
+      { error: "trip not found", known: listTripIds() },
       { status: 404 },
     );
   }
 
-  const index = getObjectIndexView();
+  // Non-null: getTripView resolved, so the spec exists.
+  const index = getObjectIndexView(tripId)!;
 
   return NextResponse.json({
     ...trip,

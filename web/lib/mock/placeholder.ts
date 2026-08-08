@@ -9,6 +9,7 @@
  *
  * Pure string generation — safe on server and client, no network, no canvas.
  */
+import { INK } from "../theme";
 import { makeRng, rngRange } from "./rng";
 
 export interface PlaceholderOptions {
@@ -95,7 +96,7 @@ export function placeholderDataUri({
 </radialGradient>
 <radialGradient id="vig${uid}" cx="0.5" cy="0.46" r="0.78">
 <stop offset="0.4" stop-color="#000" stop-opacity="0"/>
-<stop offset="1" stop-color="#09090e" stop-opacity="0.62"/>
+<stop offset="1" stop-color="${INK[950]}" stop-opacity="0.62"/>
 </radialGradient>
 <filter id="soft${uid}" x="-25%" y="-25%" width="150%" height="150%">
 <feGaussianBlur stdDeviation="${(width * 0.03).toFixed(1)}"/>

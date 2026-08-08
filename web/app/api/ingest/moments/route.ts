@@ -4,6 +4,7 @@
  * Day-2 integration seam; see the detections route for the same pattern.
  */
 import { NextResponse } from "next/server";
+import { noteIngest } from "@/lib/liveTrip";
 import { buildObjectIndex } from "@/lib/objectIndex";
 import { validateMoment } from "@/lib/validate";
 
@@ -31,7 +32,14 @@ export async function POST(request: Request) {
   // should come back as a diagnosable 422 rather than an opaque 500.
   let index;
   try {
-    index = buildObjectIndex([moment]);
+    // No path and no real trip record yet — the index only needs enough of one to
+    // stamp sightings with an absolute clock, and an ingested moment has no
+    // odometry attached, so nav targets legitimately come back undefined.
+    index = buildObjectIndex([moment], [], {
+      id: moment.tripId,
+      title: moment.tripId,
+      startedAt: new Date(0).toISOString(),
+    });
   } catch (err) {
     return NextResponse.json(
       {
@@ -45,10 +53,15 @@ export async function POST(request: Request) {
 
   // ── TODO(day 2): persist here. `await db.moments.upsert(moment)` ────────────
 
+  // See the note in the detections route — this is what flips the live counters
+  // from extrapolated to measured.
+  const attachedToActiveTrip = noteIngest(moment.tripId, { moments: 1 });
+
   return NextResponse.json(
     {
       accepted: moment.id,
       tripId: moment.tripId,
+      attachedToActiveTrip,
       span: [moment.tStart, moment.tEnd],
       objects: moment.objects.length,
       locatable: moment.objects.filter((o) => o.worldPos).length,

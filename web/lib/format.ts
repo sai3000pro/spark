@@ -59,9 +59,44 @@ export function compactNumber(n: number): string {
   return String(n);
 }
 
+/**
+ * The UTC offset baked into an ISO 8601 string, in minutes. `null` if it has none.
+ *
+ * This is what lets a trip render in ITS OWN local time rather than the viewer's.
+ * A walk through Kyoto started at 05:50 +09:00, and it has to read as "5:50 AM"
+ * whether you open it from Ontario or from Lisbon — otherwise the album titled
+ * "Higashiyama at first light" shows times in the middle of the night.
+ */
+function offsetMinutesOf(iso: string): number | null {
+  const m = /(?:Z|([+-])(\d{2}):?(\d{2}))$/.exec(iso.trim());
+  if (!m) return null;
+  if (!m[1]) return 0; // trailing "Z"
+  const minutes = Number(m[2]) * 60 + Number(m[3]);
+  return m[1] === "-" ? -minutes : minutes;
+}
+
+/**
+ * Shift an instant into the trip's own wall clock, then read it as if it were UTC.
+ *
+ * Returns a Date whose getUTC* accessors give the trip-local calendar values.
+ */
+function inTripZone(isoStart: string, offsetSec: number): Date {
+  const offsetMin = offsetMinutesOf(isoStart) ?? 0;
+  return new Date(new Date(isoStart).getTime() + offsetSec * 1000 + offsetMin * 60_000);
+}
+
+/** "3:18 PM", in the trip's local time — not the viewer's. */
 export function clockTime(isoStart: string, offsetSec = 0): string {
-  const d = new Date(new Date(isoStart).getTime() + offsetSec * 1000);
-  return d.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  return inTripZone(isoStart, offsetSec).toLocaleTimeString("en-CA", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+/** Hour of day, 0–23, in the trip's local time. Drives the album's time sections. */
+export function tripLocalHour(isoStart: string, offsetSec = 0): number {
+  return inTripZone(isoStart, offsetSec).getUTCHours();
 }
 
 export function tripDate(iso: string): string {
@@ -69,5 +104,40 @@ export function tripDate(iso: string): string {
     weekday: "long",
     month: "long",
     day: "numeric",
+  });
+}
+
+/**
+ * "Aug 2" — compact, for anywhere a date sits inside a dense line of metadata.
+ *
+ * The year only appears when it is not the current one. Stamping "2026" on every
+ * row of a library that is mostly one year is noise; its absence is the signal.
+ */
+export function shortDate(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-CA", {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+}
+
+/**
+ * "Aug 2026" — the date overlaid on an album tile.
+ *
+ * Always carries the year, unlike `monthLabel`. A tile is read on its own rather
+ * than under a group header, so "August" with no year is genuinely ambiguous
+ * once the library spans more than one.
+ */
+export function tileDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { month: "short", year: "numeric" });
+}
+
+/** "August" · "November 2025" — month grouping, where the year is contextual. */
+export function monthLabel(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-CA", {
+    month: "long",
+    year: d.getFullYear() === now.getFullYear() ? undefined : "numeric",
   });
 }

@@ -17,7 +17,19 @@ import type {
   Vec2,
 } from "./types";
 
-export function buildObjectIndex(moments: Moment[], path: TrackPoint[] = []): ObjectIndexEntry[] {
+/** Enough of a trip to stamp its sightings with an absolute clock. */
+export interface IndexTripRef {
+  id: string;
+  title: string;
+  startedAt: string;
+}
+
+export function buildObjectIndex(
+  moments: Moment[],
+  path: TrackPoint[] = [],
+  trip: IndexTripRef,
+): ObjectIndexEntry[] {
+  const tripStartMs = new Date(trip.startedAt).getTime();
   const byLabel = new Map<string, IndexedSighting[]>();
 
   for (const moment of moments) {
@@ -30,6 +42,9 @@ export function buildObjectIndex(moments: Moment[], path: TrackPoint[] = []): Ob
         momentId: moment.id,
         momentTitle: moment.title,
         placeLabel: moment.place.label,
+        tripId: trip.id,
+        tripTitle: trip.title,
+        lastSeenAt: new Date(tripStartMs + o.lastSeenT * 1000).toISOString(),
         thumbnail: { placeholderSeed: kf.placeholderSeed, hue: kf.hue, url: kf.url },
       };
       const arr = byLabel.get(o.label);
@@ -51,6 +66,7 @@ export function buildObjectIndex(moments: Moment[], path: TrackPoint[] = []): Ob
       label,
       sightings,
       lastSeenT,
+      lastSeenAt: sightings[0].lastSeenAt,
       best,
       navTarget: navTargetFor(best, path),
     });
@@ -61,6 +77,66 @@ export function buildObjectIndex(moments: Moment[], path: TrackPoint[] = []): Ob
 
 const rank = (s: IndexedSighting, lastSeenT: number) =>
   s.confidence * 0.6 + (lastSeenT > 0 ? s.lastSeenT / lastSeenT : 0) * 0.4;
+
+/**
+ * Fold per-trip indexes into one, for the global "where is my X?" palette.
+ *
+ * The ranking has to change here, and that is the whole reason this is a separate
+ * function rather than a concat. `rank()` above scores recency as a FRACTION of
+ * its own trip's duration — "seen 90% of the way through" — which is exactly
+ * right within a trip and meaningless across them: 90% of the way through a walk
+ * in February should not outrank a sighting from last week. So the merged index
+ * ranks on confidence against absolute wall-clock recency instead.
+ *
+ * `navTarget` is deliberately recomputed from the winning sighting's own trip
+ * index rather than being re-derived: a pose is in its trip's local metric frame,
+ * and there is no sensible cross-trip pose. Callers rendering a result from a
+ * different trip than the one on screen must suppress the nav block — see
+ * components/search/ObjectSearch.tsx.
+ */
+export function mergeObjectIndexes(indexes: ObjectIndexEntry[][]): ObjectIndexEntry[] {
+  const byLabel = new Map<string, { sightings: IndexedSighting[]; navByTrack: Map<string, ObjectIndexEntry["navTarget"]> }>();
+
+  for (const index of indexes) {
+    for (const entry of index) {
+      let bucket = byLabel.get(entry.label);
+      if (!bucket) {
+        bucket = { sightings: [], navByTrack: new Map() };
+        byLabel.set(entry.label, bucket);
+      }
+      bucket.sightings.push(...entry.sightings);
+      // Keep each trip's own nav target, keyed by the sighting it was computed for.
+      if (entry.navTarget) bucket.navByTrack.set(entry.best.trackId, entry.navTarget);
+    }
+  }
+
+  const entries: ObjectIndexEntry[] = [];
+  for (const [label, { sightings, navByTrack }] of byLabel) {
+    sightings.sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt));
+
+    const newestMs = Date.parse(sightings[0].lastSeenAt);
+    const oldestMs = Date.parse(sightings[sightings.length - 1].lastSeenAt);
+    const span = Math.max(1, newestMs - oldestMs);
+    const best = sightings.reduce((a, b) =>
+      crossRank(b, newestMs, span) > crossRank(a, newestMs, span) ? b : a,
+    );
+
+    entries.push({
+      label,
+      sightings,
+      lastSeenT: best.lastSeenT,
+      lastSeenAt: sightings[0].lastSeenAt,
+      best,
+      navTarget: navByTrack.get(best.trackId),
+    });
+  }
+
+  return entries.sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt));
+}
+
+/** Same 60/40 confidence-vs-recency split as `rank`, but on absolute time. */
+const crossRank = (s: IndexedSighting, newestMs: number, span: number) =>
+  s.confidence * 0.6 + (1 - (newestMs - Date.parse(s.lastSeenAt)) / span) * 0.4;
 
 /**
  * The pose the robot would drive to in order to show you the thing.

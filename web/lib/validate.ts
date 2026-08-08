@@ -7,6 +7,7 @@
  * writing junk into the pipeline at 2am.
  */
 import type { Detection, Moment } from "./types";
+import type { StartTripInput } from "./liveTrip";
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
@@ -155,4 +156,55 @@ export function validateMoment(body: unknown): Validated<Moment> {
 
   if (errors.length) return { ok: false, errors };
   return { ok: true, value: body as Moment };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live trip control
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Everything is optional — starting a trip from the toolbar sends nothing at all,
+ * and the robot will send what it knows. What is present has to be right.
+ */
+export function validateStartTrip(input: unknown): Validated<StartTripInput> {
+  if (input === undefined || input === null) return { ok: true, value: {} };
+  if (typeof input !== "object") return { ok: false, errors: ["body: expected an object"] };
+
+  const b = input as Record<string, unknown>;
+  const errors: string[] = [];
+
+  for (const key of ["placeLabel", "region", "country"] as const) {
+    if (b[key] !== undefined && !isStr(b[key])) {
+      errors.push(`${key}: must be a non-empty string when present`);
+    }
+  }
+
+  if (b.source !== undefined && !["ui", "robot"].includes(b.source as string)) {
+    errors.push("source: must be ui | robot");
+  }
+
+  if (b.origin !== undefined) {
+    const o = b.origin as Record<string, unknown> | null;
+    if (!o || typeof o !== "object" || !isNum(o.lat) || !isNum(o.lng)) {
+      errors.push("origin: expected { lat: number, lng: number }");
+    } else if ((o.lat as number) < -90 || (o.lat as number) > 90) {
+      errors.push("origin.lat: must be -90..90");
+    } else if ((o.lng as number) < -180 || (o.lng as number) > 180) {
+      errors.push("origin.lng: must be -180..180");
+    }
+  }
+
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, value: input as StartTripInput };
+}
+
+export function validateStopTrip(input: unknown): Validated<{ tripId?: string }> {
+  if (input === undefined || input === null) return { ok: true, value: {} };
+  if (typeof input !== "object") return { ok: false, errors: ["body: expected an object"] };
+
+  const b = input as Record<string, unknown>;
+  if (b.tripId !== undefined && !isStr(b.tripId)) {
+    return { ok: false, errors: ["tripId: must be a non-empty string when present"] };
+  }
+  return { ok: true, value: input as { tripId?: string } };
 }
