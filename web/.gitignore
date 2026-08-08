@@ -1,0 +1,44 @@
+# Scoped to web/ so the repo root's .gitignore stays about the iOS app and the
+# Python tools. Paths here are relative to this directory.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# next.js
+/.next/
+/out/
+/build
+
+# testing
+/coverage
+
+# misc
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Figma Make export, kept locally as a design reference. It is a separate Vite app
+# with its own lockfile and AGENTS.md; the design it produced lives in this repo as
+# app/globals.css tokens plus components/shell and components/trip.
+/Journey Moment Capture App/

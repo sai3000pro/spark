@@ -1,20 +1,26 @@
-# Setup
+# Setup — capture pipeline
 
-This repo holds the **Gauzensplat capture pipeline** — an iPhone LiDAR + Wi-Fi
+This file covers the **Gauzensplat capture pipeline**: an iPhone LiDAR + Wi-Fi
 (+ ESP32 odometry) capture system and the Mac-side tooling that turns captured
 video into Gaussian splats.
 
-Start with `README_GAUZENSPLAT_CAPTURE.md` for the what/why, and
-`IMPLEMENTATION_STATUS.md` for what's built and tested. This file is just how to
+Start with `docs/README_GAUZENSPLAT_CAPTURE.md` for the what/why, and
+`docs/IMPLEMENTATION_STATUS.md` for what's built and tested. This file is just how to
 get it running.
+
+> Looking for the **web app** (trip replay, detection pipeline, "where is my X?")?
+> That's `web/` — see `web/README.md`. It's a self-contained Next.js app with its
+> own `package.json`; none of the Python or Swift setup below applies to it.
 
 ## Repo layout
 
 ```
+ios/                       Native Swift/SwiftUI/ARKit recorder for iPhone 16 Pro (+ Mac-testable core)
 tools/arkit_capture/       Offline Mac inspector: capture → trajectory/point cloud/validation (numpy + Pillow)
 tools/live_capture_server/ Live phone↔laptop capture server + ESP32/phone simulators (Python stdlib only)
 tools/video_intel/         Video → Gaussian-splat orchestration, pruning, semantics
-ios/                       Native Swift/SwiftUI/ARKit recorder for iPhone 16 Pro (+ Mac-testable core)
+web/                       Next.js trip-replay app + the detection → moment pipeline
+docs/                      Capture-pipeline design docs, status, and test reports
 ```
 
 ## Important: the splat engine is an external dependency

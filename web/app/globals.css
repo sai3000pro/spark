@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/*
+  Spark's palette. Dark cinematic / spatial observatory — mission control for
+  your memories.
+
+  Two deliberate accent families, and the split is the whole point:
+    cool (--color-machine-*)  = the robot layer — detections, tracks, confidence, nav
+    warm (--color-memory-*)   = the human layer — moments, places, music, transcript
+  A glance at any screen tells you what was perceived versus what is remembered.
+
+  State colors are hue-separated from both so they never read as either layer:
+    signal  green   ready, promoted, navigable
+    compute violet  reconstructing — the splat is still being computed
+    warn    yellow  stand-in data, nothing was actually captured here
+    fail    rose    reconstruction failed, model error
+
+  SVG and canvas can't use Tailwind classes for fills, so every value here is
+  mirrored in lib/theme.ts. Change one, change both.
+*/
+@theme {
+  --color-ink-950: #09090e;
+  --color-ink-900: #111118;
+  --color-ink-850: #16161f;
+  --color-ink-800: #1a1a24;
+  --color-ink-700: #1e1b2e;
+  --color-ink-600: #272433;
+  --color-ink-500: #3a3550;
+
+  --color-fog-400: #6b6880;
+  --color-fog-300: #a8a3c2;
+  --color-fog-200: #c8c4dc;
+  --color-fog-100: #e8e6f0;
+
+  --color-machine-300: #7ff0e2;
+  --color-machine-400: #2dd4bf;
+  --color-machine-500: #14b8a6;
+  --color-machine-600: #0d9488;
+
+  --color-memory-300: #fdba74;
+  --color-memory-400: #f59e0b;
+  --color-memory-500: #d97706;
+  --color-memory-600: #b45309;
+
+  --color-signal-400: #34d399;
+  --color-signal-500: #10b981;
+  --color-compute-400: #a78bfa;
+  --color-compute-500: #8b5cf6;
+  --color-warn-400: #facc15;
+  --color-fail-400: #fb7185;
+
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: dark;
+  --bg: var(--color-ink-950);
+  --surface: var(--color-ink-900);
+  --surface-raised: var(--color-ink-850);
+  /* The design's border is a white wash rather than a flat grey, which is what
+     keeps panels feeling lit from within instead of outlined. */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --radius: 12px;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--color-fog-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display face carries every heading; body stays Inter for legibility at 12–14px. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Tabular figures everywhere we show a timecode, confidence, or coordinate —
+   numbers that change on hover must not reflow. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer utilities {
+  .surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .surface-raised {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+  }
+  /* Panels that float over the map or the 3D stage. The blur is what makes the
+     map read as a layer underneath rather than a background image. */
+  .glass {
+    background: color-mix(in srgb, var(--color-ink-950) 88%, transparent);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+  .glass-raised {
+    background: color-mix(in srgb, var(--color-ink-900) 92%, transparent);
+    border: 1px solid var(--border-strong);
+    backdrop-filter: blur(16px);
+  }
+  /* Mono uppercase micro-label — the design uses this for every section eyebrow. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-fog-400);
+  }
+  /* Faint grid used behind the map and timeline — reads as robot coordinate space. */
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-600) transparent;
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-machine-500) 34%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
