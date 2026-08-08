@@ -214,6 +214,35 @@ h3 {
     scrollbar-color: rgb(242 238 252 / 0.25) transparent;
   }
 
+  /* ── The highlighter bar: ONE loud accent device, hero only ─────────── */
+  .hl-ember {
+    background: var(--color-ember);
+    color: var(--color-night);
+    padding: 0 0.14em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* ── Annotation frame: a design-tool selection box pinned on the art ── */
+  .frame-note {
+    position: absolute;
+    border: 1px solid rgb(242 238 252 / 0.55);
+    background: rgb(15 13 35 / 0.62);
+    padding: 6px 10px;
+    backdrop-filter: blur(2px);
+  }
+  .frame-note > i {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: var(--color-starlight);
+    border: 1px solid rgb(15 13 35 / 0.8);
+  }
+  .frame-note > i:nth-child(1) { top: -3px; left: -3px; }
+  .frame-note > i:nth-child(2) { top: -3px; right: -3px; }
+  .frame-note > i:nth-child(3) { bottom: -3px; left: -3px; }
+  .frame-note > i:nth-child(4) { bottom: -3px; right: -3px; }
+
   /* Range input for the day scrubber — an ember bead on a dusk rail. */
   .scrub {
     appearance: none;
@@ -287,6 +316,19 @@ html.reveal-armed [data-reveal][data-state="in"] {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* The keep-log marquee — one slow lap; duplicated track makes the loop seam-free. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 52s linear infinite;
 }
 
 /* The soft breath of a live light — the follow pulse and the robot dot. */
