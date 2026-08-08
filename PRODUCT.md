@@ -24,16 +24,19 @@ and the detection → candidate → moment chain can be audited from any screen.
 
 ## Brand Personality
 
-A grainy risograph poster you can walk around in. Colorful, textured, springy — the
-motion-graphics energy of a UI-sound-effects pack applied to a robot's memory of your day.
-Three words: playful, printed, alive.
+A night-sky park poster you can step into. The robot keeps the glowing parts of a day, and
+the interface is the hour after sunset: a real park gone indigo, everything kept still
+glowing on it. Three words: luminous, calm, honest.
 
 ## Anti-references
 
-- Dark "mission control" dashboards and quiet paper-editorial journals — both prior designs.
+- The riso-poster cream atlas, dark "mission control" dashboards, and paper-editorial
+  journals — all prior designs.
 - SaaS card-grid dashboards: identical gray cards, hero-metric tiles, gradient accents.
 - Consumer photo-app gloss (Apple Photos / Google Photos): the machine's reasoning must stay visible.
-- Map-tile literalism (Leaflet/Google Maps chrome) — the map is an illustration of the day.
+- Default map chrome (Leaflet/Google Maps controls, attribution pills, POI clutter) — the
+  map is real, but it must read as the poster's floor, not a navigation app.
+- Sci-fi HUD / cyberpunk neon: the night is warm and calm, not aggressive.
 
 ## Design Principles
 

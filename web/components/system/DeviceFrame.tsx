@@ -50,14 +50,16 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
               width: 390,
               height: 844,
               borderRadius: 52,
-              background: "#232038",
+              // Hardware stays in the indigo family — one step below the page
+              // ground, edged by haze and a starlight hairline. Never gray-black.
+              background: "#0a0919",
               padding: BEZEL,
               boxShadow:
-                "0 0 0 2px #3a3654, 0 0 0 6px #16141f, 0 40px 100px rgba(20,18,32,0.55), inset 0 0 0 1px rgba(255,255,255,0.05)",
+                "0 0 0 2px #2a2552, 0 0 0 3px rgb(242 238 252 / 0.16), 0 40px 100px rgb(6 5 18 / 0.8), inset 0 0 0 1px rgb(242 238 252 / 0.07)",
             }}
           >
             <div
-              className="absolute left-1/2 z-40 -translate-x-1/2 rounded-[22px] bg-black"
+              className="absolute left-1/2 z-40 -translate-x-1/2 rounded-[22px] bg-[#060512]"
               style={{ top: 19, width: 126, height: 36 }}
             />
             <iframe
@@ -66,19 +68,19 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
               key={pathname}
               src={`${pathname}?chrome=off`}
               title="Phone preview"
-              className="block bg-cream"
+              className="block bg-night"
               style={{ width: SCREEN_W, height: SCREEN_H, borderRadius: 42, border: 0 }}
             />
-            <span className="absolute -left-1 top-24 h-8 w-1 rounded-l bg-[#3a3654]" />
-            <span className="absolute -left-1 top-36 h-14 w-1 rounded-l bg-[#3a3654]" />
-            <span className="absolute -left-1 top-[212px] h-14 w-1 rounded-l bg-[#3a3654]" />
-            <span className="absolute -right-1 top-36 h-[72px] w-1 rounded-r bg-[#3a3654]" />
+            <span className="absolute -left-1 top-24 h-8 w-1 rounded-l bg-haze" />
+            <span className="absolute -left-1 top-36 h-14 w-1 rounded-l bg-haze" />
+            <span className="absolute -left-1 top-[212px] h-14 w-1 rounded-l bg-haze" />
+            <span className="absolute -right-1 top-36 h-[72px] w-1 rounded-r bg-haze" />
           </div>
         </div>
       )}
 
       <div
-        className="riso-card fixed bottom-4 right-4 z-50 flex items-center gap-0.5 p-1 shadow-lg shadow-ink/10"
+        className="plate fixed bottom-4 right-4 z-50 flex items-center gap-1 p-1"
         role="group"
         aria-label="Preview device"
       >
@@ -88,8 +90,8 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setMode(m)}
             aria-pressed={mode === m}
-            className={`tag rounded-[12px] px-2.5 py-1 text-[10px] transition-all duration-200 ease-(--ease-pop) ${
-              mode === m ? "bg-ink text-cream-bright" : "text-ink-soft hover:text-ink"
+            className={`tag px-2.5 py-1 text-[10px] transition-colors duration-300 ease-(--ease-signature) ${
+              mode === m ? "selected-block" : "text-moth hover:text-starlight"
             }`}
           >
             {m === "phone" ? "Phone" : "Web"}
