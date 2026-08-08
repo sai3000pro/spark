@@ -125,7 +125,7 @@ function StageChip({
 }) {
   const semantic = variant === "live" ? "chip-live" : variant === "synth" ? "chip-synth" : "";
   return (
-    <span className={`tag chip bg-night/80 text-[9px] ${semantic}`}>[ {children} ]</span>
+    <span className={`tag chip bg-night/80 text-[10px] ${semantic}`}>{children}</span>
   );
 }
 
@@ -313,8 +313,8 @@ function Anchors({
                   style={{ boxShadow: "var(--ring)" }}
                 >
                   <span className="text-[11px] font-bold text-starlight">{a.label}</span>
-                  <span className="tag ml-1.5 text-[8.5px] text-moth">
-                    [ {Math.round(a.confidence * 100)}% ]
+                  <span className="tag tnum ml-1.5 text-[10px] text-moth">
+                    {Math.round(a.confidence * 100)}%
                   </span>
                 </div>
               </Html>

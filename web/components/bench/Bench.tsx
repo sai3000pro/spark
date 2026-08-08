@@ -11,7 +11,7 @@
  * Doubles as the day-2 tuning tool: change TRIGGER_WEIGHTS, drop an image in,
  * see what fires. This is where the pipeline's honesty lives — discarded
  * candidates stay visible, thresholds stay legible, and every stat speaks the
- * bracketed mono voice.
+ * quiet metadata voice.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -149,8 +149,8 @@ export function Bench() {
   return (
     <div className="space-y-5">
       <header className="rise-in max-w-3xl">
-        <InkTag className="text-[10px] text-faint">
-          [ stage 1 → stage 2 · runs in your browser ]
+        <InkTag className="text-[12px] text-faint">
+          Stage 1 → stage 2 · runs in your browser
         </InkTag>
         <h1 className="mt-2 text-[32px] leading-[1.02] text-starlight sm:text-[38px]">
           The detector bench
@@ -169,7 +169,7 @@ export function Bench() {
       >
         <CardHead n={1} title="Pick a model" hint="Weights download once, then stay cached.">
           {handle && (
-            <span className="tag chip chip-live text-[10px]">[ loaded · {handle.device} ]</span>
+            <span className="tag chip chip-live text-[11px]">loaded · {handle.device}</span>
           )}
         </CardHead>
 
@@ -187,7 +187,7 @@ export function Bench() {
                   setPhase("idle");
                   setRaw(null);
                 }}
-                className="rounded-[14px] p-3.5 text-left transition-[box-shadow,background-color] duration-200 ease-(--ease-signature) disabled:opacity-50"
+                className="rounded-[10px] p-3.5 text-left transition-[box-shadow,background-color] duration-200 ease-(--ease-signature) disabled:opacity-50"
                 style={{
                   boxShadow: on ? "var(--ring-strong)" : "var(--ring)",
                   background: on ? "var(--color-haze)" : "transparent",
@@ -195,16 +195,16 @@ export function Bench() {
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span
-                    className={`font-display text-[15px] font-bold ${
+                    className={`text-[15px] font-semibold ${
                       on ? "selected-block px-1.5" : "text-starlight"
                     }`}
                   >
                     {m.label}
                   </span>
-                  <span className="tag tnum text-[9.5px] text-faint">[ ~{m.approxMb} MB ]</span>
+                  <span className="tag tnum text-[11px] text-faint">~{m.approxMb} MB</span>
                 </div>
-                <p className="mt-1.5 text-[11.5px] leading-snug text-moth">{m.note}</p>
-                <p className="tag mt-1.5 text-[9px] normal-case text-faint">{m.id}</p>
+                <p className="mt-1.5 text-[12px] leading-snug text-moth">{m.note}</p>
+                <p className="tag mt-1.5 text-[11px] text-faint">{m.id}</p>
               </button>
             );
           })}
@@ -219,12 +219,12 @@ export function Bench() {
         {phase === "loading" && (
           <div className="mt-3.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="tag truncate text-[10px] normal-case text-moth">
+              <span className="tag truncate text-[12px] text-moth">
                 {progress?.file ?? progress?.status ?? "…"}
               </span>
-              <span className="tag tnum shrink-0 text-[10px] text-aurora">
-                [ {formatBytes(progress?.loaded)}
-                {progress?.total ? ` / ${formatBytes(progress.total)}` : ""} ]
+              <span className="tag tnum shrink-0 text-[11px] text-aurora">
+                {formatBytes(progress?.loaded)}
+                {progress?.total ? ` / ${formatBytes(progress.total)}` : ""}
               </span>
             </div>
             <div
@@ -290,7 +290,7 @@ export function Bench() {
                       }}
                     >
                       <span
-                        className="tag absolute -top-[20px] left-0 whitespace-nowrap rounded-[4px] px-1.5 text-[9px] font-bold"
+                        className="tag absolute -top-[20px] left-0 whitespace-nowrap rounded-[4px] px-1.5 text-[10px] font-bold"
                         style={{ background: color, color: NIGHT }}
                       >
                         {d.label} {d.score.toFixed(2)}
@@ -301,11 +301,11 @@ export function Bench() {
               </div>
             ) : (
               <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 bg-dusk text-center transition-colors duration-200 hover:bg-haze">
-                <span className="font-display text-[15px] font-bold text-starlight">
+                <span className="text-[15px] font-semibold text-starlight">
                   Drop an image, or click to choose
                 </span>
-                <InkTag className="text-[9.5px] text-faint">
-                  [ runs locally — nothing is uploaded ]
+                <InkTag className="text-[11px] text-faint">
+                  Runs locally — nothing is uploaded
                 </InkTag>
                 <input
                   ref={fileRef}
@@ -319,8 +319,8 @@ export function Bench() {
           </div>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-3">
-            <label className="tag flex items-center gap-2 text-[10px] text-moth">
-              threshold
+            <label className="tag flex items-center gap-2 text-[12px] text-moth">
+              Threshold
               <input
                 type="range"
                 min={0.1}
@@ -330,7 +330,7 @@ export function Bench() {
                 onChange={(e) => setThreshold(Number(e.target.value))}
                 className="scrub w-28"
               />
-              <span className="tnum text-starlight">[ {threshold.toFixed(2)} ]</span>
+              <span className="tnum text-starlight">{threshold.toFixed(2)}</span>
             </label>
 
             <button
@@ -339,7 +339,7 @@ export function Bench() {
               onClick={run}
               className={inkButtonClass("px-4 py-2 text-[13px]")}
             >
-              {phase === "running" ? "detecting…" : "Run detection"}
+              {phase === "running" ? "Detecting…" : "Run detection"}
             </button>
 
             {imageUrl && (
@@ -348,13 +348,13 @@ export function Bench() {
                 onClick={() => fileRef.current?.click()}
                 className={outlineButtonClass("px-3.5 py-1.5 text-[12px]")}
               >
-                change image
+                Change image
               </button>
             )}
 
             {elapsedMs !== null && (
-              <span className="tag chip chip-live tnum text-[10px]">
-                [ {raw?.length ?? 0} boxes · {elapsedMs} ms ]
+              <span className="tag chip chip-live tnum text-[11px]">
+                {raw?.length ?? 0} boxes · {elapsedMs} ms
               </span>
             )}
           </div>
@@ -385,7 +385,7 @@ export function Bench() {
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="tag tnum text-[9px] text-faint">[ {d.depthM}m ]</span>
+                      <span className="tag tnum text-[11px] text-faint">{d.depthM} m</span>
                       <Meter value={d.confidence} />
                     </span>
                   </li>
@@ -408,10 +408,10 @@ export function Bench() {
               hint={`Same scorer as the day. Promote ≥ ${PIPELINE_CONFIG.promoteThreshold}.`}
             >
               <span
-                className="tag chip chip-synth text-[9px]"
+                className="tag chip chip-synth text-[11px]"
                 title="A still frame has no timeline — the scorer sees the frame replayed across a synthetic 16 s window."
               >
-                [ synthetic window ]
+                synthetic window
               </span>
             </CardHead>
 
@@ -424,15 +424,15 @@ export function Bench() {
                     style={{ boxShadow: "var(--ring)" }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="tag tnum text-[9px] text-faint">
-                        [ {c.tStart}s–{c.tEnd}s ]
+                      <span className="tag tnum text-[11px] text-faint">
+                        {c.tStart}s–{c.tEnd}s
                       </span>
                       <span
-                        className={`tag tnum text-[10px] ${
+                        className={`tag tnum text-[11px] ${
                           c.status === "promoted" ? "text-aurora" : "text-moth"
                         }`}
                       >
-                        [ score {c.score.toFixed(2)} ]
+                        score {c.score.toFixed(2)}
                       </span>
                     </div>
                     <ul className="mt-1.5 space-y-1">
@@ -472,13 +472,13 @@ export function Bench() {
                 <button
                   type="button"
                   onClick={() => navigator.clipboard?.writeText(momentJson)}
-                  className="tag text-[9.5px] text-moth transition-colors duration-150 hover:text-starlight"
+                  className="tag text-[11px] text-moth transition-colors duration-150 hover:text-starlight"
                 >
-                  [ copy json ]
+                  Copy JSON
                 </button>
               </CardHead>
               <pre
-                className="scrollbar-thin mt-2 max-h-64 overflow-auto rounded-[10px] bg-night p-3 font-mono text-[10px] leading-relaxed text-moth"
+                className="scrollbar-thin mt-2 max-h-64 overflow-auto rounded-[10px] bg-night p-3 font-mono text-[11px] leading-relaxed text-moth"
                 style={{ boxShadow: "var(--ring)" }}
               >
                 {momentJson}
@@ -506,7 +506,7 @@ function CardHead({
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2.5">
         <NumberChip n={n} size="sm" />
-        <h2 className="font-display text-[16px] font-bold text-starlight">{title}</h2>
+        <h2 className="text-[17px] text-starlight">{title}</h2>
         {hint && <span className="hidden text-[11.5px] text-moth sm:inline">{hint}</span>}
       </div>
       {children}

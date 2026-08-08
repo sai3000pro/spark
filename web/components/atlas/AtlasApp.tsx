@@ -17,7 +17,6 @@ import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { distance, duration, tripDate } from "@/lib/format";
-import { EMBER, GOLD } from "@/lib/theme";
 import type { TripView } from "@/lib/tripData";
 import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
 
@@ -132,33 +131,26 @@ export function AtlasApp({
       {/* ── Floating chrome. The header is the app's ONE frosted element. ── */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
         <div
-          className="rise-in pointer-events-auto rounded-[14px] px-4 py-3"
+          className="rise-in pointer-events-auto rounded-[10px] px-4 py-3"
           style={{
-            background: "rgb(23 20 50 / 0.72)",
+            background: "rgb(23 20 50 / 0.78)",
             backdropFilter: "blur(14px) saturate(1.15)",
             WebkitBackdropFilter: "blur(14px) saturate(1.15)",
             boxShadow: "var(--ring), var(--shadow-plate)",
           }}
         >
-          <Link href="/" className="flex items-center gap-2.5" aria-label="Back to the landing">
-            <SparkGlyph />
-            <span
-              className="font-display text-[20px] font-extrabold leading-none tracking-tight"
-              style={{ fontVariationSettings: '"wdth" 125' }}
-            >
-              SPARK
+          <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
+            <span className="font-display text-[19px] leading-none" style={{ fontWeight: 560 }}>
+              Spark
             </span>
-            <span className="tag mt-0.5 text-[9px] text-faint">the walk</span>
+            <span className="tag text-[11px] text-faint">the walk</span>
           </Link>
-          <p className="tag mt-2 text-[10px] text-moth">
-            [ {tripDate(trip.startedAt)} · {trip.placeLabel} ]
+          <p className="tag tnum mt-1.5 text-[12px] text-moth">
+            {tripDate(trip.startedAt)} · {trip.placeLabel}
           </p>
-          <p className="tag tnum mt-1.5 text-[10px] text-faint">
-            <span className="text-gold">{trip.stats.momentCount} splats</span>
-            {" · "}
-            <span className="text-moth">{distance(trip.stats.distanceM)}</span>
-            {" · "}
-            <span className="text-moth">{duration(trip.stats.durationSec)}</span>
+          <p className="tag tnum mt-0.5 text-[12px] text-faint">
+            {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
+            {duration(trip.stats.durationSec)}
           </p>
         </div>
 
@@ -166,29 +158,29 @@ export function AtlasApp({
           <button
             type="button"
             onClick={() => setFindOpen(true)}
-            className="btn-ghost bg-plate/90 px-3.5 py-2 text-[13px]"
+            className="btn-ghost px-3.5 py-2 text-[13px]"
           >
-            <Search size={14} strokeWidth={1.5} aria-hidden />
+            <Search size={14} strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Where&apos;s my…</span>
-            <kbd className="tag rounded-[6px] px-1.5 py-0.5 text-[9px] text-faint" style={{ boxShadow: "var(--ring)" }}>
+            <kbd className="tag rounded-[4px] px-1.5 py-0.5 text-[10px] text-faint" style={{ boxShadow: "var(--ring)" }}>
               ⌘K
             </kbd>
           </button>
 
           {/* .btn-ghost sets display, so `hidden` must live on a wrapper. */}
           <span className="hidden md:block">
-            <Link href="/detect" className="btn-ghost bg-plate/90 px-3.5 py-2 text-[13px]">
+            <Link href="/detect" className="btn-ghost px-3.5 py-2 text-[13px]">
               Detector bench
             </Link>
           </span>
 
           <span className="hidden sm:block">
             <span
-              className="chip chip-live tag pointer-events-auto whitespace-nowrap bg-plate/90 py-2 text-[10px]"
+              className="chip chip-live tag pointer-events-auto whitespace-nowrap py-2 text-[11px] font-semibold"
               title="Follow mode. Mock telemetry — no robot is connected yet."
             >
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-aurora" aria-hidden />
-              [ follow · 78% ]
+              Following · 78%
             </span>
           </span>
         </div>
@@ -200,8 +192,8 @@ export function AtlasApp({
           className="rise-in pointer-events-none absolute left-1/2 top-20 z-10 hidden -translate-x-1/2 sm:block"
           style={{ "--i": 6 } as React.CSSProperties}
         >
-          <span className="tag rounded-full bg-night/70 px-3.5 py-1.5 text-[10px] text-moth" style={{ boxShadow: "var(--ring)" }}>
-            every light is a kept moment — click one to step inside
+          <span className="tag rounded-[6px] bg-night/75 px-3 py-1.5 text-[12px] text-moth" style={{ boxShadow: "var(--ring)" }}>
+            Every pin is a kept moment — click one to step inside
           </span>
         </div>
       )}
@@ -286,12 +278,3 @@ function posAt(path: TripView["path"], t: number): Vec2 {
   return [a.pos[0] + (b.pos[0] - a.pos[0]) * f, a.pos[1] + (b.pos[1] - a.pos[1]) * f];
 }
 
-/** The brand glyph: a four-point spark, now a light. */
-function SparkGlyph({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
-      <path d="M12 1.5 L14 9.5 L22.5 12 L14 14.5 L12 22.5 L10 14.5 L1.5 12 L10 9.5 Z" fill={EMBER} />
-      <circle cx="12" cy="12" r="2.4" fill={GOLD} />
-    </svg>
-  );
-}

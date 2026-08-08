@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { InkTag, KeyframeImg, LabelDot, Meter, inkButtonClass } from "@/components/system/ui";
 import { beforeEnd, intoTrip, timecode } from "@/lib/format";
 import { searchObjects, suggestedQueries } from "@/lib/objectIndex";
-import { INK_AURORA, MOMENT_INKS } from "@/lib/theme";
+import { INK_AURORA } from "@/lib/theme";
 import type { ObjectIndexEntry, ObjectSearchResult } from "@/lib/types";
 
 interface Props {
@@ -97,7 +97,7 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
             aria-label="Ask where an object is"
           />
           <kbd
-            className="tag hidden shrink-0 rounded-[6px] px-1.5 py-0.5 text-[9px] text-faint sm:inline"
+            className="tag hidden shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] text-faint sm:inline"
             style={{ boxShadow: "var(--ring)" }}
           >
             esc
@@ -107,31 +107,24 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
         <div className="scrollbar-thin max-h-[60vh] overflow-y-auto">
           {!query.trim() ? (
             <div className="p-4">
-              <InkTag className="text-[10px] text-faint">[ try asking ]</InkTag>
+              <InkTag className="text-[12px] font-semibold text-faint">Try asking</InkTag>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {suggestions.map((s, i) => {
-                  const ink = MOMENT_INKS[i % MOMENT_INKS.length];
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setQuery(s)}
-                      className="rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-transform duration-300 ease-(--ease-signature) hover:scale-[1.04] active:scale-95"
-                      style={{
-                        color: ink.base,
-                        background: ink.glow,
-                        boxShadow: `0 0 0 1px ${ink.base}59`,
-                      }}
-                    >
-                      “{s}”
-                    </button>
-                  );
-                })}
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setQuery(s)}
+                    className="rounded-[6px] bg-haze/60 px-3 py-1.5 text-[12.5px] font-medium text-starlight transition-colors duration-300 ease-(--ease-signature) hover:bg-haze"
+                    style={{ boxShadow: "var(--ring)" }}
+                  >
+                    “{s}”
+                  </button>
+                ))}
               </div>
-              <p className="mt-4 border-t border-dashed border-starlight/15 pt-3 text-[11.5px] leading-relaxed text-moth">
+              <p className="mt-4 border-t border-dashed border-starlight/15 pt-3 text-[12px] leading-relaxed text-moth">
                 Searching {entries.length} distinct objects the robot tracked today. Matching is
                 local and instant — everyday words map onto the detector&apos;s COCO classes, so
-                &ldquo;nalgene&rdquo; finds a <span className="font-mono">bottle</span>.
+                &ldquo;nalgene&rdquo; finds a bottle.
               </p>
             </div>
           ) : results.length === 0 ? (
@@ -160,10 +153,10 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
         </div>
 
         <div className="flex items-center gap-3 border-t border-starlight/15 px-4 py-2">
-          <span className="tag text-[9px] text-faint">[ ↑↓ move ]</span>
-          <span className="tag text-[9px] text-faint">[ ↵ step inside ]</span>
-          <span className="tag tnum ml-auto text-[9px] text-faint">
-            [ {entries.length} objects indexed ]
+          <span className="tag text-[11px] text-faint">↑↓ move</span>
+          <span className="tag text-[11px] text-faint">↵ step inside</span>
+          <span className="tag tnum ml-auto text-[11px] text-faint">
+            {entries.length} objects indexed
           </span>
         </div>
       </div>
@@ -201,7 +194,7 @@ function ResultRow({
     >
       <div className="flex gap-3.5 p-3.5">
         <div
-          className="relative h-[72px] w-[104px] shrink-0 overflow-hidden rounded-[14px]"
+          className="relative h-[72px] w-[104px] shrink-0 overflow-hidden rounded-[8px]"
           style={{ boxShadow: "var(--ring)" }}
         >
           <KeyframeImg
@@ -233,20 +226,20 @@ function ResultRow({
               <LabelDot label={entry.label} size={8} />
               {entry.label}
             </span>
-            <span className="tag chip tnum text-[9px]">
-              [ {entry.sightings.length} sighting{entry.sightings.length === 1 ? "" : "s"} ]
+            <span className="tag chip tnum text-[10px]">
+              {entry.sightings.length} sighting{entry.sightings.length === 1 ? "" : "s"}
             </span>
             {matchedOn !== "exact" && (
-              <InkTag className="text-[9px] text-faint" title={`matched on ${matchedOn}`}>
+              <InkTag className="text-[11px] text-faint" title={`matched on ${matchedOn}`}>
                 ≈ {matchedOn}
               </InkTag>
             )}
             <Meter value={best.confidence} />
           </div>
 
-          <p className="tag tnum mt-1.5 text-[10px] text-moth">
-            [ last seen {intoTrip(entry.lastSeenT)} · {best.placeLabel} ·{" "}
-            {beforeEnd(entry.lastSeenT, durationSec)} ]
+          <p className="tag tnum mt-1.5 text-[11.5px] text-moth">
+            Last seen {intoTrip(entry.lastSeenT)} · {best.placeLabel} ·{" "}
+            {beforeEnd(entry.lastSeenT, durationSec)}
           </p>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -270,18 +263,18 @@ function ResultRow({
 
           {showNav && entry.navTarget && (
             <div
-              className="mt-2 rounded-[14px] px-3 py-2"
+              className="mt-2 rounded-[8px] px-3 py-2"
               style={{
                 background: INK_AURORA.glow,
                 boxShadow: "0 0 0 1px rgb(62 230 192 / 0.35)",
               }}
             >
-              <p className="tag text-[10px] text-aurora">[ nav goal queued ]</p>
+              <p className="tag text-[11px] font-semibold text-aurora">Nav goal queued</p>
               <p className="mt-0.5 text-[12px] leading-snug text-moth">
                 The robot would drive back to this spot.
               </p>
-              <p className="tag tnum mt-1 text-[9px] text-faint">
-                target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
+              <p className="tag tnum mt-1 text-[11px] text-faint">
+                Target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
                 heading {entry.navTarget.heading.toFixed(0)}° · rejoins at{" "}
                 {timecode(entry.navTarget.approachFromT)}
               </p>

@@ -46,10 +46,9 @@ export function DayBar({
         type="button"
         onClick={onPlayToggle}
         aria-label={playing ? "Pause the replay" : "Replay the day"}
-        className="shrink-0 rounded-full transition-transform duration-300 ease-(--ease-signature) hover:scale-105 active:scale-95"
-        style={{ boxShadow: playing ? "0 0 18px rgb(255 196 107 / 0.35)" : undefined }}
+        className="shrink-0 rounded-[8px] transition-transform duration-300 ease-(--ease-signature) hover:scale-105 active:scale-95"
       >
-        <PlayGlyph size={46} paused={playing} />
+        <PlayGlyph size={42} paused={playing} />
       </button>
 
       <div className="min-w-0 flex-1">
@@ -94,11 +93,11 @@ export function DayBar({
       </div>
 
       <div className="hidden shrink-0 flex-col items-end sm:flex">
-        <span className="tag tnum text-[13px] text-starlight">
-          {timecode(t)} <span className="text-faint">/ {timecode(durationSec)}</span>
+        <span className="tag tnum text-[13px] font-semibold text-starlight">
+          {timecode(t)} <span className="font-medium text-faint">/ {timecode(durationSec)}</span>
         </span>
-        <span className="tag mt-1 text-[9px] text-faint">
-          {playing ? `[ replaying · ${replaySpeed}× ]` : "[ press play to re-walk the day ]"}
+        <span className="tag mt-0.5 text-[11px] text-faint">
+          {playing ? `Replaying · ${replaySpeed}×` : "Press play to re-walk the day"}
         </span>
       </div>
     </div>

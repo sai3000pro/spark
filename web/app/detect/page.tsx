@@ -12,7 +12,7 @@ export default function DetectPage() {
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-6 sm:px-6">
       <nav className="mb-5">
         <Link href="/" className="btn-ghost px-3.5 py-2 text-[13px]">
-          <span aria-hidden>←</span> Back to the map
+          <span aria-hidden>←</span> Back to Spark
         </Link>
       </nav>
 

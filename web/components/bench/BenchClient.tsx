@@ -13,7 +13,7 @@ const Bench = dynamic(() => import("@/components/bench/Bench").then((m) => m.Ben
   ssr: false,
   loading: () => (
     <div className="plate relative grid h-64 place-items-center">
-      <span className="tag text-[10px] text-moth">[ loading the bench… ]</span>
+      <span className="tag text-[12px] text-moth">Loading the bench…</span>
     </div>
   ),
 });

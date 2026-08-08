@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 /*
-  SPARK — the NIGHT WALK system (see /DESIGN.md).
+  SPARK — the NIGHT WALK system, v4 (see /DESIGN.md).
 
   The product material is light: Gaussian splats are point clouds of captured
-  light, so the whole app lives at blue hour. Deep indigo-violet grounds under
-  fine star grain, a warm ember/gold afterglow for action, aurora teal for
-  anything live and measured, and six luminous moment inks. Display type is
-  Archivo Expanded Black; telemetry speaks Martian Mono in brackets.
+  light, so the whole app lives at blue hour — deep indigo grounds, a warm
+  ember/gold afterglow for action, aurora teal for anything live and measured.
+  The voice is calm and editorial: Fraunces for headlines, Instrument Sans for
+  everything else. No all-caps telemetry, no brackets — metadata is quiet
+  sentence-case text separated by middle dots.
 
   SVG, canvas, WebGL and MapLibre can't read Tailwind classes, so every value
   here is mirrored in lib/theme.ts — change one, change both. The map style in
@@ -40,9 +41,13 @@
   --color-lilac: #9d8bfa;
   --color-sky: #6cc5ff;
 
-  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-martian), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+
+  /* One radius scale. Nothing is a pill except status dots. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
 
   /* Exactly two curves — registered in GSAP CustomEase under the same names. */
   --ease-signature: cubic-bezier(0.785, 0.135, 0.15, 0.86);
@@ -57,16 +62,13 @@
      Keep k−c ≥ 0.1 or the texture stops reading. */
   --starfield: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.93 0 0 0 0 0.99 0.55 0 0 0 -0.41'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23s)'/%3E%3C/svg%3E");
 
-  /* Print mottle — DARK specks for the rare light-ground element. */
-  --mottle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.06 0 0 0 0 0.05 0 0 0 0 0.14 0.5 0 0 0 -0.36'/%3E%3C/filter%3E%3Crect width='280' height='280' filter='url(%23m)'/%3E%3C/svg%3E");
-
   /* Hairline ring for plates — crisp edge without a border box. */
-  --ring: 0 0 0 1px rgb(242 238 252 / 0.14);
-  --ring-strong: 0 0 0 1px rgb(242 238 252 / 0.28);
+  --ring: 0 0 0 1px rgb(242 238 252 / 0.12);
+  --ring-strong: 0 0 0 1px rgb(242 238 252 / 0.22);
 
   /* Elevation — indigo-tinted, never neutral gray. */
   --shadow-plate:
-    inset 0 1px 0 rgb(242 238 252 / 0.07),
+    inset 0 1px 0 rgb(242 238 252 / 0.06),
     0 2px 3px -1px rgb(6 5 18 / 0.5),
     0 12px 28px -12px rgb(6 5 18 / 0.7);
 }
@@ -80,16 +82,18 @@ body {
 body {
   color: var(--color-starlight);
   font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Headlines: Fraunces at display optical size — medium weight, near-normal
+   tracking. Warm and bookish, never shouting. */
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-variation-settings: "wdth" 125;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: 520;
+  letter-spacing: -0.015em;
   text-wrap: balance;
 }
 
@@ -121,73 +125,57 @@ h3 {
     opacity: 0.5;
     border-radius: inherit;
   }
-  .mottle::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background-image: var(--mottle);
-    opacity: 0.5;
-    border-radius: inherit;
-  }
 
   /* ── The plate: crisp surface over a textured field ─────────────────── */
   .plate {
     background: var(--color-plate);
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     box-shadow: var(--ring), var(--shadow-plate);
   }
 
-  /* ── The bracketed mono voice ───────────────────────────────────────── */
+  /* ── Metadata voice: quiet sentence-case, dot-separated, tabular ────── */
   .tag {
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.01em;
     font-variant-numeric: tabular-nums;
   }
-  /* Provenance / status chip: hairline box around the mono voice. */
+  /* Provenance / status chip: hairline box around a short label. */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 3px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     box-shadow: var(--ring);
     color: var(--color-moth);
+    background: rgb(15 13 35 / 0.55);
   }
   .chip-live {
     color: var(--color-aurora);
-    box-shadow: 0 0 0 1px rgb(62 230 192 / 0.35);
+    box-shadow: 0 0 0 1px rgb(62 230 192 / 0.3);
   }
   .chip-synth {
     color: var(--color-ember);
-    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.35);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.3);
   }
 
-  /* ── Buttons: two, forever ──────────────────────────────────────────── */
+  /* ── Buttons: two, forever. Quiet rectangles, no pills ──────────────── */
   .btn-ember {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--color-ember);
-    color: var(--color-night);
+    color: #241004;
     font-weight: 600;
     transition:
-      box-shadow 0.3s var(--ease-signature),
-      transform 0.3s var(--ease-signature),
-      background-color 0.3s var(--ease-signature);
+      background-color 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
   }
   .btn-ember:hover {
     background: var(--color-gold);
-    /* Embossed: pressed INTO the night, not drawn on it. */
-    box-shadow:
-      inset 0 2px 0 rgb(255 255 255 / 0.35),
-      inset 0 -3px 6px rgb(180 73 31 / 0.45),
-      0 6px 18px -6px rgb(255 142 94 / 0.5);
   }
   .btn-ember:active {
     transform: scale(0.98);
@@ -197,10 +185,11 @@ h3 {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     color: var(--color-starlight);
+    background: rgb(31 27 64 / 0.65);
     box-shadow: var(--ring-strong);
-    font-weight: 600;
+    font-weight: 550;
     transition:
       box-shadow 0.3s var(--ease-signature),
       background-color 0.3s var(--ease-signature),
@@ -208,9 +197,6 @@ h3 {
   }
   .btn-ghost:hover {
     background: var(--color-haze);
-    box-shadow:
-      var(--ring-strong),
-      inset 0 1px 0 rgb(242 238 252 / 0.12);
   }
   .btn-ghost:active {
     transform: scale(0.98);
@@ -231,29 +217,29 @@ h3 {
   /* Range input for the day scrubber — an ember bead on a dusk rail. */
   .scrub {
     appearance: none;
-    height: 8px;
-    border-radius: 999px;
+    height: 6px;
+    border-radius: 3px;
     background: var(--color-haze);
     box-shadow: var(--ring);
     outline-offset: 3px;
   }
   .scrub::-webkit-slider-thumb {
     appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: var(--color-ember);
-    border: 3px solid var(--color-night);
-    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.6), 0 0 14px rgb(255 142 94 / 0.5);
+    border: 2.5px solid var(--color-night);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.55);
     cursor: grab;
   }
   .scrub::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: var(--color-ember);
-    border: 3px solid var(--color-night);
-    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.6), 0 0 14px rgb(255 142 94 / 0.5);
+    border: 2.5px solid var(--color-night);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.55);
     cursor: grab;
   }
 
@@ -299,16 +285,13 @@ h3 {
 
 html.reveal-armed [data-reveal] {
   opacity: 0;
-  transform: translateY(24px);
-  filter: blur(6px);
+  transform: translateY(18px);
 }
 html.reveal-armed [data-reveal][data-state="in"] {
   opacity: 1;
   transform: none;
-  filter: blur(0);
   transition:
     opacity 0.8s ease,
-    filter 0.8s ease,
     transform 0.9s var(--ease-reveal);
 }
 
@@ -316,7 +299,7 @@ html.reveal-armed [data-reveal][data-state="in"] {
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -340,17 +323,7 @@ html.reveal-armed [data-reveal][data-state="in"] {
   }
 }
 
-/* Route draws itself (pathLength=1 on the path). */
-@keyframes draw-route {
-  from {
-    stroke-dashoffset: 1;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* The soft breath of a live light — moments and the follow pulse. */
+/* The soft breath of a live light — the follow pulse and the robot dot. */
 @keyframes glow-breathe {
   0%,
   100% {
@@ -368,8 +341,8 @@ html.reveal-armed [data-reveal][data-state="in"] {
 /* MapLibre chrome: the map is the poster's floor, not a navigation app. */
 .maplibregl-ctrl-attrib {
   background: rgb(15 13 35 / 0.7) !important;
-  font-family: var(--font-mono);
-  font-size: 9px !important;
+  font-family: var(--font-sans);
+  font-size: 10px !important;
 }
 .maplibregl-ctrl-attrib a {
   color: var(--color-faint) !important;
@@ -1209,6 +1182,5 @@ html.reveal-armed [data-reveal][data-state="in"] {
   html.reveal-armed [data-reveal] {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
