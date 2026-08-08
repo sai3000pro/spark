@@ -235,7 +235,16 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       const tick = (t: number) => lenis.raf(t * 1000);
       gsap.ticker.add(tick);
       gsap.ticker.lagSmoothing(0);
+      // html/body are height:100%, so Lenis's ResizeObserver (which watches
+      // documentElement's box, not its scrollHeight) never fires when pin
+      // spacers inflate the page — its scroll limit goes stale and the wheel
+      // stops short of the bottom. Re-measure after every ScrollTrigger
+      // refresh, which is exactly when the pin spacers change the height.
+      const remeasure = () => lenis.resize();
+      ScrollTrigger.addEventListener("refresh", remeasure);
+      lenis.resize();
       return () => {
+        ScrollTrigger.removeEventListener("refresh", remeasure);
         gsap.ticker.remove(tick);
         lenis.destroy();
       };
@@ -514,76 +523,59 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       };
     });
 
-    // ── The gallery: pinned horizontal on desktop, native scroll below ──
+    // ── The gallery deck: desktop + motion only. A pile of prints in the
+    // robot's hand — each scroll beat flicks the top one off the pile
+    // (alternating left/right, the way you'd deal photographs onto a table)
+    // while the journal entry beside it swaps. The CSS deck/strip swap is
+    // keyed to html.reveal-armed, so everyone else keeps the native strip. ──
     mm.add("(min-width: 1025px) and (prefers-reduced-motion: no-preference)", () => {
       const el = root.current!;
-      const viewport = el.querySelector<HTMLElement>("[data-gallery-viewport]");
-      const track = el.querySelector<HTMLElement>("[data-gallery-track]");
-      const fill = el.querySelector<HTMLElement>("[data-rail-fill]");
-      const dots = Array.from(el.querySelectorAll<HTMLElement>("[data-rail-dot]"));
-      if (!viewport || !track) return;
-      viewport.style.overflowX = "hidden";
-      const dist = () => Math.max(0, track.scrollWidth - viewport.clientWidth);
-      if (fill) fill.style.transform = "scaleX(0)";
-      // Fast flicks shear the whole shelf of prints a few degrees — paper
-      // being dragged, not a carousel. quickTo eases it back on its own.
-      const shear = gsap.quickTo(track, "skewX", { duration: 0.5, ease: "power2.out" });
-      const tween = gsap.to(track, {
-        x: () => -dist(),
-        ease: "none",
+      const cards = Array.from(el.querySelectorAll<HTMLElement>("[data-deck-card]"));
+      const texts = Array.from(el.querySelectorAll<HTMLElement>("[data-deck-text]"));
+      const fill = el.querySelector<HTMLElement>("[data-deck-fill]");
+      if (cards.length < 2) return;
+      const n = cards.length;
+      const tl = gsap.timeline({
         scrollTrigger: {
-          trigger: "[data-gallery]",
+          trigger: "[data-deck]",
           start: "top top",
-          end: () => "+=" + Math.round(dist() + window.innerHeight * 0.6),
+          end: () => "+=" + Math.round((n - 0.4) * window.innerHeight * 0.85),
+          scrub: 0.6,
           pin: true,
-          scrub: 0.8,
           anticipatePin: 1,
           invalidateOnRefresh: true,
           onUpdate: (st) => {
-            shear(gsap.utils.clamp(-3.5, 3.5, st.getVelocity() / -400));
             if (fill) fill.style.transform = `scaleX(${st.progress})`;
-            const idx = st.progress * (dots.length - 1) + 1e-3;
-            dots.forEach((d, i) => {
-              d.style.opacity = i <= idx ? "1" : "0.3";
-              d.style.transform = i <= idx ? "scale(1.3)" : "scale(1)";
-            });
           },
-          onScrubComplete: () => shear(0),
         },
       });
-      // Each print slides inside its window as the shelf passes — a slow
-      // parallax that keeps the photographs alive while they travel.
-      const parallax = Array.from(el.querySelectorAll<HTMLElement>("[data-gimg]")).map((img) =>
-        gsap.fromTo(
-          img,
-          { xPercent: -5.5 },
-          {
-            xPercent: 5.5,
-            ease: "none",
-            scrollTrigger: {
-              trigger: img,
-              containerAnimation: tween,
-              start: "left right",
-              end: "right left",
-              scrub: true,
-            },
-          },
-        ),
-      );
+      // Time 0 = the full pile, first entry showing. The cards' markup
+      // rotation is their resting tilt; underneath cards start a hair small,
+      // so each reveal is a settle, not a pop.
+      cards.forEach((c, i) => {
+        tl.set(
+          c,
+          { xPercent: 0, yPercent: 0, autoAlpha: 1, rotation: Number(c.dataset.tilt ?? 0), scale: i === 0 ? 1 : 0.965 },
+          0,
+        );
+      });
+      texts.forEach((t, i) => tl.set(t, { autoAlpha: i === 0 ? 1 : 0, y: i === 0 ? 0 : 18 }, 0));
+      for (let i = 0; i < n - 1; i++) {
+        const at = i + 0.3;
+        const dir = i % 2 ? 1 : -1;
+        const tilt = Number(cards[i].dataset.tilt ?? 0);
+        tl.to(cards[i], { xPercent: dir * 140, yPercent: -12, rotation: tilt + dir * 24, duration: 0.7, ease: "signature" }, at)
+          .to(cards[i], { autoAlpha: 0, duration: 0.22, ease: "none" }, at + 0.5)
+          .to(cards[i + 1], { scale: 1, duration: 0.5, ease: "reveal" }, at + 0.25)
+          .to(texts[i], { autoAlpha: 0, y: -16, duration: 0.28, ease: "signature" }, at)
+          .to(texts[i + 1], { autoAlpha: 1, y: 0, duration: 0.4, ease: "reveal" }, at + 0.3);
+      }
+      tl.to({}, { duration: 0.6 });
       return () => {
-        parallax.forEach((p) => {
-          p.scrollTrigger?.kill();
-          p.kill();
-        });
-        tween.scrollTrigger?.kill();
-        tween.kill();
-        viewport.style.overflowX = "";
+        tl.scrollTrigger?.kill();
+        tl.kill();
         if (fill) fill.style.transform = "";
-        dots.forEach((d) => {
-          d.style.opacity = "";
-          d.style.transform = "";
-        });
-        gsap.set(track, { clearProps: "x,skewX" });
+        gsap.set([...cards, ...texts], { clearProps: "transform,opacity,visibility" });
       };
     });
 
@@ -700,7 +692,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       >
         {/* Captions. C is the markup default — the no-JS and reduced-motion
             resting state; A and B are staged in by the timeline. */}
-        <div className="pointer-events-none absolute inset-x-0 top-[11%] z-10 px-6 text-center">
+        <div className="pointer-events-none absolute inset-x-0 top-[15%] z-10 px-6 text-center">
           <div data-sieve-a className="opacity-0">
             <h2 className="text-[clamp(2rem,4.4vw,3.4rem)] leading-tight text-ink">
               It noticed <span className="text-brass-deep">{noticedFmt}</span> things.
@@ -729,7 +721,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
             final state — most words struck through, six circled in their
             moment's ink with its clock above. The timeline rewinds all of it
             and plays the pen forward as you scroll. */}
-        <div className="relative z-0 mx-auto flex w-full max-w-4xl flex-1 flex-wrap content-center items-baseline justify-center gap-x-4 gap-y-2.5 px-6 pb-[12vh] pt-[30vh] sm:gap-x-5 sm:gap-y-3">
+        <div className="relative z-0 mx-auto flex w-full max-w-4xl flex-1 flex-wrap content-center items-baseline justify-center gap-x-4 gap-y-2.5 px-6 pb-[16vh] pt-[26vh] sm:gap-x-5 sm:gap-y-3">
           {wall.map((w, i) =>
             w.kept == null ? (
               <span
@@ -878,114 +870,127 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         </div>
       </section>
 
-      {/* ── IV · the gallery ───────────────────────────────────────────── */}
+      {/* ── IV · the gallery deck ──────────────────────────────────────── */}
       <section
-        data-gallery
-        className="papergrain gridfield relative flex flex-col justify-center overflow-hidden bg-paper py-20 lg:h-svh lg:py-0"
+        data-deck
+        className="papergrain gridfield relative overflow-hidden bg-paper"
         aria-label="The six kept moments"
       >
-        <div className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 data-reveal className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">
-              Six moments, kept.
-            </h2>
-            <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
-              [ SIX OF {stats.candidates} CANDIDATE MINUTES · EACH ONE OWNS AN INK ]
-            </p>
+        {/* The deck — CSS swaps it in (and the strip out) once motion JS
+            arms, desktop only: a pile of prints in the hand, the top one
+            flicked aside on each scroll beat while the entry swaps. */}
+        <div className="deck-when-armed relative hidden h-svh min-h-[640px]">
+          <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10">
+            <div className="mx-auto flex w-full max-w-6xl flex-wrap items-end justify-between gap-4 px-8">
+              <h2 className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">Six moments, kept.</h2>
+              <p className="fnote pb-2 text-[11px] text-ink-faint">[ SCROLL — LEAF THROUGH THE PRINTS ]</p>
+            </div>
           </div>
-        </div>
-
-        {/* The prints, mounted on the page: each moment is a taped-down
-            photograph on a vellum mat, resting at its own slight angle, with
-            the journal entry written on the paper beneath it. Picking one up
-            (hover) squares and lifts the print. */}
-        <div data-gallery-viewport className="relative z-10 mt-12 w-full overflow-x-auto scrollbar-none">
-          <div
-            data-gallery-track
-            className="flex w-max items-start gap-9 px-5 pt-4 sm:px-8 lg:pl-[max(2rem,calc((100vw-72rem)/2+2rem))] lg:pr-[36vw]"
-          >
-            {moments.map((mo, i) => {
-              const ink = PAPER_INKS[i % PAPER_INKS.length];
-              const tilt = [-1.3, 1.1, -0.9, 1.4, -1.1, 0.8][i % 6];
-              return (
-                <Link
-                  key={mo.id}
-                  href={`/walk?m=${mo.id}`}
-                  className={`group block w-[78vw] max-w-[390px] shrink-0 sm:w-[390px] ${i % 2 === 1 ? "lg:mt-14" : ""}`}
-                >
-                  <article className="relative" style={{ "--ink": ink, "--tilt": `${tilt}deg` } as React.CSSProperties}>
-                    <div className="papergrain relative rotate-[var(--tilt)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_24px_44px_-24px_rgb(27_27_24_/_0.5)] transition-transform duration-500 ease-(--ease-reveal) group-hover:-translate-y-2 group-hover:rotate-0">
-                      <span aria-hidden className="tape -top-2.5 left-5 -rotate-6" />
-                      <span aria-hidden className="tape -top-2.5 right-7 rotate-3" />
-                      <div className="relative overflow-hidden">
-                        <div data-gimg className="-mx-[7%] w-[114%]">
-                          <KeyframeImg
-                            keyframe={{ placeholderSeed: mo.seed, hue: mo.hue, url: mo.url }}
-                            alt={`Keyframe stand-in for “${mo.title}”`}
-                            width={840}
-                            height={630}
-                            className="aspect-[4/3] w-full object-cover"
-                          />
-                        </div>
-                        {mo.hasMusic && (
-                          <span className="fnote absolute right-2.5 top-2.5 z-[1] flex items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[9.5px] text-paper">
-                            <Music size={10} strokeWidth={1.75} aria-hidden /> SCORED
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-baseline justify-between pt-2.5">
-                        <p className="fnote text-[10px] text-ink-faint">[ {String(i + 1).padStart(3, "0")} ]</p>
-                        <p className="fnote text-[10px]" style={{ color: ink }}>
-                          {mo.clock}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-6 px-1">
-                      <p className="fnote flex items-center gap-2 text-[10.5px] text-ink-faint">
-                        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
-                        {mo.place} · {mo.length} · {mo.mood}
-                      </p>
-                      <h3 className="mt-2 flex items-baseline gap-2 text-[23px] leading-snug text-ink">
-                        {mo.title}
-                        <ArrowUpRight
-                          size={16}
-                          strokeWidth={2}
-                          className="shrink-0 translate-y-[2px] transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-                          style={{ color: ink }}
-                          aria-hidden
-                        />
-                      </h3>
-                      <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink-soft">{mo.summary}</p>
-                    </div>
+          <div className="mx-auto grid h-full w-full max-w-6xl grid-cols-[minmax(320px,5fr)_minmax(0,7fr)] items-center gap-12 px-8 pt-[9vh]">
+            <div className="relative z-10 h-[min(52vh,460px)]">
+              {moments.map((mo, i) => {
+                const ink = PAPER_INKS[i % PAPER_INKS.length];
+                return (
+                  <div
+                    key={mo.id}
+                    data-deck-text
+                    className={`absolute inset-0 flex flex-col justify-center ${i === 0 ? "" : "invisible opacity-0"}`}
+                  >
+                    <p className="fnote text-[11px] text-ink-faint">
+                      [ {String(i + 1).padStart(2, "0")} / {String(moments.length).padStart(2, "0")} · {mo.clock} ]
+                    </p>
+                    <h3 className="mt-4 text-[clamp(1.9rem,3.2vw,2.9rem)] leading-[1.06] text-ink">{mo.title}</h3>
+                    <p className="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-ink-soft">{mo.summary}</p>
+                    <p className="fnote mt-5 flex items-center gap-2 text-[10.5px] text-ink-faint">
+                      <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
+                      {mo.place} · {mo.length} · {mo.mood}
+                    </p>
+                    <Link href={`/walk?m=${mo.id}`} className="pill-ghost mt-7 w-fit px-5 py-2.5 text-[14px] text-ink">
+                      Step inside
+                      <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden />
+                    </Link>
+                  </div>
+                );
+              })}
+              <div aria-hidden className="absolute bottom-0 left-0 flex w-full max-w-[260px] items-center gap-3">
+                <span className="fnote text-[10px] text-ink-faint">{moments[0]?.clock}</span>
+                <span className="relative h-[2px] flex-1 overflow-hidden rounded-full bg-ink/15">
+                  <span
+                    data-deck-fill
+                    className="absolute inset-0 origin-left rounded-full"
+                    style={{ background: `linear-gradient(90deg, ${BRASS}, ${CLAY})`, transform: "scaleX(0)" }}
+                  />
+                </span>
+                <span className="fnote text-[10px] text-ink-faint">{moments[moments.length - 1]?.clock}</span>
+              </div>
+            </div>
+            <div className="relative flex h-full items-center justify-center">
+              {moments.map((mo, i) => {
+                const ink = PAPER_INKS[i % PAPER_INKS.length];
+                const tilt = [-2.1, 1.7, -1.2, 2.3, -1.7, 1.1][i % 6];
+                return (
+                  <article
+                    key={mo.id}
+                    data-deck-card
+                    data-tilt={tilt}
+                    className="papergrain absolute w-[min(34vw,470px)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_28px_50px_-26px_rgb(27_27_24_/_0.55)]"
+                    style={{ transform: `rotate(${tilt}deg)`, zIndex: moments.length - i }}
+                  >
+                    <PrintMat mo={mo} index={i} ink={ink} />
                   </article>
-                </Link>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* The evening's rail — scrubbed by the gallery on desktop. */}
-        <div aria-hidden className="relative z-10 mx-auto mt-10 hidden w-full max-w-3xl items-center gap-4 px-8 lg:flex">
-          <span className="fnote text-[10.5px] text-ink-faint">{moments[0]?.clock}</span>
-          <div className="relative h-[2px] flex-1 rounded-full bg-ink/15">
-            <div
-              data-rail-fill
-              className="absolute inset-0 origin-left rounded-full"
-              style={{ background: `linear-gradient(90deg, ${BRASS}, ${CLAY})` }}
-            />
-            {moments.map((mo, i) => (
-              <span
-                key={mo.id}
-                data-rail-dot
-                className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full transition-[opacity,transform] duration-300"
-                style={{
-                  left: `${moments.length > 1 ? (i / (moments.length - 1)) * 100 : 0}%`,
-                  background: PAPER_INKS[i % PAPER_INKS.length],
-                }}
-              />
-            ))}
+        {/* The strip — mobile, tablet, no-JS and reduced motion: the same
+            mounted prints on a native horizontal scroll. */}
+        <div className="strip-when-armed py-20">
+          <div className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-8">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <h2 data-reveal className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">
+                Six moments, kept.
+              </h2>
+              <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
+                [ SIX OF {stats.candidates} CANDIDATE MINUTES · EACH ONE OWNS AN INK ]
+              </p>
+            </div>
           </div>
-          <span className="fnote text-[10.5px] text-ink-faint">{moments[moments.length - 1]?.clock}</span>
+          <div className="relative z-10 mt-10 w-full overflow-x-auto scrollbar-none">
+            <div className="flex w-max items-start gap-9 px-5 pt-4 sm:px-8">
+              {moments.map((mo, i) => {
+                const ink = PAPER_INKS[i % PAPER_INKS.length];
+                const tilt = [-1.3, 1.1, -0.9, 1.4, -1.1, 0.8][i % 6];
+                return (
+                  <Link key={mo.id} href={`/walk?m=${mo.id}`} className="group block w-[78vw] max-w-[390px] shrink-0">
+                    <article className="relative" style={{ "--tilt": `${tilt}deg` } as React.CSSProperties}>
+                      <div className="papergrain relative rotate-[var(--tilt)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_24px_44px_-24px_rgb(27_27_24_/_0.5)] transition-transform duration-500 ease-(--ease-reveal) group-hover:-translate-y-2 group-hover:rotate-0">
+                        <PrintMat mo={mo} index={i} ink={ink} />
+                      </div>
+                      <div className="mt-6 px-1">
+                        <p className="fnote flex items-center gap-2 text-[10.5px] text-ink-faint">
+                          <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
+                          {mo.place} · {mo.length} · {mo.mood}
+                        </p>
+                        <h3 className="mt-2 flex items-baseline gap-2 text-[23px] leading-snug text-ink">
+                          {mo.title}
+                          <ArrowUpRight
+                            size={16}
+                            strokeWidth={2}
+                            className="shrink-0 translate-y-[2px] transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                            style={{ color: ink }}
+                            aria-hidden
+                          />
+                        </h3>
+                        <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink-soft">{mo.summary}</p>
+                      </div>
+                    </article>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1040,7 +1045,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       <section
         data-statement
         aria-label="Not every minute is worth keeping — six were"
-        className="papergrain gridfield relative overflow-hidden border-y border-ink/10 bg-paper py-20 sm:py-28"
+        className="papergrain gridfield relative overflow-hidden border-y border-ink/10 bg-paper py-14 sm:py-20"
       >
         {/* Three lines, each sized to fit the page, drifting apart as the
             section passes — always readable, never driven off the edge. */}
@@ -1086,7 +1091,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       </section>
 
       {/* ── VII · field notes ──────────────────────────────────────────── */}
-      <section className="papergrain gridfield relative bg-paper py-24 sm:py-32" aria-label="Field notes">
+      <section className="papergrain gridfield relative bg-paper py-20 sm:py-24" aria-label="Field notes">
         <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <h2 data-reveal className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
@@ -1401,6 +1406,37 @@ function PinRow() {
       })}
       <circle className="pr-traveler" cx={14} cy={108} r={3.2} fill={BRASS} />
     </svg>
+  );
+}
+
+/** The inside of a mounted print: tape, photograph, and the mat's caption.
+    The host supplies the vellum mat (padding, shadow, tilt). */
+function PrintMat({ mo, index, ink }: { mo: LandingMoment; index: number; ink: string }) {
+  return (
+    <>
+      <span aria-hidden className="tape -top-2.5 left-5 -rotate-6" />
+      <span aria-hidden className="tape -top-2.5 right-7 rotate-3" />
+      <div className="relative overflow-hidden">
+        <KeyframeImg
+          keyframe={{ placeholderSeed: mo.seed, hue: mo.hue, url: mo.url }}
+          alt={`Keyframe stand-in for “${mo.title}”`}
+          width={840}
+          height={630}
+          className="aspect-[4/3] w-full object-cover"
+        />
+        {mo.hasMusic && (
+          <span className="fnote absolute right-2.5 top-2.5 z-[1] flex items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[9.5px] text-paper">
+            <Music size={10} strokeWidth={1.75} aria-hidden /> SCORED
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline justify-between pt-2.5">
+        <p className="fnote text-[10px] text-ink-faint">[ {String(index + 1).padStart(3, "0")} ]</p>
+        <p className="fnote text-[10px]" style={{ color: ink }}>
+          {mo.clock}
+        </p>
+      </div>
+    </>
   );
 }
 
