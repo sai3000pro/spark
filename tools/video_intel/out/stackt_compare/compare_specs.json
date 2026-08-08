@@ -1,0 +1,156 @@
+[
+  {
+    "name": "cmp_good_base",
+    "label": "good [base] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_good_sharp",
+    "label": "good [sharp] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "sharp_keep": 0.7
+  },
+  {
+    "name": "cmp_good_deblur",
+    "label": "good [deblur] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "cmp_good_opac",
+    "label": "good [opac] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_good_sharp_opac",
+    "label": "good [sharp_opac] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "sharp_keep": 0.7,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_good_hybrid",
+    "label": "good [hybrid] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "pipeline": "hybrid"
+  },
+  {
+    "name": "cmp_good_ffwd",
+    "label": "good [ffwd] Walking path, CN Tower view",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "pipeline": "feedforward"
+  },
+  {
+    "name": "cmp_hard_base",
+    "label": "hard [base] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_hard_sharp",
+    "label": "hard [sharp] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "sharp_keep": 0.7
+  },
+  {
+    "name": "cmp_hard_deblur",
+    "label": "hard [deblur] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "cmp_hard_opac",
+    "label": "hard [opac] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_hard_sharp_opac",
+    "label": "hard [sharp_opac] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "sharp_keep": 0.7,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_hard_hybrid",
+    "label": "hard [hybrid] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "pipeline": "hybrid"
+  },
+  {
+    "name": "cmp_hard_ffwd",
+    "label": "hard [ffwd] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024,
+    "pipeline": "feedforward"
+  }
+]

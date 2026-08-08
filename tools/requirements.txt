@@ -1,0 +1,11 @@
+# Mac tooling dependencies.
+#
+# The live capture server + simulators (tools/live_capture_server) are
+# STDLIB-ONLY and need nothing here.
+#
+# The offline inspector (tools/arkit_capture) needs numpy + Pillow; matplotlib
+# is optional (only for trajectory PNGs — the inspector still writes CSV/PLY/
+# summary without it).
+numpy>=1.24
+pillow>=9.0
+matplotlib>=3.6   # optional: trajectory plots

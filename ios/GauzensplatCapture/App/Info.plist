@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Gauzensplat Capture</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- LiDAR + world tracking require the rear camera -->
+    <key>NSCameraUsageDescription</key>
+    <string>Gauzensplat Capture uses the camera and LiDAR scanner to record RGB, camera poses, and depth for 3D reconstruction. All data stays on your device unless you explicitly export or mirror it.</string>
+
+    <!-- Direct LAN communication with the laptop capture server -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Gauzensplat Capture connects to a capture server running on your laptop over your local Wi-Fi to mirror recordings live. No internet or cloud is used.</string>
+
+    <!-- Allow cleartext http:// / ws:// to the local laptop server (ATS would
+         otherwise block plain-HTTP loads to a LAN IP). -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- Local dev tool: allow cleartext http:// / ws:// to the LAN server.
+             NSAllowsLocalNetworking alone is not honored for raw 192.168.x IPs
+             on recent iOS, so arbitrary loads is enabled (local-only use). -->
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+
+    <!-- Required so ARKit apps only install on LiDAR-capable hardware -->
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>arm64</string>
+        <string>arkit</string>
+    </array>
+
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+</dict>
+</plist>

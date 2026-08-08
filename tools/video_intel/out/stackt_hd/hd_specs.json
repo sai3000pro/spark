@@ -1,0 +1,46 @@
+[
+  {
+    "name": "m05_hd_walk",
+    "label": "m05 walking HIGH-DENSITY (fps6,130f,30k,1600)",
+    "start": 86,
+    "end": 116,
+    "fps": 6,
+    "max_frames": 130,
+    "steps": 30000,
+    "max_res": 1600,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "m20_hd_garden",
+    "label": "m20 garden HIGH-DENSITY (fps10,90f,30k,1440)",
+    "start": 308,
+    "end": 318,
+    "fps": 10,
+    "max_frames": 90,
+    "steps": 30000,
+    "max_res": 1440,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "m12_hd_seating",
+    "label": "m12 seating HIGH-DENSITY (fps10,90f,30k,1440)",
+    "start": 204,
+    "end": 214,
+    "fps": 10,
+    "max_frames": 90,
+    "steps": 30000,
+    "max_res": 1440,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "m04_hd_jenga",
+    "label": "m04 jenga HIGH-DENSITY (fps10,90f,30k,1440)",
+    "start": 76,
+    "end": 86,
+    "fps": 10,
+    "max_frames": 90,
+    "steps": 30000,
+    "max_res": 1440,
+    "deblur": "unsharp"
+  }
+]

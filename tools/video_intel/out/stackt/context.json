@@ -1,0 +1,379 @@
+{
+  "overall": "The video captures a vibrant outdoor event or market area on a sunny day, showcasing various activities, unique container-style shops, green spaces, and people enjoying the atmosphere with the Toronto skyline in the background.",
+  "moments": [
+    {
+      "index": 0,
+      "label": "Cornhole game, city skyline",
+      "description": "People are playing cornhole and sitting at picnic tables in an outdoor area with city buildings and the CN Tower visible in the background.",
+      "tags": [
+        "cornhole",
+        "picnic",
+        "city",
+        "people",
+        "outdoor"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a static scene with some moving people, which might cause artifacts.",
+      "start": 0.0,
+      "end": 26.0
+    },
+    {
+      "index": 1,
+      "label": "DJ booth, people walking",
+      "description": "People are walking past a DJ booth where a woman is DJing, with some holding drinks and food.",
+      "tags": [
+        "DJ",
+        "music",
+        "people",
+        "food",
+        "drinks"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "low",
+      "splat_reason": "Significant foreground motion with people walking past the camera.",
+      "start": 26.0,
+      "end": 36.0
+    },
+    {
+      "index": 2,
+      "label": "Crowded outdoor area view",
+      "description": "A wide shot shows a bustling outdoor area filled with many people, picnic tables, and the iconic CN Tower in the distance.",
+      "tags": [
+        "crowd",
+        "outdoor",
+        "city",
+        "picnic",
+        "CN Tower"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Wide shot with many moving people and a slight camera pan.",
+      "start": 36.0,
+      "end": 60.0
+    },
+    {
+      "index": 3,
+      "label": "Gathering at picnic tables",
+      "description": "People are gathered around picnic tables and walking along a path within the lively outdoor event space.",
+      "tags": [
+        "picnic",
+        "gathering",
+        "people",
+        "outdoor",
+        "path"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a scene with many moving people.",
+      "start": 60.0,
+      "end": 76.0
+    },
+    {
+      "index": 4,
+      "label": "Giant Jenga and event sign",
+      "description": "The outdoor area features giant Jenga, picnic tables, and an 'Intelex Family Funday' event sign.",
+      "tags": [
+        "Jenga",
+        "game",
+        "sign",
+        "picnic",
+        "event"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates past static objects, providing good depth information.",
+      "start": 76.0,
+      "end": 86.0
+    },
+    {
+      "index": 5,
+      "label": "Walking path, CN Tower view",
+      "description": "A person walks along a pathway towards the CN Tower, with other people relaxing on the adjacent grassy area.",
+      "tags": [
+        "path",
+        "walking",
+        "CN Tower",
+        "people",
+        "grass"
+      ],
+      "salience": 0.8,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera follows a person, which can introduce motion blur, but the background is stable.",
+      "start": 86.0,
+      "end": 116.0
+    },
+    {
+      "index": 6,
+      "label": "People on raised pathway",
+      "description": "People are walking along a raised pathway, with the CN Tower prominently visible in the background.",
+      "tags": [
+        "pathway",
+        "walking",
+        "CN Tower",
+        "city",
+        "people"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera follows people, but the overall scene is relatively static.",
+      "start": 116.0,
+      "end": 126.0
+    },
+    {
+      "index": 7,
+      "label": "Relaxing on grass, city construction",
+      "description": "People are relaxing on lounge chairs on a grassy area, with distant city buildings under construction.",
+      "tags": [
+        "grass",
+        "relaxing",
+        "people",
+        "city",
+        "construction"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a scene with some moving people and distant construction.",
+      "start": 126.0,
+      "end": 140.0
+    },
+    {
+      "index": 8,
+      "label": "Dog on grass, CN Tower",
+      "description": "A dog walks on the grass where people are relaxing, with the CN Tower visible in the background.",
+      "tags": [
+        "dog",
+        "grass",
+        "people",
+        "CN Tower",
+        "relaxing"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Moving dog and people, but camera movement is a smooth translation.",
+      "start": 140.0,
+      "end": 150.0
+    },
+    {
+      "index": 9,
+      "label": "Music record sale, hammocks",
+      "description": "People are enjoying the grassy area with hammocks and a 'Daybreak Music Record Sale' sign, all with the CN Tower in view.",
+      "tags": [
+        "music",
+        "record sale",
+        "hammocks",
+        "grass",
+        "CN Tower"
+      ],
+      "salience": 0.8,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a busy scene with many people and static elements.",
+      "start": 150.0,
+      "end": 168.0
+    },
+    {
+      "index": 10,
+      "label": "Men walking on pathway",
+      "description": "Two men in black athletic wear are walking directly towards the camera on a pathway.",
+      "tags": [
+        "walking",
+        "pathway",
+        "people",
+        "athletic",
+        "outdoor"
+      ],
+      "salience": 0.5,
+      "splat_feasibility": "low",
+      "splat_reason": "People walking directly towards the camera creates significant foreground motion and potential blur.",
+      "start": 168.0,
+      "end": 178.0
+    },
+    {
+      "index": 11,
+      "label": "Pathway by container shops",
+      "description": "People are walking along a pathway situated next to unique container-style shops and a green grassy area.",
+      "tags": [
+        "pathway",
+        "walking",
+        "shops",
+        "containers",
+        "people"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera follows people, but the main structures (container shops) are static.",
+      "start": 178.0,
+      "end": 204.0
+    },
+    {
+      "index": 12,
+      "label": "Shaded seating area",
+      "description": "People are relaxing in a cozy, shaded seating area adorned with decorative lights and lush greenery on a sunny day.",
+      "tags": [
+        "seating",
+        "relaxing",
+        "greenery",
+        "lights",
+        "outdoor"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera smoothly translates around a static seating area with good parallax.",
+      "start": 204.0,
+      "end": 214.0
+    },
+    {
+      "index": 13,
+      "label": "Shops, man with bicycle",
+      "description": "People are walking past container shops, and a man is leaning on a fence with a bicycle, all set against the backdrop of the CN Tower.",
+      "tags": [
+        "shops",
+        "walking",
+        "bicycle",
+        "CN Tower",
+        "people"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a scene with static structures and some moving people.",
+      "start": 214.0,
+      "end": 230.0
+    },
+    {
+      "index": 14,
+      "label": "Man with bicycle, food stall",
+      "description": "A man is leaning on a fence next to a blue bicycle, looking at his phone, with a food stall visible in the background.",
+      "tags": [
+        "bicycle",
+        "man",
+        "phone",
+        "food stall",
+        "fence"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates past a relatively static foreground subject and background.",
+      "start": 230.0,
+      "end": 240.0
+    },
+    {
+      "index": 15,
+      "label": "Art installations on containers",
+      "description": "Large, vibrant art installations are displayed on top of container buildings, with people walking below.",
+      "tags": [
+        "art",
+        "containers",
+        "buildings",
+        "people",
+        "outdoor"
+      ],
+      "salience": 0.8,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates past static art installations and buildings, good for reconstruction.",
+      "start": 240.0,
+      "end": 252.0
+    },
+    {
+      "index": 16,
+      "label": "Entering container shops",
+      "description": "People are entering and exiting the container shops, with a view of the outdoor area and city in the distance.",
+      "tags": [
+        "shops",
+        "containers",
+        "people",
+        "entrance",
+        "outdoor"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "med",
+      "splat_reason": "People moving in and out of doorways, but the camera movement is stable.",
+      "start": 252.0,
+      "end": 262.0
+    },
+    {
+      "index": 17,
+      "label": "Man on phone by bicycle",
+      "description": "A man is leaning on a fence with a bicycle, engrossed in his phone, while people walk past in the background.",
+      "tags": [
+        "man",
+        "phone",
+        "bicycle",
+        "fence",
+        "walking"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates past a relatively static foreground subject and background.",
+      "start": 262.0,
+      "end": 284.0
+    },
+    {
+      "index": 18,
+      "label": "Man by bicycle, food stall",
+      "description": "A man is leaning on a fence with a bicycle, with a food stall and city buildings visible in the background.",
+      "tags": [
+        "man",
+        "bicycle",
+        "food stall",
+        "city",
+        "fence"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates past a relatively static foreground subject and background.",
+      "start": 284.0,
+      "end": 294.0
+    },
+    {
+      "index": 19,
+      "label": "Container shops and garden",
+      "description": "The scene shows container shops and a vibrant garden area, with people walking along a pathway.",
+      "tags": [
+        "shops",
+        "containers",
+        "garden",
+        "pathway",
+        "people"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "med",
+      "splat_reason": "Camera pans across a scene with static structures and some moving people.",
+      "start": 294.0,
+      "end": 308.0
+    },
+    {
+      "index": 20,
+      "label": "Garden area, white tent",
+      "description": "A beautifully arranged garden area with various plants in crates is visible next to container shops and a white tent.",
+      "tags": [
+        "garden",
+        "plants",
+        "crates",
+        "tent",
+        "shops"
+      ],
+      "salience": 0.7,
+      "splat_feasibility": "high",
+      "splat_reason": "Camera translates around static garden elements and buildings, good parallax.",
+      "start": 308.0,
+      "end": 318.0
+    },
+    {
+      "index": 21,
+      "label": "People at shop entrances",
+      "description": "People are gathered around the entrances of the container shops, with a dog walking nearby.",
+      "tags": [
+        "shops",
+        "entrance",
+        "people",
+        "dog",
+        "containers"
+      ],
+      "salience": 0.6,
+      "splat_feasibility": "med",
+      "splat_reason": "People moving in and out of doorways, but the camera is relatively stable.",
+      "start": 318.0,
+      "end": 330.001
+    }
+  ]
+}

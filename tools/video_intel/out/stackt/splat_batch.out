@@ -1,0 +1,63 @@
+=== splat_batch: 15 sample(s) → log /Users/notjackl3/Programming/hunyuanworld-mirror/tools/video_intel/out/stackt/splat_batch_log.jsonl ===
+
+--- [1/15] m04_giant-jenga-and ---
+[00:57:43] m04_giant-jenga-and          done     imgs=40/40 gauss=364749 912.0s 
+
+--- [2/15] m12_shaded-seating-area ---
+[01:15:59] m12_shaded-seating-area      done     imgs=36/40 gauss=519429 1074.1s 
+
+--- [3/15] m14_man-with-bicycle, ---
+[01:29:43] m14_man-with-bicycle,        done     imgs=40/40 gauss=304502 793.5s 
+
+--- [4/15] m15_art-installations-on ---
+[01:41:48] m15_art-installations-on     done     imgs=35/48 gauss=32282 669.9s 
+
+--- [5/15] m17_man-on-phone ---
+[01:59:57] m17_man-on-phone             done     imgs=52/55 gauss=10000 980.0s 
+
+--- [6/15] m18_man-by-bicycle, ---
+[02:20:39] m18_man-by-bicycle,          done     imgs=18/40 gauss=8330 1174.8s 
+
+--- [7/15] m20_garden-area,-white ---
+[02:36:29] m20_garden-area,-white       done     imgs=40/40 gauss=370571 916.5s 
+
+--- [8/15] m05_med_walking-path,-cn ---
+[02:48:03] m05_med_walking-path,-cn     done     imgs=55/55 gauss=259263 638.3s 
+
+--- [9/15] m09_med_music-record-sale, ---
+[02:58:53] m09_med_music-record-sale,   done     imgs=55/55 gauss=134538 590.2s 
+
+--- [10/15] m00_med_cornhole-game,-city ---
+[03:08:27] m00_med_cornhole-game,-city  done     imgs=54/55 gauss=66277 527.4s 
+
+--- [11/15] sweep_m15_fps2_10k ---
+[03:14:21] sweep_m15_fps2_10k           done     imgs=22/24 gauss=26970 336.9s 
+
+--- [12/15] sweep_m15_fps4_20k ---
+[03:29:00] sweep_m15_fps4_20k           done     imgs=36/48 gauss=131427 770.2s 
+
+--- [13/15] sweep_m15_fps6_30k ---
+[03:56:52] sweep_m15_fps6_30k           done     imgs=53/72 gauss=698267 1575.1s 
+
+--- [14/15] full_1fps_150 ---
+[04:10:20] full_1fps_150                done     imgs=88/150 gauss=47004 724.5s 
+
+--- [15/15] full_2fps_200 ---
+[04:26:15] full_2fps_200                done     imgs=63/200 gauss=153279 801.3s 
+
+=== batch complete: 15/15 produced splats ===
+  m04_giant-jenga-and          done       gauss=364749
+  m12_shaded-seating-area      done       gauss=519429
+  m14_man-with-bicycle,        done       gauss=304502
+  m15_art-installations-on     done       gauss=32282
+  m17_man-on-phone             done       gauss=10000
+  m18_man-by-bicycle,          done       gauss=8330
+  m20_garden-area,-white       done       gauss=370571
+  m05_med_walking-path,-cn     done       gauss=259263
+  m09_med_music-record-sale,   done       gauss=134538
+  m00_med_cornhole-game,-city  done       gauss=66277
+  sweep_m15_fps2_10k           done       gauss=26970
+  sweep_m15_fps4_20k           done       gauss=131427
+  sweep_m15_fps6_30k           done       gauss=698267
+  full_1fps_150                done       gauss=47004
+  full_2fps_200                done       gauss=153279

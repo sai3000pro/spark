@@ -1,0 +1,46 @@
+[
+  {
+    "name": "cmp_good_opac_p01",
+    "label": "good opac_loss=0.01",
+    "start": 86,
+    "end": 116,
+    "opac_loss": 0.01,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_good_opac_p001",
+    "label": "good opac_loss=0.001",
+    "start": 86,
+    "end": 116,
+    "opac_loss": 0.001,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_hard_opac_p01",
+    "label": "hard opac_loss=0.01",
+    "start": 240,
+    "end": 252,
+    "opac_loss": 0.01,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_hard_opac_p001",
+    "label": "hard opac_loss=0.001",
+    "start": 240,
+    "end": 252,
+    "opac_loss": 0.001,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  }
+]

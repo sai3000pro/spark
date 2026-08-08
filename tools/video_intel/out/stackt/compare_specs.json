@@ -1,0 +1,156 @@
+[
+  {
+    "name": "cmp_good_base",
+    "label": "good [base] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280
+  },
+  {
+    "name": "cmp_good_sharp",
+    "label": "good [sharp] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "sharp_keep": 0.7
+  },
+  {
+    "name": "cmp_good_deblur",
+    "label": "good [deblur] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "cmp_good_opac",
+    "label": "good [opac] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_good_sharp_opac",
+    "label": "good [sharp_opac] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "sharp_keep": 0.7,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_good_hybrid",
+    "label": "good [hybrid] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "pipeline": "hybrid"
+  },
+  {
+    "name": "cmp_good_ffwd",
+    "label": "good [ffwd] Art installations on containers",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "pipeline": "feedforward"
+  },
+  {
+    "name": "cmp_hard_base",
+    "label": "hard [base] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280
+  },
+  {
+    "name": "cmp_hard_sharp",
+    "label": "hard [sharp] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "sharp_keep": 0.7
+  },
+  {
+    "name": "cmp_hard_deblur",
+    "label": "hard [deblur] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "deblur": "unsharp"
+  },
+  {
+    "name": "cmp_hard_opac",
+    "label": "hard [opac] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_hard_sharp_opac",
+    "label": "hard [sharp_opac] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "sharp_keep": 0.7,
+    "opac_loss": 0.1
+  },
+  {
+    "name": "cmp_hard_hybrid",
+    "label": "hard [hybrid] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "pipeline": "hybrid"
+  },
+  {
+    "name": "cmp_hard_ffwd",
+    "label": "hard [ffwd] DJ booth, people walking",
+    "start": 26.0,
+    "end": 36.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280,
+    "pipeline": "feedforward"
+  }
+]

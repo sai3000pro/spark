@@ -1,0 +1,737 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0261C98092C40B2A57FF6D6F /* FrameSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B335C89D4407584D62204A1 /* FrameSampler.swift */; };
+		117246F5B9144A02CE88C1B8 /* CaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75EDB37A0CF59A3F994584FD /* CaptureViewModel.swift */; };
+		19A31E1722C688206BDD48C8 /* BoundedFrameQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABCCA0FBE8CED375E6657CEC /* BoundedFrameQueue.swift */; };
+		22B8D139CBC75579CCBC0C98 /* CaptureFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E765998ABFF930B35AA3EABF /* CaptureFormat.swift */; };
+		2382F94C33B4A3BEE5700B2E /* ARFrameExtraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4225DC714E20044BF9A203E2 /* ARFrameExtraction.swift */; };
+		2491B9CB7095A167C38C9CA7 /* MatrixSerializationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72285CE666FE1D74382EF137 /* MatrixSerializationTests.swift */; };
+		24D6CEAAAA1EEEF641CF60C8 /* BinaryEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DCDEBC997DB8B888591CE9C /* BinaryEncoding.swift */; };
+		26A0ADA5913D77C081D970AB /* BoundedQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4F4CDD5EA858A8834F899A /* BoundedQueueTests.swift */; };
+		2C26A975DFFEFDDE5C7FED5E /* ARSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE88565A9818F5EDF3869FB /* ARSessionController.swift */; };
+		3CCF1B40C0F6DECF4CA9FC79 /* CaptureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57066CCB0CC6D81E7BF7F391 /* CaptureState.swift */; };
+		417DD16E9E36B7291D438AA5 /* GauzensplatCaptureCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */; };
+		468BCA410251F1ABEA3DA412 /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E70CFFAC92168CCF5CFA20E /* CaptureView.swift */; };
+		56611E14CFD2D2A37E02FEA9 /* ConnectionTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = A845DC99F4D9E7854BDE50A0 /* ConnectionTester.swift */; };
+		5CC1092F7A986813B1338F00 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0965C17D71E6F325C1C62D24 /* ExportSheet.swift */; };
+		632048AAA7E48976C3564C7C /* ConnectionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11635AC41EAA693DB644202 /* ConnectionPanel.swift */; };
+		7710D9E49F1706ECE3C3762E /* MatrixSerialization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00FDBA0119933F0D2F19D80F /* MatrixSerialization.swift */; };
+		879834F7EEBD1EA014457F9B /* GauzensplatCaptureApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 419252A47446420AF925F941 /* GauzensplatCaptureApp.swift */; };
+		9EE87363E6A4EFE1892CCFEC /* CaptureTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B455B72A41670C4C743136 /* CaptureTransport.swift */; };
+		9F9A6A7DD77DD3819F14C5EB /* GauzensplatCaptureCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A5A864A18684D0305C3E2DCF /* GauzensplatCaptureCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */; };
+		ACF622D2182434F3F3B3DF1D /* FileStoreAndNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72AEF0F57C40FAE66B556DB /* FileStoreAndNamingTests.swift */; };
+		B7CA5B0E6EA0718C09293FE3 /* FileNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = F481DF63238F8DE5325B4B7C /* FileNaming.swift */; };
+		B9B9AEE4C1E3EA92D23F4CD9 /* GauzensplatCaptureCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C96F70619249CCD6077AAED7 /* ClockSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF7B0179D1A31F7DAFDA8BE9 /* ClockSync.swift */; };
+		CA106E1FEE80A1899409343C /* NetworkProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EC0F5161C802154EB1C4CE1 /* NetworkProtocol.swift */; };
+		D1E322697FB4269562B84908 /* CaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77CE6290FD9ED6E77F5F4C0B /* CaptureCoordinator.swift */; };
+		D24546EFF0E463EB33DBFADA /* CaptureRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B485A0CD3909E885AE1B23A /* CaptureRecords.swift */; };
+		D50911485B2BD6B2716CA6B8 /* StateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE8AA03971F3B2C5CA9A656 /* StateMachineTests.swift */; };
+		D52B7C6434A30B0BD7DA68F2 /* ClockSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF11138D73F641624209491B /* ClockSyncTests.swift */; };
+		D8971D672340FD22EDD87830 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F7F4927A6A4D5C8721659D /* DebugView.swift */; };
+		E4B6D1995949684224811EB7 /* IntrinsicsScaling.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38702C91D9E1A91F2AC6181 /* IntrinsicsScaling.swift */; };
+		E5B5FC8B7EDA854558B99A37 /* CaptureFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C24E73AA442D4A6EA99E9F /* CaptureFileStore.swift */; };
+		E771ADE847374579F8C2233E /* FrameSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E65A662F01970216D71354C6 /* FrameSamplerTests.swift */; };
+		EDE32679646441D09BE77FBB /* GoldenFormatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0AA33A34A62F61E952138 /* GoldenFormatTests.swift */; };
+		F44664EEEA41D77894B42FBC /* WiFiLaptopTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7447CEFE299B11BA8A7B9159 /* WiFiLaptopTransport.swift */; };
+		F45758C16771A2E298F50BE4 /* Checksum.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93EE28F72931D193DF227BB /* Checksum.swift */; };
+		F5D4FE25748F55A8AB737956 /* IntrinsicsScalingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71FDB4EC814FACD24A9A6609 /* IntrinsicsScalingTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		874DF3F140C5508173387260 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DDA035DB26B2823EC19EC74 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EF0EE0D641B339F87BA143EE;
+			remoteInfo = GauzensplatCaptureCore;
+		};
+		D3D2CF32EC26C6C0CE291292 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DDA035DB26B2823EC19EC74 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EF0EE0D641B339F87BA143EE;
+			remoteInfo = GauzensplatCaptureCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1817AD129318835A18E230A7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				9F9A6A7DD77DD3819F14C5EB /* GauzensplatCaptureCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8A803A5F9E7AEB5EA48AF931 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				B9B9AEE4C1E3EA92D23F4CD9 /* GauzensplatCaptureCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		00FDBA0119933F0D2F19D80F /* MatrixSerialization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSerialization.swift; sourceTree = "<group>"; };
+		0965C17D71E6F325C1C62D24 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
+		0B87B9E814FDBB63A236159E /* GauzensplatCapture.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GauzensplatCapture.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B335C89D4407584D62204A1 /* FrameSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameSampler.swift; sourceTree = "<group>"; };
+		2EC0F5161C802154EB1C4CE1 /* NetworkProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkProtocol.swift; sourceTree = "<group>"; };
+		3E70CFFAC92168CCF5CFA20E /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		419252A47446420AF925F941 /* GauzensplatCaptureApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GauzensplatCaptureApp.swift; sourceTree = "<group>"; };
+		4225DC714E20044BF9A203E2 /* ARFrameExtraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARFrameExtraction.swift; sourceTree = "<group>"; };
+		4F4F4CDD5EA858A8834F899A /* BoundedQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedQueueTests.swift; sourceTree = "<group>"; };
+		57066CCB0CC6D81E7BF7F391 /* CaptureState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureState.swift; sourceTree = "<group>"; };
+		67C24E73AA442D4A6EA99E9F /* CaptureFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureFileStore.swift; sourceTree = "<group>"; };
+		71FDB4EC814FACD24A9A6609 /* IntrinsicsScalingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntrinsicsScalingTests.swift; sourceTree = "<group>"; };
+		72285CE666FE1D74382EF137 /* MatrixSerializationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSerializationTests.swift; sourceTree = "<group>"; };
+		7447CEFE299B11BA8A7B9159 /* WiFiLaptopTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WiFiLaptopTransport.swift; sourceTree = "<group>"; };
+		75EDB37A0CF59A3F994584FD /* CaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureViewModel.swift; sourceTree = "<group>"; };
+		77CE6290FD9ED6E77F5F4C0B /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
+		8B485A0CD3909E885AE1B23A /* CaptureRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureRecords.swift; sourceTree = "<group>"; };
+		9DCDEBC997DB8B888591CE9C /* BinaryEncoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BinaryEncoding.swift; sourceTree = "<group>"; };
+		A27D5EDC1CD6A1AD96C53E01 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A845DC99F4D9E7854BDE50A0 /* ConnectionTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionTester.swift; sourceTree = "<group>"; };
+		ABCCA0FBE8CED375E6657CEC /* BoundedFrameQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedFrameQueue.swift; sourceTree = "<group>"; };
+		B38702C91D9E1A91F2AC6181 /* IntrinsicsScaling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntrinsicsScaling.swift; sourceTree = "<group>"; };
+		C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GauzensplatCaptureCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D72AEF0F57C40FAE66B556DB /* FileStoreAndNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStoreAndNamingTests.swift; sourceTree = "<group>"; };
+		D8B455B72A41670C4C743136 /* CaptureTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureTransport.swift; sourceTree = "<group>"; };
+		DAE8AA03971F3B2C5CA9A656 /* StateMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateMachineTests.swift; sourceTree = "<group>"; };
+		DDE88565A9818F5EDF3869FB /* ARSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARSessionController.swift; sourceTree = "<group>"; };
+		DEF6C4510BA9CACF33661A35 /* GauzensplatCaptureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GauzensplatCaptureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF7B0179D1A31F7DAFDA8BE9 /* ClockSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockSync.swift; sourceTree = "<group>"; };
+		E11635AC41EAA693DB644202 /* ConnectionPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionPanel.swift; sourceTree = "<group>"; };
+		E2F7F4927A6A4D5C8721659D /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
+		E65A662F01970216D71354C6 /* FrameSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameSamplerTests.swift; sourceTree = "<group>"; };
+		E6F0AA33A34A62F61E952138 /* GoldenFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoldenFormatTests.swift; sourceTree = "<group>"; };
+		E765998ABFF930B35AA3EABF /* CaptureFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureFormat.swift; sourceTree = "<group>"; };
+		E93EE28F72931D193DF227BB /* Checksum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checksum.swift; sourceTree = "<group>"; };
+		EF11138D73F641624209491B /* ClockSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClockSyncTests.swift; sourceTree = "<group>"; };
+		F481DF63238F8DE5325B4B7C /* FileNaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNaming.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B3A541C5FD00EC3135B1BA6D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				417DD16E9E36B7291D438AA5 /* GauzensplatCaptureCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E3B95AA5E0D8FA7EC427AA23 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5A864A18684D0305C3E2DCF /* GauzensplatCaptureCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0F9340781B9EECC44CF34AD3 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				DDE88565A9818F5EDF3869FB /* ARSessionController.swift */,
+				77CE6290FD9ED6E77F5F4C0B /* CaptureCoordinator.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		3ADE0665C95D75FDA6B49B6A /* GauzensplatCapture */ = {
+			isa = PBXGroup;
+			children = (
+				47F92C7C4415544DFE1F3F11 /* App */,
+				0F9340781B9EECC44CF34AD3 /* Capture */,
+				8628A4EC93B313DE0B62E4A2 /* Network */,
+				7ED6EB188E885C3D9D2CBBAC /* Sensors */,
+				A1F0664762230BED1A5F73EF /* UI */,
+			);
+			path = GauzensplatCapture;
+			sourceTree = "<group>";
+		};
+		47F92C7C4415544DFE1F3F11 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				75EDB37A0CF59A3F994584FD /* CaptureViewModel.swift */,
+				419252A47446420AF925F941 /* GauzensplatCaptureApp.swift */,
+				A27D5EDC1CD6A1AD96C53E01 /* Info.plist */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		5C18C39015E36B9589A9DED2 /* GauzensplatCaptureCoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				4F4F4CDD5EA858A8834F899A /* BoundedQueueTests.swift */,
+				EF11138D73F641624209491B /* ClockSyncTests.swift */,
+				D72AEF0F57C40FAE66B556DB /* FileStoreAndNamingTests.swift */,
+				E65A662F01970216D71354C6 /* FrameSamplerTests.swift */,
+				E6F0AA33A34A62F61E952138 /* GoldenFormatTests.swift */,
+				71FDB4EC814FACD24A9A6609 /* IntrinsicsScalingTests.swift */,
+				72285CE666FE1D74382EF137 /* MatrixSerializationTests.swift */,
+				DAE8AA03971F3B2C5CA9A656 /* StateMachineTests.swift */,
+			);
+			path = GauzensplatCaptureCoreTests;
+			sourceTree = "<group>";
+		};
+		7ED6EB188E885C3D9D2CBBAC /* Sensors */ = {
+			isa = PBXGroup;
+			children = (
+				4225DC714E20044BF9A203E2 /* ARFrameExtraction.swift */,
+			);
+			path = Sensors;
+			sourceTree = "<group>";
+		};
+		8628A4EC93B313DE0B62E4A2 /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				A845DC99F4D9E7854BDE50A0 /* ConnectionTester.swift */,
+				7447CEFE299B11BA8A7B9159 /* WiFiLaptopTransport.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
+		A1F0664762230BED1A5F73EF /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				3E70CFFAC92168CCF5CFA20E /* CaptureView.swift */,
+				E11635AC41EAA693DB644202 /* ConnectionPanel.swift */,
+				E2F7F4927A6A4D5C8721659D /* DebugView.swift */,
+				0965C17D71E6F325C1C62D24 /* ExportSheet.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		B36E7A28AD9D2AD26CA679B9 = {
+			isa = PBXGroup;
+			children = (
+				3ADE0665C95D75FDA6B49B6A /* GauzensplatCapture */,
+				E63820759C014C559712958F /* Sources */,
+				E1C10AC75E5201CF4D20CDA9 /* Tests */,
+				FEA2BB36495D5E83F210DCD7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E1C10AC75E5201CF4D20CDA9 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				5C18C39015E36B9589A9DED2 /* GauzensplatCaptureCoreTests */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		E63820759C014C559712958F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				FB9156EB78F31280BD7BD8E7 /* GauzensplatCaptureCore */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		FB9156EB78F31280BD7BD8E7 /* GauzensplatCaptureCore */ = {
+			isa = PBXGroup;
+			children = (
+				9DCDEBC997DB8B888591CE9C /* BinaryEncoding.swift */,
+				ABCCA0FBE8CED375E6657CEC /* BoundedFrameQueue.swift */,
+				67C24E73AA442D4A6EA99E9F /* CaptureFileStore.swift */,
+				E765998ABFF930B35AA3EABF /* CaptureFormat.swift */,
+				8B485A0CD3909E885AE1B23A /* CaptureRecords.swift */,
+				57066CCB0CC6D81E7BF7F391 /* CaptureState.swift */,
+				D8B455B72A41670C4C743136 /* CaptureTransport.swift */,
+				E93EE28F72931D193DF227BB /* Checksum.swift */,
+				DF7B0179D1A31F7DAFDA8BE9 /* ClockSync.swift */,
+				F481DF63238F8DE5325B4B7C /* FileNaming.swift */,
+				1B335C89D4407584D62204A1 /* FrameSampler.swift */,
+				B38702C91D9E1A91F2AC6181 /* IntrinsicsScaling.swift */,
+				00FDBA0119933F0D2F19D80F /* MatrixSerialization.swift */,
+				2EC0F5161C802154EB1C4CE1 /* NetworkProtocol.swift */,
+			);
+			path = GauzensplatCaptureCore;
+			sourceTree = "<group>";
+		};
+		FEA2BB36495D5E83F210DCD7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0B87B9E814FDBB63A236159E /* GauzensplatCapture.app */,
+				C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */,
+				DEF6C4510BA9CACF33661A35 /* GauzensplatCaptureTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		407AA0873A5A6B5010B4B900 /* GauzensplatCapture */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA628CA0335AA125DDA53AE9 /* Build configuration list for PBXNativeTarget "GauzensplatCapture" */;
+			buildPhases = (
+				9A27590FDD234A51CD93DB47 /* Sources */,
+				E3B95AA5E0D8FA7EC427AA23 /* Frameworks */,
+				8A803A5F9E7AEB5EA48AF931 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				687A802397C09533EDFC31BC /* PBXTargetDependency */,
+			);
+			name = GauzensplatCapture;
+			packageProductDependencies = (
+			);
+			productName = GauzensplatCapture;
+			productReference = 0B87B9E814FDBB63A236159E /* GauzensplatCapture.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E01E115C9280196FD5E3D6CB /* GauzensplatCaptureTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 14F52B35933518D072F257B9 /* Build configuration list for PBXNativeTarget "GauzensplatCaptureTests" */;
+			buildPhases = (
+				C8AE6ABC3B911031E5EE801F /* Sources */,
+				B3A541C5FD00EC3135B1BA6D /* Frameworks */,
+				1817AD129318835A18E230A7 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A3B3390B9B9FE10FD8D7F58A /* PBXTargetDependency */,
+			);
+			name = GauzensplatCaptureTests;
+			packageProductDependencies = (
+			);
+			productName = GauzensplatCaptureTests;
+			productReference = DEF6C4510BA9CACF33661A35 /* GauzensplatCaptureTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		EF0EE0D641B339F87BA143EE /* GauzensplatCaptureCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 11BA95BC4DF96E5B4C521B66 /* Build configuration list for PBXNativeTarget "GauzensplatCaptureCore" */;
+			buildPhases = (
+				7F2A1A2DBAA89B6D1B441E63 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GauzensplatCaptureCore;
+			packageProductDependencies = (
+			);
+			productName = GauzensplatCaptureCore;
+			productReference = C282D983C3300525D23A3DE1 /* GauzensplatCaptureCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1DDA035DB26B2823EC19EC74 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					407AA0873A5A6B5010B4B900 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 80B153A4958905AE3837CDCD /* Build configuration list for PBXProject "GauzensplatCapture" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B36E7A28AD9D2AD26CA679B9;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FEA2BB36495D5E83F210DCD7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EF0EE0D641B339F87BA143EE /* GauzensplatCaptureCore */,
+				407AA0873A5A6B5010B4B900 /* GauzensplatCapture */,
+				E01E115C9280196FD5E3D6CB /* GauzensplatCaptureTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		7F2A1A2DBAA89B6D1B441E63 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24D6CEAAAA1EEEF641CF60C8 /* BinaryEncoding.swift in Sources */,
+				19A31E1722C688206BDD48C8 /* BoundedFrameQueue.swift in Sources */,
+				E5B5FC8B7EDA854558B99A37 /* CaptureFileStore.swift in Sources */,
+				22B8D139CBC75579CCBC0C98 /* CaptureFormat.swift in Sources */,
+				D24546EFF0E463EB33DBFADA /* CaptureRecords.swift in Sources */,
+				3CCF1B40C0F6DECF4CA9FC79 /* CaptureState.swift in Sources */,
+				9EE87363E6A4EFE1892CCFEC /* CaptureTransport.swift in Sources */,
+				F45758C16771A2E298F50BE4 /* Checksum.swift in Sources */,
+				C96F70619249CCD6077AAED7 /* ClockSync.swift in Sources */,
+				B7CA5B0E6EA0718C09293FE3 /* FileNaming.swift in Sources */,
+				0261C98092C40B2A57FF6D6F /* FrameSampler.swift in Sources */,
+				E4B6D1995949684224811EB7 /* IntrinsicsScaling.swift in Sources */,
+				7710D9E49F1706ECE3C3762E /* MatrixSerialization.swift in Sources */,
+				CA106E1FEE80A1899409343C /* NetworkProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A27590FDD234A51CD93DB47 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2382F94C33B4A3BEE5700B2E /* ARFrameExtraction.swift in Sources */,
+				2C26A975DFFEFDDE5C7FED5E /* ARSessionController.swift in Sources */,
+				D1E322697FB4269562B84908 /* CaptureCoordinator.swift in Sources */,
+				468BCA410251F1ABEA3DA412 /* CaptureView.swift in Sources */,
+				117246F5B9144A02CE88C1B8 /* CaptureViewModel.swift in Sources */,
+				632048AAA7E48976C3564C7C /* ConnectionPanel.swift in Sources */,
+				56611E14CFD2D2A37E02FEA9 /* ConnectionTester.swift in Sources */,
+				D8971D672340FD22EDD87830 /* DebugView.swift in Sources */,
+				5CC1092F7A986813B1338F00 /* ExportSheet.swift in Sources */,
+				879834F7EEBD1EA014457F9B /* GauzensplatCaptureApp.swift in Sources */,
+				F44664EEEA41D77894B42FBC /* WiFiLaptopTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C8AE6ABC3B911031E5EE801F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				26A0ADA5913D77C081D970AB /* BoundedQueueTests.swift in Sources */,
+				D52B7C6434A30B0BD7DA68F2 /* ClockSyncTests.swift in Sources */,
+				ACF622D2182434F3F3B3DF1D /* FileStoreAndNamingTests.swift in Sources */,
+				E771ADE847374579F8C2233E /* FrameSamplerTests.swift in Sources */,
+				EDE32679646441D09BE77FBB /* GoldenFormatTests.swift in Sources */,
+				F5D4FE25748F55A8AB737956 /* IntrinsicsScalingTests.swift in Sources */,
+				2491B9CB7095A167C38C9CA7 /* MatrixSerializationTests.swift in Sources */,
+				D50911485B2BD6B2716CA6B8 /* StateMachineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		687A802397C09533EDFC31BC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EF0EE0D641B339F87BA143EE /* GauzensplatCaptureCore */;
+			targetProxy = 874DF3F140C5508173387260 /* PBXContainerItemProxy */;
+		};
+		A3B3390B9B9FE10FD8D7F58A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EF0EE0D641B339F87BA143EE /* GauzensplatCaptureCore */;
+			targetProxy = D3D2CF32EC26C6C0CE291292 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2E06A8EF991851B1237D6A5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		59162B76A8B9BBDFE45EBDF8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		740012C14ABE9B79F0578A7A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.coretests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		74425BAD9E995233C9304B61 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 42LZF4Q3RR;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu11 gnu++14";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.core;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		85CD33FA9EF6461659B1F138 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.coretests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B08F1A11C31B78AF4F58507C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 42LZF4Q3RR;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu11 gnu++14";
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.core;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		CA674E05321A9381CE35FB8F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 42LZF4Q3RR;
+				INFOPLIST_FILE = GauzensplatCapture/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.capture;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		DA0FAA70E263E04133ED60A0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 42LZF4Q3RR;
+				INFOPLIST_FILE = GauzensplatCapture/App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gauzensplat.capture;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		11BA95BC4DF96E5B4C521B66 /* Build configuration list for PBXNativeTarget "GauzensplatCaptureCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				74425BAD9E995233C9304B61 /* Debug */,
+				B08F1A11C31B78AF4F58507C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		14F52B35933518D072F257B9 /* Build configuration list for PBXNativeTarget "GauzensplatCaptureTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				85CD33FA9EF6461659B1F138 /* Debug */,
+				740012C14ABE9B79F0578A7A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		80B153A4958905AE3837CDCD /* Build configuration list for PBXProject "GauzensplatCapture" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				59162B76A8B9BBDFE45EBDF8 /* Debug */,
+				2E06A8EF991851B1237D6A5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BA628CA0335AA125DDA53AE9 /* Build configuration list for PBXNativeTarget "GauzensplatCapture" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA0FAA70E263E04133ED60A0 /* Debug */,
+				CA674E05321A9381CE35FB8F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1DDA035DB26B2823EC19EC74 /* Project object */;
+}

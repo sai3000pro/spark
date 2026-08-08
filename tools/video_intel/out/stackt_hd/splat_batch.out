@@ -1,0 +1,9 @@
+=== splat_batch: 4 sample(s) → log tools/video_intel/out/stackt_hd/splat_batch_log.jsonl ===
+
+--- [1/4] m05_hd_walk ---
+[09:38:01] m05_hd_walk                  done     imgs=130/130 gauss=2000000 2590.8s 
+
+--- [2/4] m20_hd_garden ---
+[10:15:14] m20_hd_garden                done     imgs=90/90 gauss=1224397 2111.3s 
+
+--- [3/4] m12_hd_seating ---

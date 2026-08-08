@@ -1,0 +1,13 @@
+[
+  {
+    "name": "picnic_dense",
+    "label": "PICNIC TABLES only (84-91s, dense 18fps, 30k, 1600, deblur)",
+    "start": 84,
+    "end": 91,
+    "fps": 18,
+    "max_frames": 140,
+    "steps": 30000,
+    "max_res": 1600,
+    "deblur": "unsharp"
+  }
+]

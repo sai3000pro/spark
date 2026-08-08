@@ -1,0 +1,66 @@
+# XcodeGen spec — generates GauzensplatCapture.xcodeproj.
+#
+#   brew install xcodegen
+#   cd ios && xcodegen generate
+#   open GauzensplatCapture.xcodeproj
+#
+# Then set your development team (see README.md) and Run on a physical
+# iPhone 16 Pro.  The iOS Simulator cannot exercise LiDAR.
+name: GauzensplatCapture
+options:
+  bundleIdPrefix: com.gauzensplat
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+targets:
+  # Pure-logic core, shared with the SwiftPM package + `swift test`.
+  GauzensplatCaptureCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: Sources/GauzensplatCaptureCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gauzensplat.core
+        GENERATE_INFOPLIST_FILE: true
+        DEFINES_MODULE: true
+
+  GauzensplatCapture:
+    type: application
+    platform: iOS
+    sources:
+      - path: GauzensplatCapture
+    dependencies:
+      - target: GauzensplatCaptureCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gauzensplat.capture
+        INFOPLIST_FILE: GauzensplatCapture/App/Info.plist
+        # Set your team here or in Xcode > Signing & Capabilities.
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+
+  # Core unit tests (run in Xcode / xcodebuild — needs XCTest + full Xcode).
+  GauzensplatCaptureTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/GauzensplatCaptureCoreTests
+    dependencies:
+      - target: GauzensplatCaptureCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gauzensplat.coretests
+
+schemes:
+  GauzensplatCapture:
+    build:
+      targets:
+        GauzensplatCapture: all
+        GauzensplatCaptureTests: [test]
+    test:
+      targets:
+        - GauzensplatCaptureTests

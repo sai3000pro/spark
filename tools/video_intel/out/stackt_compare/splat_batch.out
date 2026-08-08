@@ -1,0 +1,101 @@
+=== splat_batch: 14 sample(s) → log tools/video_intel/out/stackt_compare/splat_batch_log.jsonl ===
+
+--- [1/14] cmp_good_base ---
+[04:33:28] cmp_good_base                done     imgs=38/48 gauss=38665 239.4s 
+
+--- [2/14] cmp_good_sharp ---
+[04:37:43] cmp_good_sharp               done     imgs=33/33 gauss=35967 237.0s 
+
+--- [3/14] cmp_good_deblur ---
+[04:42:17] cmp_good_deblur              done     imgs=33/48 gauss=35291 232.8s 
+
+--- [4/14] cmp_good_opac ---
+[04:45:39] cmp_good_opac                done     imgs=48/48 gauss=6 167.9s 
+
+--- [5/14] cmp_good_sharp_opac ---
+[04:48:47] cmp_good_sharp_opac          done     imgs=33/33 gauss=16 169.1s 
+
+--- [6/14] cmp_good_hybrid ---
+[04:58:41] cmp_good_hybrid              done     imgs=38/48 gauss=11717 552.9s 
+
+--- [7/14] cmp_good_ffwd ---
+[05:04:24] cmp_good_ffwd                done     imgs=?/48 gauss=2773465 339.9s 
+
+--- [8/14] cmp_hard_base ---
+[05:08:53] cmp_hard_base                done     imgs=35/48 gauss=20072 219.8s 
+
+--- [9/14] cmp_hard_sharp ---
+[05:13:01] cmp_hard_sharp               done     imgs=28/33 gauss=30855 227.4s 
+
+--- [10/14] cmp_hard_deblur ---
+[05:18:07] cmp_hard_deblur              done     imgs=35/48 gauss=48244 244.8s 
+
+--- [11/14] cmp_hard_opac ---
+[05:22:24] cmp_hard_opac                done     imgs=35/48 gauss=24 166.6s 
+
+--- [12/14] cmp_hard_sharp_opac ---
+[05:25:37] cmp_hard_sharp_opac          done     imgs=28/33 gauss=16 169.3s 
+
+--- [13/14] cmp_hard_hybrid ---
+[05:37:17] cmp_hard_hybrid              done     imgs=36/48 gauss=151370 604.0s 
+
+--- [14/14] cmp_hard_ffwd ---
+[05:43:27] cmp_hard_ffwd                done     imgs=?/48 gauss=3249170 366.8s 
+
+=== batch complete: 14/14 produced splats ===
+  cmp_good_base                done       gauss=38665
+  cmp_good_sharp               done       gauss=35967
+  cmp_good_deblur              done       gauss=35291
+  cmp_good_opac                done       gauss=6
+  cmp_good_sharp_opac          done       gauss=16
+  cmp_good_hybrid              done       gauss=11717
+  cmp_good_ffwd                done       gauss=2773465
+  cmp_hard_base                done       gauss=20072
+  cmp_hard_sharp               done       gauss=30855
+  cmp_hard_deblur              done       gauss=48244
+  cmp_hard_opac                done       gauss=24
+  cmp_hard_sharp_opac          done       gauss=16
+  cmp_hard_hybrid              done       gauss=151370
+  cmp_hard_ffwd                done       gauss=3249170
+=== splat_batch: 4 sample(s) → log tools/video_intel/out/stackt_compare/splat_batch_log.jsonl ===
+
+--- [1/4] cmp_good_opac_p01 ---
+[05:48:32] cmp_good_opac_p01            done     imgs=38/48 gauss=2 173.9s 
+
+--- [2/4] cmp_good_opac_p001 ---
+[05:52:03] cmp_good_opac_p001           done     imgs=48/48 gauss=46 177.6s 
+
+--- [3/4] cmp_hard_opac_p01 ---
+[05:55:53] cmp_hard_opac_p01            done     imgs=35/48 gauss=2 169.8s 
+
+--- [4/4] cmp_hard_opac_p001 ---
+[05:59:54] cmp_hard_opac_p001           done     imgs=35/48 gauss=31 176.7s 
+
+=== batch complete: 4/4 produced splats ===
+  cmp_good_opac_p01            done       gauss=2
+  cmp_good_opac_p001           done       gauss=46
+  cmp_hard_opac_p01            done       gauss=2
+  cmp_hard_opac_p001           done       gauss=31
+=== splat_batch: 5 sample(s) → log tools/video_intel/out/stackt_compare/splat_batch_log.jsonl ===
+
+--- [1/5] cmp_hard_sky ---
+[07:41:10] cmp_hard_sky                 done     imgs=35/48 gauss=1960 204.3s 
+
+--- [2/5] cmp_hard_deblur_sky ---
+[07:46:13] cmp_hard_deblur_sky          done     imgs=35/48 gauss=13079 232.5s 
+
+--- [3/5] cmp_hard_hybrid_sky ---
+[07:57:04] cmp_hard_hybrid_sky          done     imgs=35/48 gauss=73732 581.6s 
+
+--- [4/5] cmp_good_sky ---
+[08:01:45] cmp_good_sky                 done     imgs=48/48 gauss=79679 239.0s 
+
+--- [5/5] cmp_good_deblur_sky ---
+[08:06:24] cmp_good_deblur_sky          done     imgs=46/48 gauss=78505 243.0s 
+
+=== batch complete: 5/5 produced splats ===
+  cmp_hard_sky                 done       gauss=1960
+  cmp_hard_deblur_sky          done       gauss=13079
+  cmp_hard_hybrid_sky          done       gauss=73732
+  cmp_good_sky                 done       gauss=79679
+  cmp_good_deblur_sky          done       gauss=78505

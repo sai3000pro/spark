@@ -1,0 +1,60 @@
+[
+  {
+    "name": "cmp_hard_sky",
+    "label": "hard sky-mask",
+    "start": 240,
+    "end": 252,
+    "mask_sky": true,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_hard_deblur_sky",
+    "label": "hard deblur+sky",
+    "start": 240,
+    "end": 252,
+    "deblur": "unsharp",
+    "mask_sky": true,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_hard_hybrid_sky",
+    "label": "hard hybrid+sky",
+    "start": 240,
+    "end": 252,
+    "pipeline": "hybrid",
+    "mask_sky": true,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_good_sky",
+    "label": "good sky-mask",
+    "start": 86,
+    "end": 116,
+    "mask_sky": true,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  },
+  {
+    "name": "cmp_good_deblur_sky",
+    "label": "good deblur+sky",
+    "start": 86,
+    "end": 116,
+    "deblur": "unsharp",
+    "mask_sky": true,
+    "fps": 4,
+    "max_frames": 48,
+    "steps": 10000,
+    "max_res": 1024
+  }
+]

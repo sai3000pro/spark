@@ -1,0 +1,148 @@
+[
+  {
+    "name": "m04_giant-jenga-and",
+    "label": "Giant Jenga and event sign (76-86s)",
+    "start": 76.0,
+    "end": 86.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m12_shaded-seating-area",
+    "label": "Shaded seating area (204-214s)",
+    "start": 204.0,
+    "end": 214.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m14_man-with-bicycle,",
+    "label": "Man with bicycle, food stall (230-240s)",
+    "start": 230.0,
+    "end": 240.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m15_art-installations-on",
+    "label": "Art installations on containers (240-252s)",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m17_man-on-phone",
+    "label": "Man on phone by bicycle (262-284s)",
+    "start": 262.0,
+    "end": 284.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m18_man-by-bicycle,",
+    "label": "Man by bicycle, food stall (284-294s)",
+    "start": 284.0,
+    "end": 294.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m20_garden-area,-white",
+    "label": "Garden area, white tent (308-318s)",
+    "start": 308.0,
+    "end": 318.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "m05_med_walking-path,-cn",
+    "label": "Walking path, CN Tower view MED (86-116s)",
+    "start": 86.0,
+    "end": 116.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280
+  },
+  {
+    "name": "m09_med_music-record-sale,",
+    "label": "Music record sale, hammocks MED (150-168s)",
+    "start": 150.0,
+    "end": 168.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280
+  },
+  {
+    "name": "m00_med_cornhole-game,-city",
+    "label": "Cornhole game, city skyline MED (0-26s)",
+    "start": 0.0,
+    "end": 26.0,
+    "fps": 4,
+    "max_frames": 55,
+    "steps": 15000,
+    "max_res": 1280
+  },
+  {
+    "name": "sweep_m15_fps2_10k",
+    "label": "sweep Art installations on containers fps=2 steps=10000",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 2,
+    "max_frames": 90,
+    "steps": 10000,
+    "max_res": 1280
+  },
+  {
+    "name": "sweep_m15_fps4_20k",
+    "label": "sweep Art installations on containers fps=4 steps=20000",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 4,
+    "max_frames": 90,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "sweep_m15_fps6_30k",
+    "label": "sweep Art installations on containers fps=6 steps=30000",
+    "start": 240.0,
+    "end": 252.0,
+    "fps": 6,
+    "max_frames": 90,
+    "steps": 30000,
+    "max_res": 1280
+  },
+  {
+    "name": "full_1fps_150",
+    "label": "full video @1fps",
+    "fps": 1,
+    "max_frames": 150,
+    "steps": 20000,
+    "max_res": 1280
+  },
+  {
+    "name": "full_2fps_200",
+    "label": "full video @2fps",
+    "fps": 2,
+    "max_frames": 200,
+    "steps": 20000,
+    "max_res": 1280
+  }
+]
