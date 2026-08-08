@@ -31,8 +31,9 @@ export const TRIGGER_LAYER: Record<Trigger["kind"], "vision" | "audio" | "motion
   dwell: "motion",
 };
 
+/** Deep enough to read as dots on paper; always shown next to the trigger text. */
 export const LAYER_COLOR: Record<"vision" | "audio" | "motion", string> = {
-  vision: "#52cfe6",
-  audio: "#f9b072",
-  motion: "#9085e9",
+  vision: "#2e5a55",
+  audio: "#c0651f",
+  motion: "#6a51c0",
 };

@@ -13,7 +13,7 @@ track that fits the mood, and remembers where you left things.
 |---|---|---|
 | [`ios/`](ios/) | On-robot capture — ARKit/LiDAR recorder for iPhone 16 Pro, streams RGB + pose + depth | Swift / SwiftUI |
 | [`tools/`](tools/) | Mac-side pipeline — live capture server, ESP32 odometry, video → Gaussian splat | Python |
-| [`web/`](web/) | Trip replay + the detection → moment pipeline. What you see after the walk | TypeScript / Next.js |
+| [`web/`](web/) | The day as a full-screen map of splat moments + the detection → moment pipeline | TypeScript / Next.js |
 
 They meet in two places:
 
@@ -39,7 +39,7 @@ They meet in two places:
 ```
 ios/      Swift capture app (XcodeGen — run `xcodegen generate` first)
 tools/    Python: arkit_capture · live_capture_server · video_intel
-web/      Next.js app: trip replay, pipeline timeline, object search, detector bench
+web/      Next.js app: the day atlas (map + splat moments), ⌘K object search, detector bench
 docs/     Capture-pipeline design docs, status, test reports
 SETUP.md  Capture-pipeline setup
 LICENSE   MIT
