@@ -222,21 +222,31 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
           }}
         />
 
-        <div className="hero-copy relative z-10 mx-auto flex h-full max-w-6xl flex-col px-5 pt-[16vh] sm:px-8 sm:pt-[17vh]">
-          <h1
-            className="rise-in max-w-[14ch] text-[clamp(2.7rem,6vw,4.75rem)] leading-[1.05]"
-            style={{ textShadow: "0 2px 24px rgb(15 13 35 / 0.55)" }}
+        <div className="hero-copy relative z-10 mx-auto flex h-full max-w-6xl flex-col px-5 pt-[13vh] sm:px-8 sm:pt-[14vh]">
+          <p
+            className="rise-in tag text-[13px] text-starlight/80"
+            style={{ textShadow: "0 1px 12px rgb(15 13 35 / 0.8)" }}
           >
-            A day, remembered in light.
+            A robot walked behind you today. It kept {stats.moments} moments.
+          </p>
+          <h1
+            className="rise-in mt-4 text-[clamp(2.9rem,7vw,6rem)] leading-[1.02]"
+            style={{ "--i": 1, textShadow: "0 2px 24px rgb(15 13 35 / 0.45)" } as React.CSSProperties}
+          >
+            A day, remembered
+            <br />
+            <span className="hl-ember italic" style={{ textShadow: "none" }}>
+              in light.
+            </span>
           </h1>
           <p
-            className="rise-in mt-5 max-w-[46ch] text-[15.5px] leading-relaxed text-starlight/85 sm:text-[17px]"
-            style={{ "--i": 1, textShadow: "0 1px 16px rgb(15 13 35 / 0.6)" } as React.CSSProperties}
+            className="rise-in mt-6 max-w-[44ch] text-[15.5px] leading-relaxed text-starlight/85 sm:text-[17px]"
+            style={{ "--i": 2, textShadow: "0 1px 16px rgb(15 13 35 / 0.6)" } as React.CSSProperties}
           >
-            Spark walks behind you, decides what mattered on its own, and rebuilds those moments
-            as clouds of captured light you can step back into.
+            Spark decides what mattered on its own and rebuilds those moments as clouds of
+            captured light you can step back into.
           </p>
-          <div className="rise-in mt-7 flex flex-wrap items-center gap-3" style={{ "--i": 2 } as React.CSSProperties}>
+          <div className="rise-in mt-7 flex flex-wrap items-center gap-3" style={{ "--i": 3 } as React.CSSProperties}>
             <Link href="/walk" className="btn-ember px-5 py-2.5 text-[14px]">
               Step into the walk
               <ArrowRight size={15} strokeWidth={1.75} aria-hidden />
@@ -250,9 +260,41 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
             className="rise-in tag mt-auto pb-8 pr-28 text-[12px] text-starlight/70 sm:pr-0"
             style={{ "--i": 4, textShadow: "0 1px 12px rgb(15 13 35 / 0.8)" } as React.CSSProperties}
           >
-            {dateLabel} · {placeLabel} · {stats.distance} · {stats.duration} · {stats.moments}{" "}
-            moments kept
+            {dateLabel} · {placeLabel} · {stats.distance} · {stats.duration}
           </p>
+        </div>
+
+        {/* Annotation frames — telemetry pinned straight onto the painting,
+            like selection boxes in a design tool. Desktop only; the exact
+            spots drift with the cover-crop, so they point at regions, not
+            pixels. */}
+        <FrameNote className="hidden lg:block" style={{ left: "58%", top: "66%" }}>
+          Follow mode · 1.4 m behind
+        </FrameNote>
+        <FrameNote className="hidden lg:block" style={{ left: "7%", top: "74%" }}>
+          Moment 1 kept here · {moments[0]?.clock}
+        </FrameNote>
+      </section>
+
+      {/* ── The keep-log, on one slow lap ────────────────────────────────── */}
+      <div aria-hidden className="overflow-hidden border-y border-starlight/10 bg-night py-3.5">
+        <div className="marquee-track flex w-max whitespace-nowrap">
+          {[0, 1].map((dup) => (
+            <span key={dup} className="font-display text-[19px] italic text-moth/80">
+              {moments.map((m) => `${m.clock} — ${m.title}`).join("  ·  ")}
+              {"  ·  "}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── The day in numbers ───────────────────────────────────────────── */}
+      <section className="relative py-16 sm:py-20" aria-label="The day in numbers">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-y-10 px-5 sm:px-8 lg:grid-cols-4">
+          <BigStat value={stats.distance} label="walked, never in the way" />
+          <BigStat value={stats.duration} label="of one Sunday evening" />
+          <BigStat value={stats.detections} label="things its cameras noticed" />
+          <BigStat value={String(stats.moments)} label="moments it decided to keep" accent />
         </div>
       </section>
 
@@ -278,8 +320,8 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
             }}
           />
           <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-6xl px-5 pb-[10vh] sm:px-8">
-            <h2 data-reveal className="max-w-[16ch] text-[clamp(2.1rem,4.2vw,3.4rem)] leading-[1.08]">
-              It walked with you.
+            <h2 data-reveal className="max-w-[16ch] text-[clamp(2.4rem,5vw,4.2rem)] leading-[1.05]">
+              It walked <span className="italic">with</span> you.
             </h2>
             <p data-reveal className="mt-4 max-w-[48ch] text-[15px] leading-relaxed text-moth sm:text-[16px]">
               {dateLabel}, {placeLabel}. A metre and a half behind, never in the way — watching,
@@ -295,21 +337,34 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
       {/* ── III — six moments, kept ──────────────────────────────────────── */}
       <section className="relative py-24 sm:py-32" aria-label="The kept moments">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="max-w-[56ch]">
-            <h2 data-reveal className="text-[clamp(2.1rem,4.2vw,3.4rem)] leading-[1.08]">
-              Six moments, kept.
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <h2 data-reveal className="text-[clamp(2.4rem,5vw,4.2rem)] leading-[1.05]">
+              Six moments, <span className="italic text-gold">kept</span>.
             </h2>
-            <p data-reveal className="mt-4 text-[15px] leading-relaxed text-moth">
-              Not every minute — six. Each one triggered by something it saw or heard, scored, and
-              rebuilt in 3D. Open one to step inside it.
+            <p data-reveal className="max-w-[38ch] pb-2 text-[15px] leading-relaxed text-moth">
+              Not every minute — six. Each one triggered by something it saw or heard, scored,
+              and rebuilt in 3D. Open one to step inside it.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-16 grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
             {moments.map((m, i) => {
               const ink = inkForMoment(i);
               return (
-                <Link key={m.id} href={`/walk?m=${m.id}`} className="group" data-reveal>
+                <Link
+                  key={m.id}
+                  href={`/walk?m=${m.id}`}
+                  className={`group relative ${i % 3 === 1 ? "lg:translate-y-8" : ""}`}
+                  data-reveal
+                >
+                  {/* The index numeral, oversized and leaning over its card. */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -top-9 left-1 z-10 font-display text-[64px] italic leading-none"
+                    style={{ color: ink.base, textShadow: "0 2px 12px rgb(15 13 35 / 0.7)" }}
+                  >
+                    {i + 1}
+                  </span>
                   <article
                     className="plate overflow-hidden transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-1"
                   >
@@ -369,8 +424,8 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
       <section className="starfield relative bg-dusk py-24 sm:py-32" aria-label="How Spark decides">
         <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
           <div className="max-w-[56ch]">
-            <h2 data-reveal className="text-[clamp(2.1rem,4.2vw,3.4rem)] leading-[1.08]">
-              Honest by design.
+            <h2 data-reveal className="text-[clamp(2.4rem,5vw,4.2rem)] leading-[1.05]">
+              Honest <span className="italic">by design</span>.
             </h2>
             <p data-reveal className="mt-4 text-[15px] leading-relaxed text-moth">
               A memory you can audit: everything the robot saw, everything it almost kept, and the
@@ -415,8 +470,8 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
       <section className="relative overflow-hidden py-24 sm:py-32" aria-label="What a splat is">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-2">
           <div>
-            <h2 data-reveal className="text-[clamp(2.1rem,4.2vw,3.4rem)] leading-[1.08]">
-              A memory is a cloud of light.
+            <h2 data-reveal className="text-[clamp(2.4rem,5vw,4.2rem)] leading-[1.05]">
+              A memory is a <span className="italic">cloud of light</span>.
             </h2>
             <p data-reveal className="mt-5 max-w-[50ch] text-[15px] leading-relaxed text-moth">
               While it follows, Spark films each kept moment from a dozen angles and rebuilds it
@@ -468,8 +523,8 @@ export function Landing({ dateLabel, placeLabel, stats, moments }: LandingProps)
             sizes="256px"
             placeholder="empty"
           />
-          <h2 data-reveal className="mt-8 text-[clamp(2.4rem,5vw,4rem)] leading-[1.05]">
-            Walk it back.
+          <h2 data-reveal className="mt-8 text-[clamp(2.8rem,6vw,5rem)] leading-[1.03]">
+            Walk it <span className="italic text-gold">back</span>.
           </h2>
           <p data-reveal className="mt-5 max-w-[44ch] text-[15px] leading-relaxed text-moth">
             The whole day is pinned to the real park, one light per kept moment. The robot
@@ -508,12 +563,48 @@ function SieveStep({
     <div className="border-t border-starlight/12 pt-5">
       <p className="tag text-[12px] font-semibold text-faint">{label}</p>
       <p
-        className={`tnum font-display mt-3 text-[52px] leading-none ${accent ? "text-gold" : "text-starlight"}`}
+        className={`tnum font-display mt-3 text-[clamp(3.4rem,6vw,4.75rem)] leading-none ${accent ? "text-gold" : "text-starlight"}`}
         style={{ fontWeight: 480 }}
       >
         <span data-count={count}>{count.toLocaleString("en-CA")}</span>
       </p>
       <p className="mt-3 max-w-[30ch] text-[13px] leading-relaxed text-moth">{caption}</p>
     </div>
+  );
+}
+
+/** A hero-scale number with its story in one small line — the day's receipts. */
+function BigStat({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <div className="border-t border-starlight/12 pr-6 pt-5" data-reveal>
+      <p
+        className={`tnum font-display text-[clamp(2.4rem,4vw,3.5rem)] leading-none ${accent ? "italic text-gold" : "text-starlight"}`}
+        style={{ fontWeight: 480 }}
+      >
+        {value}
+      </p>
+      <p className="mt-2.5 text-[13px] leading-snug text-moth">{label}</p>
+    </div>
+  );
+}
+
+/** A design-tool selection box pinned onto the painting, corner handles and all. */
+function FrameNote({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span className={`frame-note tag z-10 text-[11.5px] text-starlight ${className}`} style={style} aria-hidden>
+      <i />
+      <i />
+      <i />
+      <i />
+      {children}
+    </span>
   );
 }

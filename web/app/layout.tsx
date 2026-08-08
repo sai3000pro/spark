@@ -12,6 +12,9 @@ const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
   axes: ["opsz"],
+  // The italic carries the landing's accent words and marquee — Fraunces'
+  // display italic is half the site's voice, not an afterthought.
+  style: ["normal", "italic"],
   display: "swap",
 });
 const instrument = Instrument_Sans({
