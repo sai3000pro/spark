@@ -1,7 +1,7 @@
 ---
-version: 5.2
+version: 5.3
 name: Spark-field-notes
-description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups, a pinned horizontal gallery of the six kept moments, a crossed-out-pages ledger of every discard, a scroll-dragged statement, an accordion of field notes, and a finale where the giant wordmark bleeds off the page behind one pane of glass. An opt-in 'night air' layer (wind + crickets) is synthesized on device. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned horizontal shelf of taped-down photographs on vellum mats, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -55,6 +55,13 @@ The generated map style still derives from these values.
   and dark plates.
 - `.dotfield` — a halftone print screen (radial-gradient dots, center-masked) on pine
   heroes. Print, not sci-fi.
+- `.gridfield` — graph-paper hairlines on cream sections (the journal's squared pages),
+  edge-masked so it reads as a page, not a spreadsheet. The paper counterpart of the
+  hero's dotfield; every major cream section wears it over `.papergrain`.
+- Tactile props, used sparingly and only on the journal: `.tape` (translucent
+  torn-ended strips holding prints and sheets down), `.ruled` (28px feint lines the
+  field-note answers are written on), `.stamp` (a bordered mono chip pressed at an
+  angle, clay).
 
 ## Shape & components
 
@@ -87,14 +94,24 @@ choreography, in order:
 2. **Hero cycle** — the headline's last line blurs out/in every 3.4s (wet ink).
 3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
    copies wear `.smear` (blur 7px) for the smeared-ink read.
-4. **The gallery** — "Six moments, kept." pins on desktop and scrubs horizontally with
-   the evening's rail beneath; mobile and no-JS get native overflow scroll.
-5. **The plates draw themselves** on arrival: detection dots ripple out from center,
-   score bars grow against the clay keep-line, pins drop onto the route.
-6. **The dragged statement** — one giant line scrubbed `xPercent` across its section.
+4. **The gallery** — "Six moments, kept." pins on desktop: taped-down photographs on
+   tilted vellum mats scrub horizontally over the evening's rail; each print
+   parallaxes inside its window (containerAnimation) and the whole shelf shears a few
+   degrees with scroll velocity. Hover squares and lifts a print. Mobile and no-JS get
+   native overflow scroll.
+5. **The plates draw themselves** on arrival, then idle: detection dots ripple out and
+   the hot ones twinkle; score bars grow against the clay keep-line whose dashes then
+   march while the kept bars glow; six surveyor's markers drop onto the dotted route,
+   breathe sonar rings, and a brass dot — the robot — laps the evening.
+6. **The statement** — three stacked lines that each FIT the page ("Not every minute /
+   is worth keeping. / Six were."), drifting a few percent in opposite directions as
+   the section passes — always readable, never driven off the edge. "Six were." wears
+   a clay circle that draws itself on reveal (same [data-draw] grammar as the sieve).
 7. Reveals via IntersectionObserver once (variants: up/fade/scale/left/right with
    per-item `--reveal-delay`); ledger score bars grow in; count-ups once to the real
-   number.
+   number. The field notes are a numbered index — selecting an entry circles its
+   number in clay (CSS-transitioned dashoffset, `aria-expanded`-driven so the first
+   entry arrives circled without JS) and swaps the taped, ruled, stamped answer sheet.
 8. **Night air** — opt-in ambient audio (brown-noise wind through a wandering lowpass,
    sparse cricket chirps), synthesized in Web Audio, toggled in the nav.
 
