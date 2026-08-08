@@ -18,3 +18,6 @@ venv/
 
 # Local capture/session data (not transferred)
 live_sessions/
+
+# Design reference material (cloned locally, not ours to vendor)
+awesome-design-md/

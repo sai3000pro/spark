@@ -1,193 +1,169 @@
 @import "tailwindcss";
 
 /*
-  Spark's palette. Aurora night — the world the robot walked you through.
+  SPARK — the RISO ATLAS system (see /DESIGN.md).
 
-  THREE families, and the distinction between the last two is load-bearing:
+  A grainy risograph poster you can walk around in. Cream paper canvas, thick
+  film grain, and a hand-pulled ink palette where every moment on the map owns
+  one saturated color. Type is chunky geometric display (Bricolage Grotesque)
+  over Space Grotesk UI, with Space Mono carrying every timestamp and label in
+  uppercase — the motion-graphics title-card grammar.
 
-    --color-brand-*    orange  the BRAND. Interactive chrome only.
-    --color-machine-*  teal    the robot layer — detections, tracks, confidence, nav
-    --color-memory-*   amber   the human layer — moments, places, music, transcript
-
-  Brand orange (#f5a623) and memory amber (#f59e0b) are only ΔE 5.5 apart —
-  noticeably different, but not "a different colour". No hue tweak fixes that
-  inside the brand, so the two are kept apart STRUCTURALLY instead:
-
-    Brand orange is a FORM, never a CATEGORY.
-      Solid pill fills on primary actions, 1px rings on interactive surfaces,
-      focus rings, the brand glyph. It NEVER encodes a value — never in a chart,
-      a legend, a chip, or the timeline.
-
-    Memory amber is a CATEGORY, never a FILL.
-      text-memory-300 and 10–12% tint chips, always adjacent to a label.
-      It is never a solid button.
-
-  The rule holds because the only two tones that can ever share a visual field
-  are brand-400 (solid) and memory-300 (text) — ΔE 28.0, unmistakable. The
-  5.5-ΔE pair can never co-occur.
-
-  State colors stay hue-separated from all three so they never read as a layer:
-    signal  green   ready, promoted, navigable
-    compute violet  reconstructing — the splat is still being computed
-    warn    yellow  stand-in data, nothing was actually captured here
-    fail    rose    reconstruction failed, model error
+  Moment colors cycle through the riso drum inks below (see MOMENT_INKS in
+  lib/theme.ts). Navy is the night plate the Gaussian splats live on.
 
   SVG and canvas can't use Tailwind classes for fills, so every value here is
   mirrored in lib/theme.ts. Change one, change both.
 */
 @theme {
-  /* The ink ramp is rebased on the brand navy #0b0f1e with the ORIGINAL ramp's
-     L* deltas preserved, hue locked to 284°. It has to move as a unit: #0b0f1e
-     is lighter than the old #09090e (L* 4.6 vs 2.6), so lifting only --bg would
-     collapse the 950↔900 separation from 1.057 to ~1.01 and flatten every card
-     in the app. Verified after: 950↔900 is 1.057, 900↔850 is 1.042. */
-  --color-ink-950: #0b0f1e;
-  --color-ink-900: #111624;
-  --color-ink-850: #151a2a;
-  --color-ink-800: #191e30;
-  --color-ink-700: #1b2133;
-  --color-ink-600: #23293e;
-  --color-ink-500: #353c55;
+  --color-cream: #f6eedd;
+  --color-cream-bright: #fdf8ec;
+  --color-cream-deep: #ece1c8;
 
-  --color-fog-400: #6b6880;
-  --color-fog-300: #a8a3c2;
-  --color-fog-200: #c8c4dc;
-  --color-fog-100: #e8e6f0;
+  --color-ink: #232038;
+  --color-ink-soft: #56536e;
+  --color-ink-faint: #767390;
 
-  /* Brand — interactive chrome ONLY. See the rule above.
-     brand-400 is 9.41:1 on the new background, and `bg-brand-400 text-ink-950`
-     is 9.41:1 the other way, so the solid-pill idiom passes AAA. */
-  --color-brand-300: #ffc45c;
-  --color-brand-400: #f5a623;
-  --color-brand-500: #d98613;
-  --color-brand-600: #a8620a;
+  /* The riso drum inks. `deep` is the text-safe / pressed version, `soft` the tint. */
+  --color-violet: #5b3df0;
+  --color-violet-deep: #4227c8;
+  --color-violet-soft: #d9d0f8;
 
-  --color-machine-300: #7ff0e2;
-  --color-machine-400: #2dd4bf;
-  --color-machine-500: #14b8a6;
-  --color-machine-600: #0d9488;
+  --color-coral: #ef5b3c;
+  --color-coral-deep: #bc3a1e;
+  --color-coral-soft: #f9cfc2;
 
-  --color-memory-300: #fdba74;
-  --color-memory-400: #f59e0b;
-  --color-memory-500: #d97706;
-  --color-memory-600: #b45309;
+  --color-teal: #1ba098;
+  --color-teal-deep: #0f6b66;
+  --color-teal-soft: #bfe5df;
 
-  --color-signal-400: #34d399;
-  --color-signal-500: #10b981;
-  --color-compute-400: #a78bfa;
-  --color-compute-500: #8b5cf6;
-  --color-warn-400: #facc15;
-  --color-fail-400: #fb7185;
+  --color-mustard: #f4b841;
+  --color-mustard-deep: #92670a;
+  --color-mustard-soft: #fae3ad;
 
-  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  /* The landing hero's face. Falls back to the display face, so a font failure
-     degrades to Outfit rather than to Times. */
-  --font-hero: var(--font-poppins), var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --color-rose: #e9718f;
+  --color-rose-deep: #b03a58;
+  --color-rose-soft: #f8d3db;
 
-  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --color-sky: #6db5d8;
+  --color-sky-deep: #2a6f94;
+  --color-sky-soft: #cfe7f2;
+
+  /* The night plate — where splats and sci-fi cards live. */
+  --color-navy: #1d2145;
+  --color-navy-deep: #141732;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+
+  /* Motion-graphics curves: pop has overshoot, swift doesn't. */
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
-  color-scheme: dark;
-  --bg: var(--color-ink-950);
-  --surface: var(--color-ink-900);
-  --surface-raised: var(--color-ink-850);
-  /* The design's border is a white wash rather than a flat grey, which is what
-     keeps panels feeling lit from within instead of outlined. */
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --radius: 12px;
-
-  /* The app bar's declared height. AppBar sets its own box from this, and the
-     landing hero subtracts it to fill exactly one viewport. Measured from the
-     bar's contents (a 40px ViewSwitch plus 20px of padding); re-measure if the
-     bar's contents change. */
-  --appbar-h: 60px;
-  /* Zero in a browser. DeviceFrame's phone preview overrides it to its notch
-     safe-area padding so the hero still ends exactly at the preview's fold. */
-  --frame-inset: 0px;
+  color-scheme: light;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='280' height='280' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-html {
-  background: var(--bg);
-  /* The scroll cue is a plain in-page anchor, so smoothness belongs here rather
-     than in a JS scrollIntoView — the browser also disables it automatically
-     under prefers-reduced-motion, which JS would have to check for itself.
-     REQUIRES data-scroll-behavior="smooth" on <html>: Next 16 no longer
-     overrides a global smooth scroll during route transitions, so without that
-     attribute every navigation smooth-scrolls a full page height. */
-  scroll-behavior: smooth;
-  /* One rule fixes every in-page anchor in the app, present and future — the
-     alternative is scroll-margin-top on each individual target. The +8px keeps
-     the landing edge off the bar's border. */
-  scroll-padding-top: calc(var(--appbar-h) + 8px);
+html,
+body {
+  height: 100%;
+  background: var(--color-cream);
 }
 
 body {
-  background: var(--bg);
-  color: var(--color-fog-100);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display face carries every heading; body stays Inter for legibility at 12–14px. */
 h1,
 h2,
 h3,
-h4,
-h5,
-h6 {
+h4 {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
 }
 
-/* Tabular figures everywhere we show a timecode, confidence, or coordinate —
-   numbers that change on hover must not reflow. */
+/* Timestamps, confidences, coordinates — numbers must not reflow on change. */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
 
 @layer utilities {
-  .surface {
-    background: var(--surface);
-    border: 1px solid var(--border);
+  /* ── The grain ────────────────────────────────────────────────────────
+     Film grain lives on a ::after so it rides ABOVE the fills of whatever
+     carries it. soft-light survives on light + saturated grounds alike.
+     NOTE: .grained sets no `position` (it must not fight `absolute`/`fixed`
+     utilities) — pair it with relative/absolute/fixed yourself. */
+  .grained::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--grain);
+    opacity: 0.34;
+    mix-blend-mode: soft-light;
+    border-radius: inherit;
   }
-  .surface-raised {
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
+  .grained-heavy::after {
+    opacity: 0.8;
   }
-  /* Panels that float over the map or the 3D stage. The blur is what makes the
-     map read as a layer underneath rather than a background image. */
-  .glass {
-    background: color-mix(in srgb, var(--color-ink-950) 88%, transparent);
-    border: 1px solid var(--border);
-    backdrop-filter: blur(12px);
+
+  /* ── The card grammar of the poster ──────────────────────────────────
+     Thin ink outline, big radius, cream-bright fill; a numbered chip in the
+     corner and a play-button make it a sound-pack card. */
+  .riso-card {
+    background: var(--color-cream-bright);
+    border: 1.5px solid rgb(35 32 56 / 0.35);
+    border-radius: 18px;
   }
-  .glass-raised {
-    background: color-mix(in srgb, var(--color-ink-900) 92%, transparent);
-    border: 1px solid var(--border-strong);
-    backdrop-filter: blur(16px);
-  }
-  /* Mono uppercase micro-label — the design uses this for every section eyebrow. */
-  .eyebrow {
+
+  /* Mono uppercase label — every timestamp and tag speaks this way. */
+  .tag {
     font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-fog-400);
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
   }
-  /* Faint grid used behind the map and timeline — reads as robot coordinate space. */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-ink-600) transparent;
+    scrollbar-color: rgb(35 32 56 / 0.35) transparent;
+  }
+
+  /* Chunky range input for the day scrubber. */
+  .scrub {
+    appearance: none;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--color-cream-deep);
+    border: 1.5px solid rgb(35 32 56 / 0.35);
+    outline-offset: 3px;
+  }
+  .scrub::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-ink);
+    border: 3px solid var(--color-cream-bright);
+    box-shadow: 0 0 0 1.5px var(--color-ink);
+    cursor: grab;
+  }
+  .scrub::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-ink);
+    border: 3px solid var(--color-cream-bright);
+    box-shadow: 0 0 0 1.5px var(--color-ink);
+    cursor: grab;
   }
 
   /*
@@ -225,8 +201,81 @@ h6 {
   }
 }
 
+/* ── Motion ──────────────────────────────────────────────────────────── */
+
+/* Title-card entrance: pop with a hint of overshoot. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Slide-up entrance for panels and bars. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The overlay takeover: a beat of scale + fade, like a cut in a title sequence. */
+@keyframes takeover {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Route draws itself (pathLength=1 on the path). */
+@keyframes draw-route {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Sticker wobble on hover — one cycle, not a loop. */
+@keyframes wobble {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  35% {
+    transform: rotate(-3deg) scale(1.06);
+  }
+  70% {
+    transform: rotate(2deg) scale(1.04);
+  }
+  100% {
+    transform: rotate(0deg) scale(1.05);
+  }
+}
+
+.pop-in {
+  animation: pop-in 0.45s var(--ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.rise-in {
+  animation: rise-in 0.55s var(--ease-swift) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
 ::selection {
-  background: color-mix(in oklab, var(--color-machine-500) 34%, transparent);
+  background: color-mix(in oklab, var(--color-mustard) 60%, transparent);
 }
 
 /* The sweep on the recording card. A CSS animation on purpose, so the
@@ -1052,6 +1101,7 @@ h6 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
 

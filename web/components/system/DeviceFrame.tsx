@@ -8,11 +8,8 @@
  * The bezel contains an <iframe>, not a scaled div, and that is the whole trick.
  * Tailwind's `sm:`/`md:` breakpoints resolve against the VIEWPORT, not the
  * container, so simply making a 390px-wide box gives you the desktop layout
- * crushed into 390px — the two-column trip view collapses into a sidebar plus a
- * 40px sliver of map. An iframe has its own viewport, so every existing media
- * query resolves correctly at 362px with no component changes at all. Container
- * queries would be the alternative, but that means rewriting every breakpoint in
- * the app to stay in sync.
+ * crushed into 390px. An iframe has its own viewport, so every existing media
+ * query resolves correctly with no component changes at all.
  *
  * The iframe loads the same route with `?chrome=off`, which tells the nested copy
  * of this component to render bare — otherwise it would draw its own bezel, and
@@ -33,7 +30,7 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
   const nested = useSearchParams().get("chrome") === "off";
 
   // Inside the iframe: no bezel, no toggle, just the app — but inset from the top
-  // so the dynamic island doesn't sit on the status bar, the same way a real
+  // so the dynamic island doesn't sit on the app chrome, the same way a real
   // iPhone's safe area works.
   if (nested) {
     // --frame-inset tells the landing hero how much vertical room the notch
@@ -64,10 +61,10 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
               width: 390,
               height: 844,
               borderRadius: 52,
-              background: "#181818",
+              background: "#232038",
               padding: BEZEL,
               boxShadow:
-                "0 0 0 2px #2e2e2e, 0 0 0 6px #111, 0 40px 100px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(255,255,255,0.04)",
+                "0 0 0 2px #3a3654, 0 0 0 6px #16141f, 0 40px 100px rgba(20,18,32,0.55), inset 0 0 0 1px rgba(255,255,255,0.05)",
             }}
           >
             <div
@@ -80,19 +77,19 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
               key={pathname}
               src={`${pathname}?chrome=off`}
               title="Phone preview"
-              className="block bg-ink-950"
+              className="block bg-cream"
               style={{ width: SCREEN_W, height: SCREEN_H, borderRadius: 42, border: 0 }}
             />
-            <span className="absolute -left-1 top-24 h-8 w-1 rounded-l bg-[#2e2e2e]" />
-            <span className="absolute -left-1 top-36 h-14 w-1 rounded-l bg-[#2e2e2e]" />
-            <span className="absolute -left-1 top-[212px] h-14 w-1 rounded-l bg-[#2e2e2e]" />
-            <span className="absolute -right-1 top-36 h-[72px] w-1 rounded-r bg-[#2e2e2e]" />
+            <span className="absolute -left-1 top-24 h-8 w-1 rounded-l bg-[#3a3654]" />
+            <span className="absolute -left-1 top-36 h-14 w-1 rounded-l bg-[#3a3654]" />
+            <span className="absolute -left-1 top-[212px] h-14 w-1 rounded-l bg-[#3a3654]" />
+            <span className="absolute -right-1 top-36 h-[72px] w-1 rounded-r bg-[#3a3654]" />
           </div>
         </div>
       )}
 
       <div
-        className="glass-raised fixed bottom-4 right-4 z-50 flex items-center gap-1 rounded-xl p-1"
+        className="riso-card fixed bottom-4 right-4 z-50 flex items-center gap-0.5 p-1 shadow-lg shadow-ink/10"
         role="group"
         aria-label="Preview device"
       >
@@ -102,8 +99,8 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setMode(m)}
             aria-pressed={mode === m}
-            className={`rounded-lg px-2.5 py-1 font-mono text-[11px] transition-colors ${
-              mode === m ? "bg-machine-400 text-ink-950" : "text-fog-400 hover:text-fog-200"
+            className={`tag rounded-[12px] px-2.5 py-1 text-[10px] transition-all duration-200 ease-(--ease-pop) ${
+              mode === m ? "bg-ink text-cream-bright" : "text-ink-soft hover:text-ink"
             }`}
           >
             {m === "phone" ? "Phone" : "Web"}

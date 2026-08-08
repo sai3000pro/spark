@@ -1,11 +1,12 @@
 /**
- * Procedural keyframe stand-ins.
+ * Procedural keyframe stand-ins, in the riso poster language.
  *
  * The robot's real frames do not exist tonight, so every Keyframe carries a
- * `placeholderSeed` and we synthesize a soft, out-of-focus scene from it: sky
- * gradient, horizon, a few blurred subject blobs, vignette. It reads as "a photo
- * you can't quite make out yet" rather than as a grey box, which keeps the
- * layout honest. Drop a real `url` on the Keyframe and this is never called.
+ * `placeholderSeed` and we print a little risograph scene from it: stacked
+ * soft arches, a sun, hill blobs, and film grain — the same drum inks as the
+ * rest of the app, so a stand-in thumbnail reads as part of the poster rather
+ * than as a gray box. Drop a real `url` on the Keyframe and this is never
+ * called.
  *
  * Pure string generation — safe on server and client, no network, no canvas.
  */
@@ -16,7 +17,7 @@ export interface PlaceholderOptions {
   seed: number;
   width?: number;
   height?: number;
-  /** Base hue in degrees. Pick per-moment so each scene is recognizable. */
+  /** Base hue in degrees. Picks the ink pairing so scenes stay distinct. */
   hue?: number;
 }
 
@@ -32,6 +33,30 @@ export const SCENE_HUES = {
 
 export type SceneHue = keyof typeof SCENE_HUES;
 
+interface ScenePalette {
+  sky: string;
+  arch1: string;
+  arch2: string;
+  ground: string;
+  sun: string;
+  blob: string;
+}
+
+/** Hue buckets → drum-ink scene palettes (see lib/theme.ts). */
+function paletteFor(hue: number): ScenePalette {
+  if (hue >= 150 && hue < 240)
+    // water — sky blues over teal
+    return { sky: "#cfe7f2", arch1: "#6db5d8", arch2: "#2a6f94", ground: "#1ba098", sun: "#fdf8ec", blob: "#0f6b66" };
+  if (hue >= 240 || hue < 25)
+    // dusk / indoor — violets and roses
+    return { sky: "#d9d0f8", arch1: "#e9718f", arch2: "#5b3df0", ground: "#4227c8", sun: "#f4b841", blob: "#b03a58" };
+  if (hue >= 25 && hue < 60)
+    // golden hour — coral on mustard
+    return { sky: "#fae3ad", arch1: "#f4b841", arch2: "#ef5b3c", ground: "#bc3a1e", sun: "#fdf8ec", blob: "#e9718f" };
+  // park / field — teals with a mustard sun
+  return { sky: "#bfe5df", arch1: "#4eb3a8", arch2: "#1ba098", ground: "#0f6b66", sun: "#f4b841", blob: "#2a6f94" };
+}
+
 export function placeholderDataUri({
   seed,
   width = 640,
@@ -39,78 +64,51 @@ export function placeholderDataUri({
   hue = SCENE_HUES.park,
 }: PlaceholderOptions): string {
   const r = makeRng(seed);
-  const horizon = rngRange(r, 0.5, 0.68);
-  const skyLight = rngRange(r, 62, 74);
-  const groundDark = rngRange(r, 16, 26);
-  const hueShift = rngRange(r, -14, 14);
+  const p = paletteFor(((hue % 360) + 360) % 360);
+  const horizon = rngRange(r, 0.52, 0.68) * height;
 
-  const blobs = Array.from({ length: 4 }, () => {
+  // Stacked soft arches on the horizon — the "Soft" card move from the poster.
+  const arches = Array.from({ length: 4 }, (_, i) => {
+    const cx = rngRange(r, 0.1, 0.9) * width;
+    const rad = rngRange(r, 0.16, 0.34) * width;
+    const fill = i % 2 === 0 ? p.arch1 : p.arch2;
+    const op = 0.85 + i * 0.04;
+    return `<circle cx="${cx.toFixed(1)}" cy="${(horizon + rad * 0.55).toFixed(1)}" r="${rad.toFixed(1)}" fill="${fill}" opacity="${Math.min(1, op).toFixed(2)}"/>`;
+  }).join("");
+
+  // A sun (or moon) punched into the sky.
+  const sunX = rngRange(r, 0.18, 0.82) * width;
+  const sunY = rngRange(r, 0.16, 0.4) * horizon;
+  const sunR = rngRange(r, 0.07, 0.12) * width;
+
+  // Foreground blobs — the subjects you can't quite make out.
+  const blobs = Array.from({ length: 3 }, () => {
     const cx = rngRange(r, 0.08, 0.92) * width;
-    const cy = rngRange(r, horizon - 0.18, horizon + 0.24) * height;
-    const rad = rngRange(r, 0.06, 0.19) * width;
-    const l = rngRange(r, 24, 68);
-    const h = hue + rngRange(r, -40, 40);
-    const op = rngRange(r, 0.35, 0.72);
-    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}" fill="hsl(${h.toFixed(0)} 42% ${l.toFixed(0)}%)" opacity="${op.toFixed(2)}"/>`;
+    const cy = rngRange(r, 0.86, 1.04) * height;
+    const rad = rngRange(r, 0.1, 0.2) * width;
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}" fill="${p.blob}" opacity="0.9"/>`;
   }).join("");
 
-  // Suggestion of depth: a couple of horizontal bands near the horizon.
-  const bands = Array.from({ length: 3 }, (_, i) => {
-    const y = (horizon + 0.04 + i * 0.07) * height;
-    const op = 0.16 - i * 0.04;
-    return `<rect x="0" y="${y.toFixed(1)}" width="${width}" height="${(height * 0.05).toFixed(1)}" fill="hsl(${(hue + 20).toFixed(0)} 30% 8%)" opacity="${op.toFixed(2)}"/>`;
-  }).join("");
-
-  // A low sun and its wash across the ground. This is what stops the frame reading
-  // as a flat colour swatch — one bright anchor plus a directional gradient is most
-  // of what makes an out-of-focus photo look like a photo.
-  const sunX = rngRange(r, 0.2, 0.8) * width;
-  const sunY = rngRange(r, horizon - 0.3, horizon - 0.06) * height;
-  const sunR = rngRange(r, 0.1, 0.2) * width;
-
-  // Foliage silhouettes on the horizon, dark against the sky.
-  const canopy = Array.from({ length: 7 }, (_, i) => {
-    const cx = ((i + rngRange(r, 0.1, 0.9)) / 7) * width;
-    const rad = rngRange(r, 0.05, 0.13) * width;
-    const cy = horizon * height - rad * rngRange(r, 0.15, 0.5);
-    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}"/>`;
-  }).join("");
-
-  // Per-seed suffix on every <defs> id. Not needed while these are consumed as
-  // `<img src="data:…">` (each is its own document), but it makes the markup safe
-  // to inline directly into a page later, where ids are document-global.
-  const uid = `p${Math.abs(seed | 0).toString(36)}${Math.round(hue)}`;
+  // Per-seed suffix on every <defs> id so the markup stays safe to inline.
+  const uid = `r${Math.abs(seed | 0).toString(36)}${Math.round(hue)}`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
 <defs>
-<linearGradient id="sky${uid}" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="hsl(${(hue + hueShift - 10).toFixed(0)} 44% ${(skyLight * 0.72).toFixed(0)}%)"/>
-<stop offset="${(horizon * 0.62).toFixed(3)}" stop-color="hsl(${(hue + hueShift).toFixed(0)} 40% ${skyLight.toFixed(0)}%)"/>
-<stop offset="${horizon.toFixed(3)}" stop-color="hsl(${(hue + hueShift + 14).toFixed(0)} 32% ${(skyLight * 0.5).toFixed(0)}%)"/>
-<stop offset="1" stop-color="hsl(${(hue + hueShift + 26).toFixed(0)} 28% ${groundDark.toFixed(0)}%)"/>
-</linearGradient>
-<radialGradient id="sun${uid}" cx="0.5" cy="0.5" r="0.5">
-<stop offset="0" stop-color="hsl(${(hue + 40).toFixed(0)} 70% 88%)" stop-opacity="0.85"/>
-<stop offset="0.45" stop-color="hsl(${(hue + 30).toFixed(0)} 60% 72%)" stop-opacity="0.35"/>
-<stop offset="1" stop-color="hsl(${(hue + 20).toFixed(0)} 55% 62%)" stop-opacity="0"/>
-</radialGradient>
-<radialGradient id="vig${uid}" cx="0.5" cy="0.46" r="0.78">
-<stop offset="0.4" stop-color="#000" stop-opacity="0"/>
-<stop offset="1" stop-color="${INK[950]}" stop-opacity="0.62"/>
-</radialGradient>
-<filter id="soft${uid}" x="-25%" y="-25%" width="150%" height="150%">
-<feGaussianBlur stdDeviation="${(width * 0.03).toFixed(1)}"/>
+<filter id="g${uid}" x="0" y="0" width="100%" height="100%">
+<feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0.9 0.9 0 0"/>
+<feComposite operator="in" in2="SourceGraphic"/>
 </filter>
-<filter id="haze${uid}" x="-25%" y="-25%" width="150%" height="150%">
-<feGaussianBlur stdDeviation="${(width * 0.012).toFixed(1)}"/>
-</filter>
+<clipPath id="c${uid}"><rect width="${width}" height="${height}"/></clipPath>
 </defs>
-<rect width="${width}" height="${height}" fill="url(#sky${uid})"/>
-<circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="${sunR.toFixed(1)}" fill="url(#sun${uid})"/>
-<g filter="url(#haze${uid})" fill="hsl(${(hue + 30).toFixed(0)} 34% 9%)" opacity="0.72">${canopy}</g>
-<g filter="url(#soft${uid})">${blobs}</g>
-${bands}
-<rect width="${width}" height="${height}" fill="url(#vig${uid})"/>
+<g clip-path="url(#c${uid})">
+<rect width="${width}" height="${height}" fill="${p.sky}"/>
+<circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="${sunR.toFixed(1)}" fill="${p.sun}"/>
+${arches}
+<rect x="0" y="${(horizon + height * 0.16).toFixed(1)}" width="${width}" height="${height}" fill="${p.ground}"/>
+${blobs}
+<rect width="${width}" height="${height}" filter="url(#g${uid})" opacity="0.26"/>
+</g>
 </svg>`;
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/\n/g, ""))}`;

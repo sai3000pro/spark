@@ -1,18 +1,25 @@
 "use client";
 
 /**
- * The detector bench.
+ * The detector bench, as a page of numbered poster cards.
  *
- * Its job is to prove the contract end-to-end: a real model runs on a real image,
- * its output is converted to the pipeline's `Detection[]`, and those go straight
- * into the SAME `scoreCandidates` the mock trip uses. If a candidate comes out the
- * other side, stage 1 → stage 2 works on live data.
+ * Its job is to prove the contract end-to-end: a real model runs on a real
+ * image, its output is converted to the pipeline's `Detection[]`, and those go
+ * straight into the SAME `scoreCandidates` the trip uses. If a candidate comes
+ * out the other side, stage 1 → stage 2 works on live data.
  *
  * Doubles as the day-2 tuning tool: change TRIGGER_WEIGHTS, drop an image in,
  * see what fires.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Chip, ConfidenceBar, LabelDot, SectionHeading, StageTag } from "@/components/ui";
+import {
+  InkTag,
+  LabelDot,
+  Meter,
+  NumberChip,
+  inkButtonClass,
+  outlineButtonClass,
+} from "@/components/system/ui";
 import {
   DETECTOR_MODELS,
   formatBytes,
@@ -25,11 +32,12 @@ import {
 import { colorForLabel } from "@/lib/mock/labels";
 import { PIPELINE_CONFIG, promoteToMoment, scoreCandidates } from "@/lib/pipeline";
 import { describeTrigger, LAYER_COLOR, TRIGGER_LAYER } from "@/lib/triggers";
+import { CORAL, MUSTARD, TEAL, VIOLET } from "@/lib/theme";
 import type { Detection, MomentCandidate } from "@/lib/types";
 
 type Phase = "idle" | "loading" | "ready" | "running" | "error";
 
-export function DetectorLab() {
+export function Bench() {
   const [modelId, setModelId] = useState(DETECTOR_MODELS[0].id);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<ProgressInfo | null>(null);
@@ -42,7 +50,6 @@ export function DetectorLab() {
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  const imgRef = useRef<HTMLImageElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Revoke object URLs so repeated drops don't leak.
@@ -138,103 +145,104 @@ export function DetectorLab() {
   }, [promoted, detections]);
 
   return (
-    <div className="space-y-6">
-      <header className="max-w-3xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-fog-100">Detector bench</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-fog-300">
-          Runs a real object detector in your browser and pushes its output through the same{" "}
-          <code className="font-mono text-[13px] text-machine-300">scoreCandidates</code> the trip
-          data uses. Nothing is uploaded — the model runs locally.
+    <div className="space-y-5">
+      <header className="pop-in max-w-3xl">
+        <InkTag color={TEAL.deep} className="text-[10px]">
+          stage 1 → stage 2 · runs in your browser
+        </InkTag>
+        <h1 className="mt-2 font-display text-[34px] font-extrabold leading-[1.02] tracking-tight text-ink sm:text-[42px]">
+          The detector bench
+        </h1>
+        <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
+          A real object detector runs on any photo you drop in, and its output goes through the
+          same <code className="font-mono font-bold text-teal-deep">scoreCandidates</code> the
+          day&apos;s map uses. Nothing is uploaded.
         </p>
       </header>
 
-      {/* ── Model ────────────────────────────────────────────────────────── */}
-      <section className="surface rounded-xl p-4">
-        <SectionHeading
-          hint="Weights download on demand, then stay cached for the session."
-          right={
-            handle && (
-              <Chip tone="signal">
-                loaded · {handle.device}
-              </Chip>
-            )
-          }
-        >
-          Model
-        </SectionHeading>
+      {/* ── 01 · Model ──────────────────────────────────────────────────── */}
+      <section className="riso-card grained relative rounded-[20px] p-4 rise-in sm:p-5" style={{ "--i": 1 } as React.CSSProperties}>
+        <CardHead n={1} title="Pick a model" hint="Weights download once, then stay cached.">
+          {handle && (
+            <InkTag color={TEAL.deep} className="text-[10px]">
+              ● loaded · {handle.device}
+            </InkTag>
+          )}
+        </CardHead>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {DETECTOR_MODELS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              disabled={phase === "loading" || phase === "running"}
-              onClick={() => {
-                setModelId(m.id);
-                setHandle(null);
-                setPhase("idle");
-                setRaw(null);
-              }}
-              className={`rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
-                modelId === m.id
-                  ? "border-machine-500/60 bg-machine-500/10"
-                  : "border-ink-700 hover:border-ink-600"
-              }`}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[13px] font-semibold text-fog-100">{m.label}</span>
-                <span className="tnum font-mono text-[10px] text-fog-400">~{m.approxMb} MB</span>
-              </div>
-              <p className="mt-1 text-[11px] leading-snug text-fog-300">{m.note}</p>
-              <p className="mt-1 font-mono text-[10px] text-fog-400">{m.id}</p>
-            </button>
-          ))}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {DETECTOR_MODELS.map((m, i) => {
+            const ink = i === 0 ? CORAL : VIOLET;
+            const on = modelId === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={phase === "loading" || phase === "running"}
+                onClick={() => {
+                  setModelId(m.id);
+                  setHandle(null);
+                  setPhase("idle");
+                  setRaw(null);
+                }}
+                className="rounded-[14px] border-[1.5px] p-3.5 text-left transition-all duration-200 ease-(--ease-pop) hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                style={{
+                  borderColor: on ? ink.base : "rgb(35 32 56 / 0.25)",
+                  background: on ? `${ink.soft}55` : "transparent",
+                  boxShadow: on ? `inset 0 0 0 1.5px ${ink.base}` : undefined,
+                }}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-display text-[15px] font-bold text-ink">{m.label}</span>
+                  <span className="tag text-[9.5px] text-ink-soft">~{m.approxMb} MB</span>
+                </div>
+                <p className="mt-1 text-[11.5px] leading-snug text-ink-soft">{m.note}</p>
+                <p className="tag mt-1.5 text-[9px] text-ink-faint">{m.id}</p>
+              </button>
+            );
+          })}
         </div>
 
         {phase === "idle" && (
-          <button
-            type="button"
-            onClick={load}
-            className="mt-3 rounded-lg border border-machine-500/60 bg-machine-500/12 px-3 py-2 text-[13px] font-medium text-machine-300 transition-colors hover:bg-machine-500/20"
-          >
+          <button type="button" onClick={load} className={inkButtonClass("mt-3.5")}>
             Load model
           </button>
         )}
 
         {phase === "loading" && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between gap-3 text-[11px] text-fog-300">
-              <span className="truncate font-mono">{progress?.file ?? progress?.status ?? "…"}</span>
-              <span className="tnum shrink-0 font-mono text-fog-400">
+          <div className="mt-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="tag truncate text-[10px] text-ink-soft">
+                {progress?.file ?? progress?.status ?? "…"}
+              </span>
+              <span className="tag tnum shrink-0 text-[10px] text-ink-soft">
                 {formatBytes(progress?.loaded)}
                 {progress?.total ? ` / ${formatBytes(progress.total)}` : ""}
               </span>
             </div>
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink-700">
+            <div className="mt-1.5 h-[9px] overflow-hidden rounded-full border-[1.5px] border-ink/30 bg-cream-deep">
               <div
-                className="h-full rounded-full bg-machine-400 transition-[width] duration-200"
-                style={{ width: `${Math.round(progress?.progress ?? 0)}%` }}
+                className="h-full rounded-full transition-[width] duration-200"
+                style={{ width: `${Math.round(progress?.progress ?? 0)}%`, background: TEAL.base }}
               />
             </div>
           </div>
         )}
 
         {error && (
-          <p className="mt-3 rounded-lg border border-fail-400/40 bg-fail-400/10 p-2.5 text-[12px] text-fail-400">
+          <p
+            className="mt-3.5 rounded-[10px] border-[1.5px] px-3 py-2.5 text-[12px] font-bold"
+            style={{ borderColor: CORAL.base, color: CORAL.deep, background: `${CORAL.soft}55` }}
+          >
             {error}
           </p>
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        {/* ── Frame + boxes ─────────────────────────────────────────────── */}
-        <section>
-          <SectionHeading
-            hint="Drop a photo with a few obvious objects in it."
-            right={<StageTag n={1} name="detection" />}
-          >
-            Frame
-          </SectionHeading>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        {/* ── 02 · Frame ────────────────────────────────────────────────── */}
+        <section className="riso-card grained relative h-fit rounded-[20px] p-4 rise-in sm:p-5" style={{ "--i": 2 } as React.CSSProperties}>
+          <CardHead n={2} title="Drop a frame" hint="A photo with a few obvious objects in it." />
 
           <div
             onDragOver={(e) => e.preventDefault()}
@@ -242,12 +250,12 @@ export function DetectorLab() {
               e.preventDefault();
               onFile(e.dataTransfer.files[0]);
             }}
-            className="surface relative overflow-hidden rounded-xl"
+            className="relative mt-3 overflow-hidden rounded-[14px] border-[1.5px] border-ink/35"
           >
             {imageUrl ? (
               <div className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img ref={imgRef} src={imageUrl} alt="Frame to run detection on" className="block w-full" />
+                <img src={imageUrl} alt="Frame to run detection on" className="block w-full" />
                 {raw?.map((d, i) => {
                   const color = colorForLabel(d.label.toLowerCase());
                   const dim = hoveredIdx !== null && hoveredIdx !== i;
@@ -256,18 +264,18 @@ export function DetectorLab() {
                       key={i}
                       onMouseEnter={() => setHoveredIdx(i)}
                       onMouseLeave={() => setHoveredIdx(null)}
-                      className="absolute border-2 transition-opacity"
+                      className="absolute rounded-[4px] border-[2.5px] transition-opacity"
                       style={{
                         left: `${d.box.xmin * 100}%`,
                         top: `${d.box.ymin * 100}%`,
                         width: `${(d.box.xmax - d.box.xmin) * 100}%`,
                         height: `${(d.box.ymax - d.box.ymin) * 100}%`,
                         borderColor: color,
-                        opacity: dim ? 0.28 : 1,
+                        opacity: dim ? 0.25 : 1,
                       }}
                     >
                       <span
-                        className="absolute -top-[18px] left-0 whitespace-nowrap rounded px-1 font-mono text-[10px] text-ink-950"
+                        className="tag absolute -top-[20px] left-0 whitespace-nowrap rounded-[4px] px-1.5 text-[9px] text-cream-bright"
                         style={{ background: color }}
                       >
                         {d.label} {d.score.toFixed(2)}
@@ -277,9 +285,13 @@ export function DetectorLab() {
                 })}
               </div>
             ) : (
-              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed border-ink-700 text-center">
-                <span className="text-[13px] text-fog-300">Drop an image, or click to choose</span>
-                <span className="text-[11px] text-fog-400">Runs locally — nothing is uploaded</span>
+              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 bg-cream text-center transition-colors hover:bg-cream-deep/60">
+                <span className="font-display text-[15px] font-bold text-ink">
+                  Drop an image, or click to choose
+                </span>
+                <InkTag className="text-[9.5px] text-ink-faint">
+                  runs locally — nothing is uploaded
+                </InkTag>
                 <input
                   ref={fileRef}
                   type="file"
@@ -291,8 +303,8 @@ export function DetectorLab() {
             )}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-[12px] text-fog-300">
+          <div className="mt-3.5 flex flex-wrap items-center gap-3">
+            <label className="tag flex items-center gap-2 text-[10px] text-ink-soft">
               threshold
               <input
                 type="range"
@@ -301,18 +313,16 @@ export function DetectorLab() {
                 step={0.05}
                 value={threshold}
                 onChange={(e) => setThreshold(Number(e.target.value))}
-                className="accent-machine-400"
+                className="scrub w-28"
               />
-              <span className="tnum font-mono text-[11px] text-fog-400">
-                {threshold.toFixed(2)}
-              </span>
+              <span className="tnum text-ink">{threshold.toFixed(2)}</span>
             </label>
 
             <button
               type="button"
               disabled={!handle || !imageUrl || phase === "running"}
               onClick={run}
-              className="rounded-lg border border-machine-500/60 bg-machine-500/12 px-3 py-1.5 text-[13px] font-medium text-machine-300 transition-colors hover:bg-machine-500/20 disabled:opacity-40"
+              className={inkButtonClass("px-4 py-2 text-[13px]")}
             >
               {phase === "running" ? "detecting…" : "Run detection"}
             </button>
@@ -321,83 +331,81 @@ export function DetectorLab() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="rounded-lg border border-ink-700 px-3 py-1.5 text-[12px] text-fog-300 transition-colors hover:border-ink-600"
+                className={outlineButtonClass("px-3.5 py-1.5 text-[12px]")}
               >
                 change image
               </button>
             )}
 
             {elapsedMs !== null && (
-              <span className="tnum font-mono text-[11px] text-fog-400">
+              <span className="tag tnum text-[10px] text-ink-soft">
                 {raw?.length ?? 0} boxes in {elapsedMs} ms
               </span>
             )}
           </div>
         </section>
 
-        {/* ── Contract + pipeline output ────────────────────────────────── */}
-        <section className="space-y-6">
-          <div>
-            <SectionHeading hint="Model output, converted to the pipeline's own type.">
-              Detection[]
-            </SectionHeading>
+        {/* ── 03 · Pipeline ─────────────────────────────────────────────── */}
+        <section className="space-y-5">
+          <div className="riso-card grained relative rounded-[20px] p-4 rise-in sm:p-5" style={{ "--i": 3 } as React.CSSProperties}>
+            <CardHead n={3} title="Detection[]" hint="Model output in the pipeline's own type." />
             {detections.length ? (
-              <ul className="scrollbar-thin max-h-52 space-y-1 overflow-y-auto pr-1">
+              <ul className="scrollbar-thin mt-2 max-h-52 overflow-y-auto pr-1">
                 {detections.map((d, i) => (
                   <li
                     key={d.id}
                     onMouseEnter={() => setHoveredIdx(i)}
                     onMouseLeave={() => setHoveredIdx(null)}
-                    className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 ${
-                      hoveredIdx === i ? "bg-ink-800/70" : ""
+                    className={`flex items-center justify-between gap-2 rounded-[8px] px-2 py-1.5 ${
+                      hoveredIdx === i ? "bg-cream-deep" : ""
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <LabelDot label={d.label} size={7} />
-                      <span className="truncate text-[13px] text-fog-100">{d.label}</span>
+                      <LabelDot label={d.label} />
+                      <span className="truncate text-[13px] font-medium text-ink">{d.label}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="tnum font-mono text-[10px] text-fog-400">
-                        {d.depthM}m
-                      </span>
-                      <ConfidenceBar value={d.confidence} />
+                      <span className="tag tnum text-[9px] text-ink-faint">{d.depthM}m</span>
+                      <Meter value={d.confidence} />
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-[12px] text-fog-400">
+              <p className="mt-2 text-[12px] text-ink-soft">
                 Load a model and run detection to see records here.
               </p>
             )}
           </div>
 
-          <div>
-            <SectionHeading
-              hint={`Same scorer as the trip. Promote threshold ${PIPELINE_CONFIG.promoteThreshold}.`}
-              right={<StageTag n={2} name="candidates" />}
-            >
-              What stage 2 makes of it
-            </SectionHeading>
+          <div className="riso-card grained relative rounded-[20px] p-4 rise-in sm:p-5" style={{ "--i": 4 } as React.CSSProperties}>
+            <CardHead
+              n={4}
+              title="What stage 2 makes of it"
+              hint={`Same scorer as the day. Promote ≥ ${PIPELINE_CONFIG.promoteThreshold}.`}
+            />
 
             {candidates.length ? (
-              <ul className="space-y-2">
+              <ul className="mt-2 space-y-2.5">
                 {candidates.slice(0, 3).map((c) => (
-                  <li key={c.id} className="rounded-lg border border-ink-700 bg-ink-850 p-2.5">
+                  <li key={c.id} className="rounded-[12px] border-[1.5px] border-ink/25 p-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] text-fog-400">
+                      <span className="tag tnum text-[9px] text-ink-faint">
                         {c.tStart}s–{c.tEnd}s
                       </span>
-                      <span className="tnum font-mono text-[11px] text-machine-300">
+                      <span
+                        className="tag tnum text-[10px]"
+                        style={{ color: c.status === "promoted" ? TEAL.deep : MUSTARD.deep }}
+                      >
                         score {c.score.toFixed(2)}
                       </span>
                     </div>
-                    <ul className="mt-1.5 space-y-0.5">
+                    <ul className="mt-1.5 space-y-1">
                       {c.triggers.slice(0, 4).map((t, i) => (
-                        <li key={i} className="flex items-center gap-1.5 text-[11px] text-fog-200">
+                        <li key={i} className="flex items-center gap-1.5 text-[11.5px] text-ink">
                           <span
                             aria-hidden
-                            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                            className="inline-block h-2 w-2 shrink-0 rounded-[3px]"
                             style={{ background: LAYER_COLOR[TRIGGER_LAYER[t.kind]] }}
                           />
                           {describeTrigger(t)}
@@ -405,7 +413,7 @@ export function DetectorLab() {
                       ))}
                     </ul>
                     {c.discardReason && (
-                      <p className="mt-1.5 border-t border-ink-700 pt-1.5 text-[10px] text-fail-400">
+                      <p className="mt-1.5 text-[10.5px] font-bold" style={{ color: CORAL.deep }}>
                         discarded — {c.discardReason}
                       </p>
                     )}
@@ -413,7 +421,7 @@ export function DetectorLab() {
                 ))}
               </ul>
             ) : (
-              <p className="text-[12px] text-fog-400">
+              <p className="mt-2 text-[12px] leading-relaxed text-ink-soft">
                 No candidates yet. A still frame has no audio or odometry, so only the vision
                 triggers can fire — that is the honest result, not a bug.
               </p>
@@ -421,28 +429,46 @@ export function DetectorLab() {
           </div>
 
           {momentJson && (
-            <div>
-              <SectionHeading
-                hint="What stage 3 would store."
-                right={
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard?.writeText(momentJson)}
-                    className="rounded border border-ink-700 px-2 py-0.5 text-[11px] text-fog-300 transition-colors hover:border-ink-600"
-                  >
-                    copy JSON
-                  </button>
-                }
-              >
-                Promoted Moment
-              </SectionHeading>
-              <pre className="scrollbar-thin max-h-64 overflow-auto rounded-lg border border-ink-700 bg-ink-950 p-2.5 font-mono text-[10px] leading-relaxed text-fog-300">
+            <div className="riso-card grained relative rounded-[20px] p-4 rise-in sm:p-5">
+              <CardHead n={5} title="Promoted Moment" hint="What stage 3 would store.">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(momentJson)}
+                  className="tag text-[9.5px] text-ink-soft hover:text-ink"
+                >
+                  copy json
+                </button>
+              </CardHead>
+              <pre className="scrollbar-thin mt-2 max-h-64 overflow-auto rounded-[12px] border-[1.5px] border-ink/25 bg-cream p-3 font-mono text-[10px] leading-relaxed text-ink-soft">
                 {momentJson}
               </pre>
             </div>
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function CardHead({
+  n,
+  title,
+  hint,
+  children,
+}: {
+  n: number;
+  title: string;
+  hint?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center gap-2.5">
+        <NumberChip n={n} size="sm" />
+        <h2 className="font-display text-[16px] font-bold text-ink">{title}</h2>
+        {hint && <span className="hidden text-[11.5px] text-ink-soft sm:inline">{hint}</span>}
+      </div>
+      {children}
     </div>
   );
 }
