@@ -9,16 +9,20 @@
  *      noticed, set as words on the page; scrolling crosses them out in ink,
  *      one by one, until six circled entries remain. "It kept six."
  * III  How it decides — the smeared marquee band, then Seen / Weighed / Kept
- *      as three dark plates whose instruments draw themselves: a wave of
- *      detections, score bars growing against the keep-line, pins walking
- *      onto the route — with the real numbers counting up.
- * IV   Six moments, kept — a horizontal gallery pinned to the scroll; each
- *      vellum card wears its moment's ink, with the evening's rail beneath.
+ *      as three dark plates whose instruments draw themselves and then stay
+ *      alive: detections twinkle, the keep-line's dashes march, and a brass
+ *      dot laps the route past six surveyor's markers breathing sonar rings.
+ * IV   Six moments, kept — a horizontal shelf of taped-down photographs on
+ *      vellum mats, pinned to the scroll on desktop; the prints parallax in
+ *      their windows and the shelf shears with scroll velocity.
  * V    The crossed-out pages — every discarded candidate, its trigger, score
  *      and the exact reason it lost. Honesty as a section, not a footnote.
- * VI   A giant statement dragged across the page by the scroll.
- * VII  The field notes — an accordion of the questions people actually ask.
- * VIII Finale — pine again, the giant wordmark behind one pane of glass.
+ * VI   The statement — three lines that each fit the page, drifting apart as
+ *      they pass, with "Six were." circled in clay.
+ * VII  The field notes — a numbered index whose active entry is circled by
+ *      the same pen, answered on a taped, ruled, stamped sheet.
+ * VIII Finale — pine again, the giant wordmark with the pane of glass
+ *      floating dead-centre over it.
  *
  * Motion contract (DESIGN.md v5.1): markup defaults are the FINAL state and
  * JS animates FROM elsewhere — no-JS and reduced-motion get a complete page
@@ -354,17 +358,70 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
               { fill: BRASS, duration: 0.45, stagger: 0.07 },
               "-=0.15",
             );
+          // Idle: the keep-line's dashes keep marching (the threshold is a
+          // live measurement) and the kept bars glow like held breath.
+          const march = gsap.to(plate.querySelector(".sb-line"), {
+            strokeDashoffset: -20,
+            duration: 2.2,
+            ease: "none",
+            repeat: -1,
+          });
+          const held = gsap.to(plate.querySelectorAll(".sb-kept"), {
+            opacity: 0.55,
+            duration: 1.7,
+            ease: "sine.inOut",
+            yoyo: true,
+            repeat: -1,
+            stagger: 0.4,
+          });
+          killers.push(() => {
+            march.kill();
+            held.kill();
+          });
         } else if (kind === "kept") {
           const path = plate.querySelector<SVGPathElement>(".pr-path");
-          if (path) {
-            const len = path.getTotalLength();
-            tl.fromTo(path, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: 1.3, ease: "signature" });
-          }
-          tl.from(
+          tl.from(path, { opacity: 0, duration: 0.7 }).from(
             plate.querySelectorAll(".pr-pin"),
             { y: -26, opacity: 0, scale: 0.5, transformOrigin: "50% 100%", duration: 0.6, stagger: 0.09 },
-            "-=0.9",
+            "-=0.4",
           );
+          // Idle: the dotted route keeps walking, the robot (a brass dot)
+          // laps it, and each marker breathes a sonar ring.
+          const walkDots = gsap.to(path, { strokeDashoffset: -16, duration: 1.8, ease: "none", repeat: -1 });
+          const halos = gsap.fromTo(
+            plate.querySelectorAll(".pr-halo"),
+            { attr: { r: 7 }, opacity: 0.5 },
+            {
+              attr: { r: 15 },
+              opacity: 0,
+              duration: 2.1,
+              ease: "power1.out",
+              repeat: -1,
+              stagger: 0.35,
+            },
+          );
+          const traveler = plate.querySelector<SVGCircleElement>(".pr-traveler");
+          let lap: gsap.core.Tween | null = null;
+          if (path && traveler) {
+            const len = path.getTotalLength();
+            const proxy = { t: 0 };
+            lap = gsap.to(proxy, {
+              t: 1,
+              duration: 8,
+              ease: "none",
+              repeat: -1,
+              onUpdate: () => {
+                const p = path.getPointAtLength(proxy.t * len);
+                traveler.setAttribute("cx", String(p.x));
+                traveler.setAttribute("cy", String(p.y));
+              },
+            });
+          }
+          killers.push(() => {
+            walkDots.kill();
+            halos.kill();
+            lap?.kill();
+          });
         }
         killers.push(() => {
           tl.scrollTrigger?.kill();
@@ -372,24 +429,29 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         });
       });
 
-      // The dragged statement — scrubbed across its section.
-      const drag = gsap.fromTo(
-        "[data-statement-track]",
-        { xPercent: 3 },
-        {
-          xPercent: -32,
-          ease: "none",
-          scrollTrigger: {
-            trigger: "[data-statement]",
-            start: "top bottom",
-            end: "bottom top",
-            scrub: 0.4,
+      // The statement — three stacked lines that each fit the page, drifting
+      // in opposite directions as the section passes. Every line is readable
+      // at every scroll position; the drift is texture, not travel.
+      el.querySelectorAll<HTMLElement>("[data-drift]").forEach((line) => {
+        const v = Number(line.dataset.drift ?? 0);
+        const drift = gsap.fromTo(
+          line,
+          { xPercent: v },
+          {
+            xPercent: -v,
+            ease: "none",
+            scrollTrigger: {
+              trigger: "[data-statement]",
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 0.4,
+            },
           },
-        },
-      );
-      killers.push(() => {
-        drag.scrollTrigger?.kill();
-        drag.kill();
+        );
+        killers.push(() => {
+          drift.scrollTrigger?.kill();
+          drift.kill();
+        });
       });
 
       // Discard score bars grow when the ledger arrives.
@@ -463,18 +525,22 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       viewport.style.overflowX = "hidden";
       const dist = () => Math.max(0, track.scrollWidth - viewport.clientWidth);
       if (fill) fill.style.transform = "scaleX(0)";
+      // Fast flicks shear the whole shelf of prints a few degrees — paper
+      // being dragged, not a carousel. quickTo eases it back on its own.
+      const shear = gsap.quickTo(track, "skewX", { duration: 0.5, ease: "power2.out" });
       const tween = gsap.to(track, {
         x: () => -dist(),
         ease: "none",
         scrollTrigger: {
           trigger: "[data-gallery]",
           start: "top top",
-          end: () => "+=" + Math.round(dist() + window.innerHeight * 0.35),
+          end: () => "+=" + Math.round(dist() + window.innerHeight * 0.6),
           pin: true,
-          scrub: 0.5,
+          scrub: 0.8,
           anticipatePin: 1,
           invalidateOnRefresh: true,
           onUpdate: (st) => {
+            shear(gsap.utils.clamp(-3.5, 3.5, st.getVelocity() / -400));
             if (fill) fill.style.transform = `scaleX(${st.progress})`;
             const idx = st.progress * (dots.length - 1) + 1e-3;
             dots.forEach((d, i) => {
@@ -482,9 +548,33 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
               d.style.transform = i <= idx ? "scale(1.3)" : "scale(1)";
             });
           },
+          onScrubComplete: () => shear(0),
         },
       });
+      // Each print slides inside its window as the shelf passes — a slow
+      // parallax that keeps the photographs alive while they travel.
+      const parallax = Array.from(el.querySelectorAll<HTMLElement>("[data-gimg]")).map((img) =>
+        gsap.fromTo(
+          img,
+          { xPercent: -5.5 },
+          {
+            xPercent: 5.5,
+            ease: "none",
+            scrollTrigger: {
+              trigger: img,
+              containerAnimation: tween,
+              start: "left right",
+              end: "right left",
+              scrub: true,
+            },
+          },
+        ),
+      );
       return () => {
+        parallax.forEach((p) => {
+          p.scrollTrigger?.kill();
+          p.kill();
+        });
         tween.scrollTrigger?.kill();
         tween.kill();
         viewport.style.overflowX = "";
@@ -493,7 +583,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           d.style.opacity = "";
           d.style.transform = "";
         });
-        gsap.set(track, { clearProps: "x" });
+        gsap.set(track, { clearProps: "x,skewX" });
       };
     });
 
@@ -605,7 +695,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       {/* ── II · the sieve ─────────────────────────────────────────────── */}
       <section
         data-sieve
-        className="papergrain relative flex h-svh min-h-[620px] flex-col overflow-hidden bg-paper"
+        className="papergrain gridfield relative flex h-svh min-h-[620px] flex-col overflow-hidden bg-paper"
         aria-label="Everything the robot noticed, crossed out down to what it kept"
       >
         {/* Captions. C is the markup default — the no-JS and reduced-motion
@@ -791,7 +881,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       {/* ── IV · the gallery ───────────────────────────────────────────── */}
       <section
         data-gallery
-        className="papergrain relative flex flex-col justify-center overflow-hidden bg-paper py-20 lg:h-svh lg:py-0"
+        className="papergrain gridfield relative flex flex-col justify-center overflow-hidden bg-paper py-20 lg:h-svh lg:py-0"
         aria-label="The six kept moments"
       >
         <div className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-8">
@@ -805,58 +895,68 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           </div>
         </div>
 
-        <div data-gallery-viewport className="relative z-10 mt-10 w-full overflow-x-auto scrollbar-none">
+        {/* The prints, mounted on the page: each moment is a taped-down
+            photograph on a vellum mat, resting at its own slight angle, with
+            the journal entry written on the paper beneath it. Picking one up
+            (hover) squares and lifts the print. */}
+        <div data-gallery-viewport className="relative z-10 mt-12 w-full overflow-x-auto scrollbar-none">
           <div
             data-gallery-track
-            className="flex w-max items-stretch gap-5 px-5 sm:px-8 lg:pl-[max(2rem,calc((100vw-72rem)/2+2rem))] lg:pr-[36vw]"
+            className="flex w-max items-start gap-9 px-5 pt-4 sm:px-8 lg:pl-[max(2rem,calc((100vw-72rem)/2+2rem))] lg:pr-[36vw]"
           >
             {moments.map((mo, i) => {
               const ink = PAPER_INKS[i % PAPER_INKS.length];
+              const tilt = [-1.3, 1.1, -0.9, 1.4, -1.1, 0.8][i % 6];
               return (
-                <Link key={mo.id} href={`/walk?m=${mo.id}`} className="group block shrink-0">
-                  <article
-                    className="ink-halo relative flex h-full w-[82vw] max-w-[430px] flex-col overflow-hidden rounded-[14px] bg-vellum p-4 transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-1.5 sm:w-[430px]"
-                    style={{ "--ink": ink } as React.CSSProperties}
-                  >
-                    <p
-                      aria-hidden
-                      className="fnote pointer-events-none absolute right-2 top-1 text-[5.2rem] font-medium leading-none tracking-normal opacity-[0.1]"
-                      style={{ color: ink }}
-                    >
-                      {String(i + 1).padStart(2, "0")}
-                    </p>
-                    <div className="relative overflow-hidden rounded-[10px]">
-                      <KeyframeImg
-                        keyframe={{ placeholderSeed: mo.seed, hue: mo.hue, url: mo.url }}
-                        alt={`Keyframe stand-in for “${mo.title}”`}
-                        width={840}
-                        height={630}
-                        className="aspect-[4/3] w-full object-cover transition-transform duration-500 ease-(--ease-reveal) group-hover:scale-[1.03]"
-                      />
-                      <span className="fnote absolute left-3 top-3 rounded-full bg-ink/80 px-2.5 py-1 text-[10px] text-paper">
-                        {mo.clock}
-                      </span>
-                      {mo.hasMusic && (
-                        <span className="fnote absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[9.5px] text-paper">
-                          <Music size={10} strokeWidth={1.75} aria-hidden /> SCORED
-                        </span>
-                      )}
+                <Link
+                  key={mo.id}
+                  href={`/walk?m=${mo.id}`}
+                  className={`group block w-[78vw] max-w-[390px] shrink-0 sm:w-[390px] ${i % 2 === 1 ? "lg:mt-14" : ""}`}
+                >
+                  <article className="relative" style={{ "--ink": ink, "--tilt": `${tilt}deg` } as React.CSSProperties}>
+                    <div className="papergrain relative rotate-[var(--tilt)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_24px_44px_-24px_rgb(27_27_24_/_0.5)] transition-transform duration-500 ease-(--ease-reveal) group-hover:-translate-y-2 group-hover:rotate-0">
+                      <span aria-hidden className="tape -top-2.5 left-5 -rotate-6" />
+                      <span aria-hidden className="tape -top-2.5 right-7 rotate-3" />
+                      <div className="relative overflow-hidden">
+                        <div data-gimg className="-mx-[7%] w-[114%]">
+                          <KeyframeImg
+                            keyframe={{ placeholderSeed: mo.seed, hue: mo.hue, url: mo.url }}
+                            alt={`Keyframe stand-in for “${mo.title}”`}
+                            width={840}
+                            height={630}
+                            className="aspect-[4/3] w-full object-cover"
+                          />
+                        </div>
+                        {mo.hasMusic && (
+                          <span className="fnote absolute right-2.5 top-2.5 z-[1] flex items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[9.5px] text-paper">
+                            <Music size={10} strokeWidth={1.75} aria-hidden /> SCORED
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline justify-between pt-2.5">
+                        <p className="fnote text-[10px] text-ink-faint">[ {String(i + 1).padStart(3, "0")} ]</p>
+                        <p className="fnote text-[10px]" style={{ color: ink }}>
+                          {mo.clock}
+                        </p>
+                      </div>
                     </div>
-                    <p className="fnote mt-4 flex items-center gap-2 text-[10.5px] text-ink-faint">
-                      <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
-                      {mo.place} · {mo.length} · {mo.mood}
-                    </p>
-                    <h3 className="mt-2 text-[22px] leading-snug text-ink">{mo.title}</h3>
-                    <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink-soft">{mo.summary}</p>
-                    <p className="mt-auto flex items-center gap-1.5 pt-4 text-[13px] font-semibold" style={{ color: ink }}>
-                      Step inside
-                      <ArrowUpRight
-                        size={13}
-                        strokeWidth={2}
-                        className="transition-transform duration-300 ease-(--ease-signature) group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                        aria-hidden
-                      />
-                    </p>
+                    <div className="mt-6 px-1">
+                      <p className="fnote flex items-center gap-2 text-[10.5px] text-ink-faint">
+                        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
+                        {mo.place} · {mo.length} · {mo.mood}
+                      </p>
+                      <h3 className="mt-2 flex items-baseline gap-2 text-[23px] leading-snug text-ink">
+                        {mo.title}
+                        <ArrowUpRight
+                          size={16}
+                          strokeWidth={2}
+                          className="shrink-0 translate-y-[2px] transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          style={{ color: ink }}
+                          aria-hidden
+                        />
+                      </h3>
+                      <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-ink-soft">{mo.summary}</p>
+                    </div>
                   </article>
                 </Link>
               );
@@ -890,7 +990,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       </section>
 
       {/* ── V · the crossed-out pages ──────────────────────────────────── */}
-      <section data-ledger className="papergrain relative bg-paper" aria-label="The discarded candidates">
+      <section data-ledger className="papergrain gridfield relative bg-paper" aria-label="The discarded candidates">
         <div className="relative mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-28">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <h2 data-reveal className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
@@ -939,72 +1039,149 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       {/* ── VI · the dragged statement ─────────────────────────────────── */}
       <section
         data-statement
-        aria-label="Not every minute is worth keeping"
-        className="relative overflow-hidden border-y border-ink/10 bg-paper py-16 sm:py-24"
+        aria-label="Not every minute is worth keeping — six were"
+        className="papergrain gridfield relative overflow-hidden border-y border-ink/10 bg-paper py-20 sm:py-28"
       >
-        <p
-          data-statement-track
-          className="whitespace-nowrap text-[clamp(3.4rem,9vw,7.5rem)] font-medium leading-none tracking-tight text-ink"
-        >
-          Not every minute is worth keeping. <span className="text-clay">Six were.</span>{" "}
-          <span className="text-ink/35">Not every minute is worth keeping.</span>
-        </p>
+        {/* Three lines, each sized to fit the page, drifting apart as the
+            section passes — always readable, never driven off the edge. */}
+        <div className="relative flex flex-col items-center gap-1 text-center">
+          <p
+            data-drift="5"
+            className="w-max whitespace-nowrap text-[clamp(2.5rem,6.8vw,5.4rem)] font-medium leading-[1.05] tracking-tight text-ink"
+          >
+            Not every minute
+          </p>
+          <p
+            data-drift="-5"
+            className="w-max whitespace-nowrap text-[clamp(2.5rem,6.8vw,5.4rem)] font-medium leading-[1.05] tracking-tight text-ink"
+          >
+            is worth keeping.
+          </p>
+          <p
+            data-drift="3"
+            className="mt-4 w-max whitespace-nowrap text-[clamp(2.9rem,8vw,6.4rem)] font-medium leading-[1.02] tracking-tight text-clay"
+          >
+            <span data-reveal="fade" data-draw className="relative inline-block px-4">
+              Six were.
+              <svg
+                aria-hidden
+                viewBox="0 0 120 44"
+                preserveAspectRatio="none"
+                className="pointer-events-none absolute -left-[6%] -top-[14%] h-[130%] w-[112%] overflow-visible"
+              >
+                <path
+                  data-draw-path
+                  pathLength={100}
+                  d="M8 24 C 8 9, 38 3, 62 4 C 92 5, 114 11, 113 22 C 112 35, 84 41, 56 40 C 28 39, 9 34, 8 25"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeDasharray={103}
+                  strokeLinecap="round"
+                />
+              </svg>
+            </span>
+          </p>
+        </div>
       </section>
 
       {/* ── VII · field notes ──────────────────────────────────────────── */}
-      <section className="papergrain relative bg-paper py-24 sm:py-32" aria-label="Field notes">
-        <div className="relative mx-auto grid max-w-6xl gap-5 px-5 sm:px-8 lg:grid-cols-[minmax(280px,2fr)_3fr]">
-          <div className="rounded-[14px] bg-vellum p-7 shadow-[inset_0_0_0_1px_rgb(27_27_24_/_0.12)] sm:p-9" data-reveal>
-            <h2 className="text-[clamp(1.9rem,3vw,2.6rem)] leading-tight text-spruce">Field notes</h2>
-            <div className="mt-6 border-t border-ink/15" />
-            <ul className="mt-6 space-y-4">
+      <section className="papergrain gridfield relative bg-paper py-24 sm:py-32" aria-label="Field notes">
+        <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h2 data-reveal className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
+              Field notes
+            </h2>
+            <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
+              [ THE QUESTIONS PEOPLE ACTUALLY ASK ]
+            </p>
+          </div>
+
+          <div className="mt-12 grid items-start gap-10 lg:grid-cols-[minmax(300px,2fr)_3fr]">
+            {/* The index: numbered entries straight on the page. Selecting one
+                circles its number in clay — the same pen as the sieve. */}
+            <ul data-reveal className="border-t border-ink/15">
               {FIELD_NOTES.map((q, i) => (
                 <li key={q.q}>
                   <button
                     onClick={() => setNote(i)}
                     aria-expanded={note === i}
-                    className={`fnote flex items-center gap-2.5 text-left text-[12px] tracking-[0.16em] transition-colors duration-300 ${
-                      note === i ? "text-ink" : "text-ink-faint hover:text-ink-soft"
-                    }`}
+                    className="group/n flex w-full items-baseline gap-5 border-b border-ink/15 py-5 text-left"
                   >
                     <span
-                      aria-hidden
-                      className={`text-[9px] transition-transform duration-300 ease-(--ease-signature) ${note === i ? "text-clay" : "opacity-0"}`}
+                      className={`note-ring fnote relative shrink-0 text-[11px] transition-colors duration-300 ${
+                        note === i ? "text-clay" : "text-ink-faint"
+                      }`}
                     >
-                      ▶
+                      {String(i + 1).padStart(2, "0")}
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 120 44"
+                        preserveAspectRatio="none"
+                        className="pointer-events-none absolute -left-2.5 -top-[7px] h-[calc(100%+15px)] w-[calc(100%+20px)] overflow-visible"
+                      >
+                        <path
+                          pathLength={100}
+                          d="M8 24 C 8 9, 38 3, 62 4 C 92 5, 114 11, 113 22 C 112 35, 84 41, 56 40 C 28 39, 9 34, 8 25"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                          strokeDasharray={103}
+                          strokeLinecap="round"
+                        />
+                      </svg>
                     </span>
-                    [ {q.q} ]
+                    <span
+                      className={`text-[17px] leading-snug transition-[color,translate] duration-300 ease-(--ease-signature) ${
+                        note === i ? "text-ink" : "text-ink-soft group-hover/n:translate-x-1 group-hover/n:text-ink"
+                      }`}
+                    >
+                      {q.q}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="relative rounded-[14px] bg-vellum p-7 shadow-[inset_0_0_0_1px_rgb(27_27_24_/_0.12)] sm:p-9" data-reveal>
-            <p aria-hidden className="fnote absolute right-7 top-7 text-[12px] text-ink-faint">
-              + ○ □
-            </p>
+
+            {/* The answer: a loose sheet taped over the page — ruled feint
+                lines, the writing sitting on them, a clay stamp in the corner. */}
             <div
-              key={note}
-              className="border-t border-ink/15 pt-6 sm:min-h-[240px]"
-              style={{ animation: "takeover 0.4s var(--ease-reveal) both" }}
+              data-reveal
+              style={{ "--reveal-delay": "120ms" } as React.CSSProperties}
+              className="papergrain relative rotate-[-0.4deg] bg-vellum px-7 pb-7 pt-9 shadow-[0_2px_4px_rgb(27_27_24_/_0.07),0_26px_48px_-28px_rgb(27_27_24_/_0.45)] sm:px-9 sm:pb-9"
             >
-              {FIELD_NOTES[note].a.map((para) => (
-                <p key={para.slice(0, 24)} className="mt-4 max-w-[62ch] text-[15px] leading-relaxed text-ink-soft first:mt-0">
-                  {para}
-                </p>
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap gap-x-10 gap-y-6 border-t border-ink/15 pt-6">
-              <Receipt value={stats.distance} label="walked, never in the way" />
-              <Receipt value={stats.duration} label="of one Sunday evening" />
-              <Receipt value={String(stats.objects)} label="things it can still point to" />
+              <span aria-hidden className="tape -top-2.5 left-8 -rotate-3" />
+              <span aria-hidden className="tape -top-2.5 right-10 rotate-2" />
+              <div key={note} style={{ animation: "takeover 0.4s var(--ease-reveal) both" }}>
+                <div className="flex items-start justify-between gap-4">
+                  <h3 className="max-w-[24ch] text-[21px] leading-snug text-ink">{FIELD_NOTES[note].q}</h3>
+                  <p aria-hidden className="stamp fnote mt-1 shrink-0 text-[9.5px] text-clay">
+                    NOTE {String(note + 1).padStart(2, "0")}
+                  </p>
+                </div>
+                <div className="ruled mt-5 sm:min-h-[196px]">
+                  {FIELD_NOTES[note].a.map((para) => (
+                    <p
+                      key={para.slice(0, 24)}
+                      className="mt-[28px] max-w-[60ch] text-[15px] leading-[28px] text-ink-soft first:mt-0"
+                    >
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-8 flex flex-wrap gap-x-10 gap-y-6 border-t border-ink/15 pt-6">
+                <Receipt value={stats.distance} label="walked, never in the way" />
+                <Receipt value={stats.duration} label="of one Sunday evening" />
+                <Receipt value={String(stats.objects)} label="things it can still point to" />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* ── VIII · finale ──────────────────────────────────────────────── */}
-      <section className="dotfield starfield relative overflow-hidden bg-pine" aria-label="Enter the app">
+      <section className="dotfield starfield relative overflow-hidden bg-pine pb-10 sm:pb-14" aria-label="Enter the app">
         <div className="relative z-10 mx-auto max-w-6xl px-5 pt-24 sm:px-8 sm:pt-32">
           <div className="flex flex-wrap items-end justify-between gap-8">
             <h2 data-reveal className="text-[clamp(2.6rem,5.6vw,4.6rem)] leading-[1.05] text-milk">
@@ -1042,9 +1219,9 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         </div>
 
         <div className="relative mt-6">
-          {/* One pane of glass — in flow on small screens, floating over the
-              wordmark on large ones. */}
-          <footer className="relative z-10 mx-4 mt-10 sm:mx-10 lg:absolute lg:bottom-[9vw] lg:left-1/2 lg:mx-0 lg:mt-0 lg:w-full lg:max-w-5xl lg:-translate-x-1/2">
+          {/* One pane of glass — in flow on small screens, floating dead-centre
+              over the wordmark on large ones. */}
+          <footer className="relative z-10 mx-4 mt-10 sm:mx-10 lg:absolute lg:left-1/2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-full lg:max-w-5xl lg:-translate-x-1/2 lg:-translate-y-1/2">
             <div className="glass-bar flex flex-col items-center gap-5 rounded-2xl px-6 py-5 text-milk sm:flex-row sm:justify-between">
               <nav className="fnote flex gap-5 text-[10.5px]">
                 <Link href="/walk" className="opacity-80 transition-opacity hover:opacity-100">
@@ -1068,7 +1245,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
 
           <p
             aria-hidden
-            className="pointer-events-none mx-auto mt-6 w-fit translate-y-[16%] whitespace-nowrap text-center text-[clamp(9rem,30vw,26rem)] font-semibold leading-[0.78] tracking-[-0.05em] text-ink lg:mt-0"
+            className="pointer-events-none mx-auto mt-6 w-fit whitespace-nowrap text-center text-[clamp(8rem,27vw,23rem)] font-semibold leading-[0.92] tracking-[-0.05em] text-ink lg:mt-0"
           >
             spark
             <span className="ml-[0.02em] inline-block h-[0.13em] w-[0.13em] rounded-full bg-clay align-baseline" />
@@ -1193,7 +1370,9 @@ function ScoreBars({ candidates, kept }: { candidates: number; kept: number }) {
   );
 }
 
-/** [ 003 ] — six teardrop pins walking onto the route. */
+/** [ 003 ] — the walk as a dotted route: six surveyor's markers flag the kept
+    minutes, each breathing a sonar ring, while a brass dot — the robot —
+    quietly laps the evening. */
 function PinRow() {
   const inks = [BRASS, CLAY, "#7d7730", "#8fb3ad", BRASS, CLAY];
   return (
@@ -1212,16 +1391,15 @@ function PinRow() {
         const y = [104, 92, 110, 90, 78, 86][i];
         return (
           <g key={i} className="pr-pin" transform={`translate(${x} ${y})`}>
-            <path
-              d="M0 0 C -9 -12, -9 -26, 0 -30 C 9 -26, 9 -12, 0 0 Z"
-              fill={ink}
-              stroke={PINE}
-              strokeWidth={1.2}
-            />
-            <circle cx={0} cy={-19} r={4.4} fill={PINE} />
+            <ellipse cx={0} cy={0} rx={4.5} ry={1.6} fill="rgb(243 239 251 / 0.18)" />
+            <line x1={0} y1={0} x2={0} y2={-14} stroke={ink} strokeWidth={1.5} strokeLinecap="round" />
+            <circle className="pr-halo" cx={0} cy={-21} r={7} fill="none" stroke={ink} strokeWidth={1} opacity={0} />
+            <circle cx={0} cy={-21} r={6} fill={ink} />
+            <circle cx={0} cy={-21} r={2.1} fill={PINE} />
           </g>
         );
       })}
+      <circle className="pr-traveler" cx={14} cy={108} r={3.2} fill={BRASS} />
     </svg>
   );
 }
@@ -1238,27 +1416,27 @@ function Receipt({ value, label }: { value: string; label: string }) {
 
 const FIELD_NOTES = [
   {
-    q: "WHY KEEP SO LITTLE?",
+    q: "Why keep so little?",
     a: [
       "A camera roll with nine hundred photos of one evening is a place memories go to be lost. Spark's bet is the opposite: a walk survives as the six minutes you'd actually retell.",
       "Everything else is still on the record — counted, timestamped and auditable — it just doesn't get rebuilt in 3D.",
     ],
   },
   {
-    q: "WHAT COUNTS AS SYNTHETIC?",
+    q: "What counts as synthetic?",
     a: [
       "Tonight's preview clouds and keyframe stand-ins are generated, and every one of them is labelled on its face. Odometry, detections and the map are measured.",
       "The rule is absolute: nothing synthetic wears a real thing's clothes. Unknown renders as unknown, never as zero.",
     ],
   },
   {
-    q: "WHERE'S MY WATER BOTTLE?",
+    q: "Where's my water bottle?",
     a: [
       "The robot indexes every distinct thing it sees against the walk's real coordinates. Ask, and it points to the bench where you left the bottle — inside the rebuilt moment, standing where it stood.",
     ],
   },
   {
-    q: "WHY SHOW THE DISCARDS?",
+    q: "Why show the discards?",
     a: [
       "Because a memory machine you can't audit is a stranger editing your life. The bench shows every candidate that fired, its score, and the exact reason it lost.",
       "If the sieve is wrong, you should be able to catch it being wrong.",

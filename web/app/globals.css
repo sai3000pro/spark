@@ -260,6 +260,54 @@ h3 {
     opacity: 0.55;
   }
 
+  /* Graph-paper grid for cream sections — the journal's squared pages. The
+     paper counterpart of the hero's halftone dotfield; fades at the edges so
+     it reads as a page, not a spreadsheet. */
+  .gridfield::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgb(27 27 24 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(27 27 24 / 0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(140% 120% at 50% 30%, black 40%, transparent 96%);
+    mask-image: radial-gradient(140% 120% at 50% 30%, black 40%, transparent 96%);
+  }
+
+  /* A strip of translucent tape — torn ends, holds prints and cards down. */
+  .tape {
+    position: absolute;
+    z-index: 2;
+    width: 76px;
+    height: 22px;
+    pointer-events: none;
+    background: linear-gradient(105deg, rgb(246 240 223 / 0.5), rgb(246 240 223 / 0.72));
+    box-shadow: 0 1px 3px rgb(27 27 24 / 0.14);
+    clip-path: polygon(0 8%, 3% 0, 97% 3%, 100% 12%, 99% 92%, 96% 100%, 4% 97%, 1% 88%);
+  }
+
+  /* Ruled feint lines — the notebook page the field notes are written on.
+     Pair with 28px line-height so the writing sits on the rules. */
+  .ruled {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 27px,
+      rgb(27 27 24 / 0.09) 27px 28px
+    );
+  }
+
+  /* A rubber stamp — bordered mono, pressed at a slight angle. */
+  .stamp {
+    display: inline-block;
+    border: 1.5px solid currentColor;
+    border-radius: 5px;
+    padding: 5px 12px;
+    transform: rotate(-4deg);
+    opacity: 0.85;
+  }
+
   /* ════ NIGHT WALK utilities (the twilight map app) ════════════════════ */
 
   /* ── Texture: belongs to the FIELD, never the plate ─────────────────── */
@@ -448,6 +496,30 @@ html.reveal-armed [data-reveal][data-state="in"] {
   transition:
     opacity 0.8s ease var(--reveal-delay, 0s),
     transform 0.9s var(--ease-reveal) var(--reveal-delay, 0s);
+}
+
+/* Hand-drawn circles that draw themselves on reveal. Same contract as
+   [data-reveal]: the markup default is the finished (drawn) circle; arming
+   rewinds it, entering the viewport draws it. Paths carry pathLength=100
+   and dasharray 103 (and NO non-scaling-stroke — Chromium ignores
+   pathLength for dash math when it's set). */
+html.reveal-armed [data-draw]:not([data-state="in"]) [data-draw-path] {
+  stroke-dashoffset: 103;
+}
+html.reveal-armed [data-draw][data-state="in"] [data-draw-path] {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s var(--ease-reveal) 0.35s;
+}
+
+/* The field notes' index rings: the clay circle around the active entry's
+   number draws on select, rewinds on leave. aria-expanded carries the state,
+   so the first entry arrives already circled without JS. */
+.note-ring path {
+  stroke-dashoffset: 103;
+  transition: stroke-dashoffset 0.6s var(--ease-reveal);
+}
+button[aria-expanded="true"] .note-ring path {
+  stroke-dashoffset: 0;
 }
 
 /* Entrances for floating chrome — used sparingly, once per mount. */
