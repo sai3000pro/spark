@@ -23,3 +23,9 @@ live_sessions/
 awesome-design-md/
 web/public/map-lib/
 .playwright-mcp/
+superpowers/
+
+# Build / pipeline artifacts
+brush_bin/
+target/
+tools/video_intel/out/
