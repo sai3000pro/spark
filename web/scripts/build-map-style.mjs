@@ -1,19 +1,26 @@
 /**
- * Regenerates public/map/night-walk.json — the NIGHT WALK map style — from the
- * pinned OpenFreeMap Liberty style (scripts/liberty-base.json).
+ * Regenerates the app's map styles from the pinned OpenFreeMap Liberty style
+ * (scripts/liberty-base.json).
  *
  *   node scripts/build-map-style.mjs
  *
  * Never hand-edit the output. The transform is categorical: every Liberty layer
  * falls into one bucket (ground, greens, water, road, path, building, label…)
- * and each bucket gets a NIGHT WALK treatment — hue from the palette, original
- * lightness compressed into the dark band so the map keeps its own contrast
+ * and each bucket gets a palette treatment, so the map keeps its own contrast
  * ordering (casings darker than fills, motorways lighter than alleys) without
- * ever leaving the night. POI/transit/shield clutter is hidden outright: the
- * map is the poster's floor, not a navigation app.
+ * ever leaving the register. POI/transit/shield clutter is hidden outright: the
+ * map is the journal's page, not a navigation app.
+ *
+ * Two styles come out of the same transform:
+ *
+ *   field-notes.json — the shipped style. The walk drawn on the journal's own
+ *     cream paper, like a naturalist's survey map: moss washes for the greens,
+ *     a lagoon wash for water, vellum roads with fine sand casings, ink labels.
+ *   night-walk.json  — the retired twilight style, still generated so flipping
+ *     the app back is a one-line change in FieldMap.
  *
  * Palette values are duplicated from lib/theme.ts by hand (this script runs in
- * plain node, no TS) — if the palette moves, update PALETTE below and re-run.
+ * plain node, no TS) — if the palette moves, update the palettes below and re-run.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -22,18 +29,45 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const base = JSON.parse(readFileSync(join(here, "liberty-base.json"), "utf8"));
 
-// ── The night palette (mirrors lib/theme.ts) ────────────────────────────────
-const PALETTE = {
-  night: "#0f0d23",
+// ── FIELD NOTES — the journal's paper (mirrors lib/theme.ts) ────────────────
+// Ground a half-step deeper than the page (#faf4e3) so vellum chrome lifts.
+const FIELD_NOTES = {
+  name: "Spark Field Notes",
+  ground: "#f6efdb",
+  water: "#cfdfda", // lagoon wash
+  waterEdge: "#a3bdb8",
+  green: "#e4e1bd", // parks & grass — a moss wash pressed into the paper
+  wood: "#d6d6b2",
+  sand: "#efe3c0",
+  roadCasing: "#d9d0b0", // fine sand ink around every road
+  roadMinor: "#fffbf0", // vellum
+  roadMajor: "#f7ead0",
+  path: "#b3a271", // park paths — a worn pen line
+  building: "#efe6ca",
+  rail: "#c9be9c",
+  boundary: "#cfc6a6",
+  labelText: "#52524a", // ink-soft
+  labelHalo: "#faf4e3",
+  parkLabel: "#6f6a2b", // moss, pressed
+  waterLabel: "#3f6167", // lagoon, pressed
+  lightColor: "#fffbf0",
+  lightIntensity: 0.05,
+  buildingOpacity: 0.75,
+};
+
+// ── NIGHT WALK — the retired twilight register ──────────────────────────────
+const NIGHT_WALK = {
+  name: "Spark Night Walk",
+  ground: "#0f0d23",
   water: "#0b1226",
   waterEdge: "#1b2c4e",
-  green: "#17253f", // parks & grass — indigo-teal, a step off the ground
+  green: "#17253f",
   wood: "#141d32",
   sand: "#1c1836",
   roadCasing: "#0c0a1e",
   roadMinor: "#1e1a3e",
   roadMajor: "#262152",
-  path: "#4a4478", // park paths read as faint starlit lines
+  path: "#4a4478",
   building: "#1b1837",
   rail: "#332d5e",
   boundary: "#2a2552",
@@ -41,75 +75,92 @@ const PALETTE = {
   labelHalo: "#0f0d23",
   parkLabel: "#6f7fae",
   waterLabel: "#4f6ea0",
+  lightColor: "#f2eefc",
+  lightIntensity: 0.35,
+  buildingOpacity: 0.9,
 };
 
 // ── Bucketing by layer id ───────────────────────────────────────────────────
 const HIDE =
   /^(poi_|airport|aerodrome|highway_shield|highway-shield|highway-name-minor|road_one_way|ferry|aeroway_|cable_car|road_shield|housenumber)/;
 
-/** id-pattern → paint overrides. First match wins. */
-const RULES = [
-  { re: /^background$/, paint: { "background-color": PALETTE.night } },
-  { re: /^(park|landuse_pitch|landcover_grass|landuse_track)/, fill: PALETTE.green },
-  { re: /^landcover_wood/, fill: PALETTE.wood },
-  { re: /^(landcover_wetland|landcover_ice)/, fill: PALETTE.wood },
-  { re: /^(landuse_residential|landuse_school|landuse_hospital|landuse_cemetery)/, fill: PALETTE.night },
-  { re: /^landcover_sand/, fill: PALETTE.sand },
-  { re: /^(water|waterway)/, fill: PALETTE.water, line: PALETTE.waterEdge },
-  { re: /_casing$/, line: PALETTE.roadCasing },
-  { re: /path_pedestrian|_path$|footway|steps/, line: PALETTE.path },
-  { re: /motorway|trunk_primary|highway_major/, line: PALETTE.roadMajor },
-  { re: /rail/, line: PALETTE.rail },
-  { re: /^(tunnel|road|highway|bridge|street)/, line: PALETTE.roadMinor },
-  { re: /^building/, fill: PALETTE.building, extrusion: PALETTE.building },
-  { re: /^(boundary|admin)/, line: PALETTE.boundary },
-  { re: /water_name|waterway_name/, text: PALETTE.waterLabel },
-  { re: /park.*label|label.*park|poi_park/, text: PALETTE.parkLabel },
-];
+function buildStyle(palette) {
+  /** id-pattern → paint overrides. First match wins. */
+  const RULES = [
+    { re: /^background$/, paint: { "background-color": palette.ground } },
+    { re: /^(park|landuse_pitch|landcover_grass|landuse_track)/, fill: palette.green },
+    { re: /^landcover_wood/, fill: palette.wood },
+    { re: /^(landcover_wetland|landcover_ice)/, fill: palette.wood },
+    { re: /^(landuse_residential|landuse_school|landuse_hospital|landuse_cemetery)/, fill: palette.ground },
+    { re: /^landcover_sand/, fill: palette.sand },
+    { re: /^(water|waterway)/, fill: palette.water, line: palette.waterEdge },
+    { re: /_casing$/, line: palette.roadCasing },
+    { re: /path_pedestrian|_path$|footway|steps/, line: palette.path },
+    { re: /motorway|trunk_primary|highway_major/, line: palette.roadMajor },
+    { re: /rail/, line: palette.rail },
+    { re: /^(tunnel|road|highway|bridge|street)/, line: palette.roadMinor },
+    { re: /^building/, fill: palette.building, extrusion: palette.building },
+    { re: /^(boundary|admin)/, line: palette.boundary },
+    { re: /water_name|waterway_name/, text: palette.waterLabel },
+    { re: /park.*label|label.*park|poi_park/, text: palette.parkLabel },
+  ];
 
-const out = structuredClone(base);
-out.name = "Spark Night Walk";
-// The shaded-relief raster fights the night ground; the vector source carries
-// everything the app needs.
-out.layers = out.layers.filter((l) => l.source !== "ne2_shaded");
-delete out.sources.ne2_shaded;
+  const out = structuredClone(base);
+  out.name = palette.name;
+  // Flatten the extrusion side-shading: at full intensity the default light
+  // turns tall buildings into dark slabs that punch through the flat register.
+  out.light = { anchor: "viewport", color: palette.lightColor, intensity: palette.lightIntensity };
+  // The shaded-relief raster fights the flat ground; the vector source carries
+  // everything the app needs.
+  out.layers = out.layers.filter((l) => l.source !== "ne2_shaded");
+  delete out.sources.ne2_shaded;
 
-for (const layer of out.layers) {
-  if (HIDE.test(layer.id)) {
-    layer.layout = { ...(layer.layout ?? {}), visibility: "none" };
-    continue;
+  for (const layer of out.layers) {
+    if (HIDE.test(layer.id)) {
+      layer.layout = { ...(layer.layout ?? {}), visibility: "none" };
+      continue;
+    }
+    const rule = RULES.find((r) => r.re.test(layer.id));
+    layer.paint = layer.paint ?? {};
+
+    if (layer.type === "background" && rule?.paint) Object.assign(layer.paint, rule.paint);
+
+    if (layer.type === "fill") {
+      layer.paint["fill-color"] = rule?.fill ?? palette.ground;
+      delete layer.paint["fill-pattern"];
+      if (layer.paint["fill-outline-color"]) layer.paint["fill-outline-color"] = palette.boundary;
+    }
+
+    if (layer.type === "fill-extrusion") {
+      layer.paint["fill-extrusion-color"] = rule?.extrusion ?? palette.building;
+      layer.paint["fill-extrusion-opacity"] = palette.buildingOpacity;
+    }
+
+    if (layer.type === "line") {
+      layer.paint["line-color"] = rule?.line ?? palette.roadMinor;
+      delete layer.paint["line-pattern"];
+    }
+
+    if (layer.type === "symbol") {
+      layer.paint["text-color"] = rule?.text ?? palette.labelText;
+      layer.paint["text-halo-color"] = palette.labelHalo;
+      layer.paint["text-halo-width"] = 1.2;
+      // Icons carry Liberty's own sprite colors; the journal's map speaks text.
+      if (layer.layout?.["icon-image"]) delete layer.layout["icon-image"];
+    }
   }
-  const rule = RULES.find((r) => r.re.test(layer.id));
-  layer.paint = layer.paint ?? {};
 
-  if (layer.type === "background" && rule?.paint) Object.assign(layer.paint, rule.paint);
-
-  if (layer.type === "fill") {
-    layer.paint["fill-color"] = rule?.fill ?? PALETTE.night;
-    delete layer.paint["fill-pattern"];
-    if (layer.paint["fill-outline-color"]) layer.paint["fill-outline-color"] = PALETTE.boundary;
-  }
-
-  if (layer.type === "fill-extrusion") {
-    layer.paint["fill-extrusion-color"] = rule?.extrusion ?? PALETTE.building;
-    layer.paint["fill-extrusion-opacity"] = 0.9;
-  }
-
-  if (layer.type === "line") {
-    layer.paint["line-color"] = rule?.line ?? PALETTE.roadMinor;
-    delete layer.paint["line-pattern"];
-  }
-
-  if (layer.type === "symbol") {
-    layer.paint["text-color"] = rule?.text ?? PALETTE.labelText;
-    layer.paint["text-halo-color"] = PALETTE.labelHalo;
-    layer.paint["text-halo-width"] = 1.2;
-    // Icons carry Liberty's daylight sprite colors; the night map speaks text.
-    if (layer.layout?.["icon-image"]) delete layer.layout["icon-image"];
-  }
+  return out;
 }
 
 const dest = join(here, "..", "public", "map");
 mkdirSync(dest, { recursive: true });
-writeFileSync(join(dest, "night-walk.json"), JSON.stringify(out, null, 1));
-console.log(`night-walk.json written: ${out.layers.length} layers`);
+
+for (const [file, palette] of [
+  ["field-notes.json", FIELD_NOTES],
+  ["night-walk.json", NIGHT_WALK],
+]) {
+  const style = buildStyle(palette);
+  writeFileSync(join(dest, file), JSON.stringify(style, null, 1));
+  console.log(`${file} written: ${style.layers.length} layers`);
+}

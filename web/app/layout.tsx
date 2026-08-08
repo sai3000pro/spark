@@ -30,7 +30,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${grotesk.variable} ${typewriter.variable} antialiased`}>
-      <body>
+      {/* One register everywhere now — the whole product is the journal. */}
+      <body className="field-site">
         {/* DeviceFrame reads ?chrome=off via useSearchParams, which needs a
             Suspense boundary; the fallback renders the app unwrapped so there is
             never a blank frame. */}

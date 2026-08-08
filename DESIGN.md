@@ -1,22 +1,25 @@
 ---
 version: 5.3
 name: Spark-field-notes
-description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned horizontal shelf of taped-down photographs on vellum mats, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned horizontal shelf of taped-down photographs on vellum mats, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
 SVG/canvas/WebGL/MapLibre in `web/lib/theme.ts` — change one, change both. The map style is
 generated: `web/scripts/build-map-style.mjs` recolors OpenFreeMap Liberty into
-`web/public/map/night-walk.json`; palette changes re-run the script, never hand-edit the JSON.
+`web/public/map/field-notes.json` (and keeps `night-walk.json` buildable as the retired
+twilight register's revert path); palette changes re-run the script, never hand-edit the JSON.
 
 ## The idea
 
 The robot is a field naturalist. It walks a metre behind you, notices everything — ducks,
 benches, laughter, golden light — and presses the few minutes worth keeping into a journal.
-The brand surface (the landing) IS that journal: cream paper with real tooth, pressed
+The whole product IS that journal now: cream paper with real tooth, pressed
 teal-and-brass inks, typewriter specimen tags, and a scroll that re-enacts the day's sieve.
-The product surface (walk / trip / bench) stays the NIGHT WALK twilight map — the journal
-is how the day is told; the map is where the day lives. Two registers, one story.
+The product surface (walk / splat / bench) is the same paper — the walk printed as a
+naturalist's survey map, moments stamped as pins in their pressed inks, and the splat
+stage framed as the journal's one dark pine plate (the capture keeps the night's light).
+One register, one story.
 
 ## Colors
 
@@ -31,9 +34,11 @@ FIELD NOTES (landing + brand surfaces):
 - Text on pine: `milk` #f6f0df primary · `mist` #a9bdb9 secondary.
 - Gradients exist only as the pine→paper section bleed; never as fills on cards or text.
 
-NIGHT WALK (walk / trip / bench app screens) — unchanged: `night`/`dusk`/`plate`/`haze`
-grounds, `starlight`/`moth`/`faint` text, ember/gold/aurora semantics, six moment inks.
-The generated map style still derives from these values.
+NIGHT WALK — retired from product surfaces in v5.3. The indigo tokens stay in the
+theme for the generated twilight map's revert path and the landing's own plates. The six
+moment inks live on with two faces: `base` (luminous — dark plates, the splat stage) and
+`deep` (pressed — pins, chips, meters on paper). Categorical label-family colors mirror
+this with `FAMILY_COLOR` / `FAMILY_COLOR_DEEP` in `lib/mock/labels.ts`.
 
 ## Typography
 
@@ -45,7 +50,10 @@ The generated map style still derives from these values.
   uppercase, tracking 0.12–0.32em, tabular numerals, brackets written in the markup:
   `[ KEPT · 6 ]`, `[ 002 ]`, `[ WHY SHOW THE DISCARDS? ]`. This is the ONLY uppercase in
   the system, and mono appears nowhere else except real code/JSON panels.
-- App screens keep sentence-case `.tag` metadata separated by middle dots.
+- App screens speak both voices: `.fnote` [ TAGS ] for provenance, timecodes and chips;
+  sentence-case `.tag` (dot-separated) for running metadata. Same rule as the landing:
+  the brackets are the only uppercase, mono appears nowhere else except real code/JSON
+  panels (the bench's Moment JSON prints on a `.plate-pine`).
 
 ## Texture
 
@@ -66,10 +74,13 @@ The generated map style still derives from these values.
 ## Shape & components
 
 - Radius scale: 6/10/14px for boxes — plus **pills** (`rounded-full`), which are the ONLY
-  fully-round controls and belong to the journal: `.pill-brass` (brass fill, ink text) is
-  the primary action; `.pill-ghost` (hairline ring via currentColor — set a text color on
-  the element, never a `color` in the class) is the quiet one. App screens keep their two
-  rectangle buttons.
+  fully-round controls: `.pill-brass` (brass fill, ink text) is the primary action;
+  `.pill-ghost` (hairline ring via currentColor — set a text color on the element, never a
+  `color` in the class) is the quiet one. The app uses the same two pills — its old
+  rectangle buttons retired with the twilight register.
+- App surfaces: `.plate-vellum` (vellum fill + `--ring-ink` pen line + soft ink shadow)
+  is the raised card; `.plate-pine` is the one dark plate (splat stage, code panels);
+  `.scrub-paper` is the brass-bead scrubber; `.selected-block` is reverse-video ink.
 - Vellum cards: `vellum` fill + inset hairline ring + soft ink shadow. Nested cards banned.
 - `.glass-bar` — the journal's ONE pane of glass, used twice: sticky nav and the finale
   footer. Tint deep enough that milk text reads over cream sections.
@@ -120,8 +131,13 @@ page — the sieve resting on its crossed-out page, marquees still, numbers alre
 
 ## The map
 
-Unchanged from v4: real OpenFreeMap Liberty tiles restyled to twilight by script, the walk
-as a two-stroke ember/gold ribbon replayed at 120×, teardrop pins in moment inks.
+Real OpenFreeMap Liberty tiles restyled by script into the journal's own survey map:
+cream ground a half-step under the page, moss washes for greens, a lagoon wash for water,
+vellum roads with fine sand casings, ink-soft labels, extrusion light flattened so
+buildings print as pale blocks. The walk draws as the journal marks a keeper — a wide
+translucent brass highlighter stroke under a crisp clay pen line — replayed at 120× while
+the full route waits as a dotted pencil trace. Teardrop pins stamp each moment's pressed
+ink; papergrain and a soft ink vignette sit over the tiles so the map reads as a page.
 
 ## Honesty
 
@@ -135,5 +151,5 @@ Synthetic previews say `synthetic`; unknown renders as unknown, never as zero.
 WCAG AA both registers. On paper: ink 16.6:1, ink-soft 7.1:1, ink-faint metadata-only.
 On pine: milk 14.9:1, mist 7.4:1. Brass and clay are large-text/graphic only on their
 grounds. Color never the sole carrier — every ink rides with a label. Keyboard: tabbable
-pills, tabs and accordion buttons; focus is a 2px clay ring on the journal, aurora in the
-app. Full `prefers-reduced-motion` alternatives: everything lands on final state.
+pills, tabs and accordion buttons; focus is a 2px clay ring everywhere — the app included.
+Full `prefers-reduced-motion` alternatives: everything lands on final state.

@@ -41,12 +41,12 @@ export function DayBar({
   const t = playhead ?? 0;
 
   return (
-    <div className="plate pointer-events-auto flex items-center gap-3 px-3.5 py-3 sm:gap-4 sm:px-5">
+    <div className="plate-vellum papergrain pointer-events-auto relative flex items-center gap-3 overflow-hidden px-3.5 py-3 sm:gap-4 sm:px-5">
       <button
         type="button"
         onClick={onPlayToggle}
         aria-label={playing ? "Pause the replay" : "Replay the day"}
-        className="shrink-0 rounded-[8px] transition-transform duration-300 ease-(--ease-signature) hover:scale-105 active:scale-95"
+        className="relative z-[2] shrink-0 rounded-full transition-transform duration-300 ease-(--ease-signature) hover:scale-105 active:scale-95"
       >
         <PlayGlyph size={42} paused={playing} />
       </button>
@@ -88,15 +88,15 @@ export function DayBar({
           value={Math.round(t)}
           onChange={(e) => onScrub(Number(e.target.value))}
           aria-label="Scrub the day"
-          className="scrub w-full"
+          className="scrub-paper w-full"
         />
       </div>
 
       <div className="hidden shrink-0 flex-col items-end sm:flex">
-        <span className="tag tnum text-[13px] font-semibold text-starlight">
-          {timecode(t)} <span className="font-medium text-faint">/ {timecode(durationSec)}</span>
+        <span className="fnote text-[11px] text-ink">
+          {timecode(t)} <span className="text-ink-faint">/ {timecode(durationSec)}</span>
         </span>
-        <span className="tag mt-0.5 text-[11px] text-faint">
+        <span className="tag mt-1 text-[11px] text-ink-soft">
           {playing ? `Replaying · ${replaySpeed}×` : "Press play to re-walk the day"}
         </span>
       </div>

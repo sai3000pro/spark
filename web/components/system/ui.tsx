@@ -1,17 +1,18 @@
 /**
- * The NIGHT WALK primitives. Server-safe — no hooks, no client directive.
+ * The journal's primitives. Server-safe — no hooks, no client directive.
  *
- * The voice is calm and editorial: quiet sentence-case metadata, numbered
- * chips in the moment's ink, hairline-ringed plates, and exactly two buttons.
- * Every metadata voice in the app speaks through these.
+ * The voice is the field journal's: quiet sentence-case metadata, typewriter
+ * [ TAGS ] for provenance, numbered chips stamped in the moment's pressed ink,
+ * vellum cards with a fine pen-line ring, and the two pills. Every metadata
+ * voice in the app speaks through these.
  */
 import type { CSSProperties, ReactNode } from "react";
 import { placeholderDataUri } from "@/lib/mock/placeholder";
-import { colorForLabel } from "@/lib/mock/labels";
-import { NIGHT, STARLIGHT, type MomentInk } from "@/lib/theme";
+import { colorForLabel, deepColorForLabel } from "@/lib/mock/labels";
+import { PAPER, PINE, type MomentInk } from "@/lib/theme";
 import type { Keyframe as KeyframeModel } from "@/lib/types";
 
-/** The corner chip: `01`, `02`… — the index mark, now a small light. */
+/** The corner chip: `01`, `02`… — the index mark, stamped in pressed ink. */
 export function NumberChip({
   n,
   ink,
@@ -19,7 +20,7 @@ export function NumberChip({
   className = "",
 }: {
   n: number;
-  /** Colored variant — the chip glows with the moment's ink, numeral goes night. */
+  /** Colored variant — the chip is stamped in the moment's pressed ink. */
   ink?: MomentInk;
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -31,11 +32,11 @@ export function NumberChip({
   };
   const style: CSSProperties = ink
     ? {
-        background: ink.base,
-        color: NIGHT,
-        boxShadow: "0 0 0 1.5px rgb(15 13 35 / 0.55)",
+        background: ink.deep,
+        color: PAPER,
+        boxShadow: "0 0 0 1.5px rgb(250 244 227 / 0.85), 0 1px 3px rgb(27 27 24 / 0.25)",
       }
-    : { color: STARLIGHT, boxShadow: "var(--ring-strong)" };
+    : { background: PINE, color: PAPER, boxShadow: "0 1px 3px rgb(27 27 24 / 0.2)" };
   return (
     <span
       style={style}
@@ -51,19 +52,19 @@ export function PlayGlyph({
   size = 40,
   paused = false,
   ink,
-  fg = NIGHT,
+  fg = PAPER,
 }: {
   size?: number;
   paused?: boolean;
-  /** Disc color — defaults to starlight so it reads at a glance on the night. */
+  /** Disc color — defaults to pine ink so it reads as a pressed seal on paper. */
   ink?: string;
   fg?: string;
 }) {
-  const disc = ink ?? STARLIGHT;
+  const disc = ink ?? PINE;
   return (
     <span
       aria-hidden
-      className="grid shrink-0 place-items-center rounded-[8px]"
+      className="grid shrink-0 place-items-center rounded-full"
       style={{ width: size, height: size, background: disc }}
     >
       {paused ? (
@@ -86,18 +87,30 @@ export function PlayGlyph({
   );
 }
 
-/** Primary button — ember. */
+/** Primary action — the journal's brass pill. */
 export function inkButtonClass(extra = "") {
-  return `btn-ember px-4 py-2 text-[13.5px] disabled:opacity-40 ${extra}`;
+  return `pill-brass px-4 py-2 text-[13.5px] disabled:opacity-40 ${extra}`;
 }
 
-/** Secondary — quiet plate. */
+/** Secondary — the quiet hairline pill, inked in the current text color. */
 export function outlineButtonClass(extra = "") {
-  return `btn-ghost px-4 py-2 text-[13px] disabled:opacity-40 ${extra}`;
+  return `pill-ghost text-ink px-4 py-2 text-[13px] disabled:opacity-40 ${extra}`;
 }
 
-/** A detected label with its family color — always next to the label text. */
-export function LabelDot({ label, size = 7 }: { label: string; size?: number }) {
+/**
+ * A detected label with its family color — always next to the label text.
+ * Pressed for paper by default; `luminous` for the dark splat stage.
+ */
+export function LabelDot({
+  label,
+  size = 7,
+  luminous = false,
+}: {
+  label: string;
+  size?: number;
+  luminous?: boolean;
+}) {
+  const color = luminous ? colorForLabel(label) : deepColorForLabel(label);
   return (
     <span
       aria-hidden
@@ -105,14 +118,14 @@ export function LabelDot({ label, size = 7 }: { label: string; size?: number }) 
       style={{
         width: size,
         height: size,
-        background: colorForLabel(label),
-        boxShadow: `0 0 6px ${colorForLabel(label)}55`,
+        background: color,
+        boxShadow: luminous ? `0 0 6px ${color}55` : "0 0 0 1px rgb(250 244 227 / 0.9)",
       }}
     />
   );
 }
 
-/** Confidence meter — a thin rail with a luminous fill. */
+/** Confidence meter — a pen-line rail with a pressed-ink fill. */
 export function Meter({
   value,
   ink,
@@ -129,15 +142,15 @@ export function Meter({
       aria-label={`confidence ${Math.round(value * 100)}%`}
     >
       <span
-        className="relative inline-block h-[6px] overflow-hidden rounded-full bg-haze"
-        style={{ width, boxShadow: "var(--ring)" }}
+        className="relative inline-block h-[6px] overflow-hidden rounded-full"
+        style={{ width, background: "rgb(27 27 24 / 0.1)" }}
       >
         <span
           className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${Math.round(value * 100)}%`, background: ink?.base ?? STARLIGHT }}
+          style={{ width: `${Math.round(value * 100)}%`, background: ink?.deep ?? PINE }}
         />
       </span>
-      <span className="tag text-[10px] text-moth">{value.toFixed(2)}</span>
+      <span className="fnote text-[10px] text-ink-faint">{value.toFixed(2)}</span>
     </span>
   );
 }
@@ -176,10 +189,10 @@ export function KeyframeImg({
 export function SynthNote({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`tag chip chip-synth text-[10px] ${className}`}
+      className={`fnote chip chip-synth text-[10px] ${className}`}
       title="No capture uploaded yet — this frame is printed from the moment's metadata."
     >
-      synthetic
+      [ synthetic ]
     </span>
   );
 }

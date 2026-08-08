@@ -92,6 +92,24 @@ export function densityColor(value: number, max: number): string {
 export const colorForLabel = (label: string) => FAMILY_COLOR[familyOf(label)];
 
 /**
+ * The same categorical scale pressed onto paper — one deep value per family,
+ * for dots and meters on the cream grounds where the luminous set washes out.
+ * Hues match FAMILY_COLOR one-for-one so a family keeps its identity when a
+ * label moves between the dark splat stage and the journal page.
+ */
+export const FAMILY_COLOR_DEEP: Record<LabelFamily, string> = {
+  people: "#5a48c9",
+  personal: "#b4491f",
+  animal: "#0e7a63",
+  sport: "#a06a14",
+  food: "#a72d6a",
+  vehicle: "#5f7a1f",
+  furniture: "#5c6880",
+};
+
+export const deepColorForLabel = (label: string) => FAMILY_COLOR_DEEP[familyOf(label)];
+
+/**
  * Everyday words people actually say, mapped to the COCO class the model emits.
  * "where is my water bottle" must find a `bottle`.
  */

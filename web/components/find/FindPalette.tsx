@@ -8,15 +8,14 @@
  * takeover with the camera flying to that object's anchor. Find → 3D → the
  * thing, in two clicks.
  *
- * Visually it is a spotlight at night: one solid plate over a near-opaque
- * night backdrop, results speaking the bracketed mono voice, and the active
- * row's label picked out in reverse video (`.selected-block`).
+ * Visually it is the journal held up to the light: one vellum slip over a
+ * deep pine wash, results speaking the typewriter [ TAG ] voice, and the
+ * active row's label picked out in reverse video (`.selected-block`).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InkTag, KeyframeImg, LabelDot, Meter, inkButtonClass } from "@/components/system/ui";
 import { beforeEnd, intoTrip, timecode } from "@/lib/format";
 import { searchObjects, suggestedQueries } from "@/lib/objectIndex";
-import { INK_AURORA } from "@/lib/theme";
 import type { ObjectIndexEntry, ObjectSearchResult } from "@/lib/types";
 
 interface Props {
@@ -71,19 +70,19 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-night/80 px-4 pt-[9vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-pine/55 px-4 pt-[9vh]"
       role="dialog"
       aria-modal="true"
       aria-label="Where is my object"
       onClick={onClose}
     >
       <div
-        className="plate relative w-full max-w-2xl overflow-hidden"
+        className="plate-vellum papergrain relative w-full max-w-2xl overflow-hidden text-ink"
         style={{ animation: "takeover 0.3s var(--ease-signature) both" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-starlight/15 px-4 py-3.5">
-          <svg width="18" height="18" viewBox="0 0 14 14" aria-hidden className="shrink-0 text-ember">
+        <div className="flex items-center gap-3 border-b border-ink/10 px-4 py-3.5">
+          <svg width="18" height="18" viewBox="0 0 14 14" aria-hidden className="shrink-0 text-clay">
             <circle cx="6" cy="6" r="4.1" fill="none" stroke="currentColor" strokeWidth="1.5" />
             <path d="M9.4 9.4 12.8 12.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -93,12 +92,12 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKey}
             placeholder="Where's my water bottle?"
-            className="w-full bg-transparent text-[17px] font-semibold text-starlight outline-none placeholder:text-faint"
+            className="w-full bg-transparent text-[17px] font-semibold text-ink outline-none placeholder:text-ink-faint"
             aria-label="Ask where an object is"
           />
           <kbd
-            className="tag hidden shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] text-faint sm:inline"
-            style={{ boxShadow: "var(--ring)" }}
+            className="fnote hidden shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] text-ink-faint sm:inline"
+            style={{ boxShadow: "var(--ring-ink)" }}
           >
             esc
           </kbd>
@@ -107,21 +106,21 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
         <div className="scrollbar-thin max-h-[60vh] overflow-y-auto">
           {!query.trim() ? (
             <div className="p-4">
-              <InkTag className="text-[12px] font-semibold text-faint">Try asking</InkTag>
+              <span className="fnote text-[10.5px] text-ink-faint">[ try asking ]</span>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {suggestions.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setQuery(s)}
-                    className="rounded-[6px] bg-haze/60 px-3 py-1.5 text-[12.5px] font-medium text-starlight transition-colors duration-300 ease-(--ease-signature) hover:bg-haze"
-                    style={{ boxShadow: "var(--ring)" }}
+                    className="rounded-[6px] bg-paper px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors duration-300 ease-(--ease-signature) hover:bg-brass/30"
+                    style={{ boxShadow: "var(--ring-ink)" }}
                   >
                     “{s}”
                   </button>
                 ))}
               </div>
-              <p className="mt-4 border-t border-dashed border-starlight/15 pt-3 text-[12px] leading-relaxed text-moth">
+              <p className="mt-4 border-t border-dashed border-ink/15 pt-3 text-[12px] leading-relaxed text-ink-soft">
                 Searching {entries.length} distinct objects the robot tracked today. Matching is
                 local and instant — everyday words map onto the detector&apos;s COCO classes, so
                 &ldquo;nalgene&rdquo; finds a bottle.
@@ -129,10 +128,10 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
             </div>
           ) : results.length === 0 ? (
             <div className="px-4 py-9 text-center">
-              <p className="text-[15px] font-bold text-starlight">
+              <p className="text-[15px] font-bold text-ink">
                 Nothing matching &ldquo;{query}&rdquo; was tracked today.
               </p>
-              <p className="mt-1.5 text-[11.5px] text-moth">
+              <p className="mt-1.5 text-[11.5px] text-ink-soft">
                 The robot can only find things its detector had a class for.
               </p>
             </div>
@@ -152,11 +151,11 @@ export function FindPalette({ entries, durationSec, onClose, onStepInside }: Pro
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-t border-starlight/15 px-4 py-2">
-          <span className="tag text-[11px] text-faint">↑↓ move</span>
-          <span className="tag text-[11px] text-faint">↵ step inside</span>
-          <span className="tag tnum ml-auto text-[11px] text-faint">
-            {entries.length} objects indexed
+        <div className="flex items-center gap-3 border-t border-ink/10 px-4 py-2">
+          <span className="fnote text-[10px] text-ink-faint">↑↓ move</span>
+          <span className="fnote text-[10px] text-ink-faint">↵ step inside</span>
+          <span className="fnote tnum ml-auto text-[10px] text-ink-faint">
+            [ {entries.length} objects indexed ]
           </span>
         </div>
       </div>
@@ -190,12 +189,12 @@ function ResultRow({
     <li
       ref={ref}
       onMouseEnter={onActivate}
-      className={`border-b border-starlight/10 last:border-b-0 ${active ? "bg-haze/60" : ""}`}
+      className={`border-b border-ink/10 last:border-b-0 ${active ? "bg-paper" : ""}`}
     >
       <div className="flex gap-3.5 p-3.5">
         <div
           className="relative h-[72px] w-[104px] shrink-0 overflow-hidden rounded-[8px]"
-          style={{ boxShadow: "var(--ring)" }}
+          style={{ boxShadow: "var(--ring-ink), 0 2px 6px rgb(27 27 24 / 0.12)" }}
         >
           <KeyframeImg
             keyframe={best.thumbnail}
@@ -206,7 +205,7 @@ function ResultRow({
           />
           {/* The actual detection box, drawn where the model put it. */}
           <span
-            className="pointer-events-none absolute border-2 border-starlight mix-blend-difference"
+            className="pointer-events-none absolute border-2 border-milk mix-blend-difference"
             style={{
               left: `${best.bestBbox[0] * 100}%`,
               top: `${best.bestBbox[1] * 100}%`,
@@ -220,24 +219,24 @@ function ResultRow({
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span
               className={`flex items-center gap-1.5 text-[15px] font-bold ${
-                active ? "selected-block px-1.5 py-0.5" : "text-starlight"
+                active ? "selected-block px-1.5 py-0.5" : "text-ink"
               }`}
             >
               <LabelDot label={entry.label} size={8} />
               {entry.label}
             </span>
-            <span className="tag chip tnum text-[10px]">
+            <span className="fnote chip tnum text-[9.5px]">
               {entry.sightings.length} sighting{entry.sightings.length === 1 ? "" : "s"}
             </span>
             {matchedOn !== "exact" && (
-              <InkTag className="text-[11px] text-faint" title={`matched on ${matchedOn}`}>
+              <InkTag className="text-[11px] text-ink-faint" title={`matched on ${matchedOn}`}>
                 ≈ {matchedOn}
               </InkTag>
             )}
             <Meter value={best.confidence} />
           </div>
 
-          <p className="tag tnum mt-1.5 text-[11.5px] text-moth">
+          <p className="tag tnum mt-1.5 text-[11.5px] text-ink-soft">
             Last seen {intoTrip(entry.lastSeenT)} · {best.placeLabel} ·{" "}
             {beforeEnd(entry.lastSeenT, durationSec)}
           </p>
@@ -254,7 +253,7 @@ function ResultRow({
               <button
                 type="button"
                 onClick={() => setShowNav((v) => !v)}
-                className="btn-ghost px-3.5 py-1.5 text-[12px]"
+                className="pill-ghost px-3.5 py-1.5 text-[12px] text-ink"
               >
                 Send robot here
               </button>
@@ -265,15 +264,15 @@ function ResultRow({
             <div
               className="mt-2 rounded-[8px] px-3 py-2"
               style={{
-                background: INK_AURORA.glow,
-                boxShadow: "0 0 0 1px rgb(62 230 192 / 0.35)",
+                background: "rgb(125 119 48 / 0.12)",
+                boxShadow: "0 0 0 1px rgb(125 119 48 / 0.35)",
               }}
             >
-              <p className="tag text-[11px] font-semibold text-aurora">Nav goal queued</p>
-              <p className="mt-0.5 text-[12px] leading-snug text-moth">
+              <p className="fnote text-[10px] text-moss">[ nav goal queued ]</p>
+              <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">
                 The robot would drive back to this spot.
               </p>
-              <p className="tag tnum mt-1 text-[11px] text-faint">
+              <p className="fnote tnum mt-1 text-[10px] text-ink-faint">
                 Target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
                 heading {entry.navTarget.heading.toFixed(0)}° · rejoins at{" "}
                 {timecode(entry.navTarget.approachFromT)}

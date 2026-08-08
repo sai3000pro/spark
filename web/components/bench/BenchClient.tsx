@@ -12,8 +12,8 @@ import dynamic from "next/dynamic";
 const Bench = dynamic(() => import("@/components/bench/Bench").then((m) => m.Bench), {
   ssr: false,
   loading: () => (
-    <div className="plate relative grid h-64 place-items-center">
-      <span className="tag text-[12px] text-moth">Loading the bench…</span>
+    <div className="plate-vellum relative grid h-64 place-items-center">
+      <span className="tag text-[12px] text-ink-soft">Loading the bench…</span>
     </div>
   ),
 });

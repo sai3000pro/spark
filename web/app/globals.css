@@ -4,15 +4,15 @@
   SPARK — the FIELD NOTES system, v5 (see /DESIGN.md).
 
   The robot is a field naturalist: it walks behind you, notices things, and
-  presses the ones worth keeping into a journal. The site is that journal —
-  grainy cream paper, deep pine ink, brass/moss/clay specimen tags set in a
-  typewriter mono. The landing is scroll cinema (Lenis + GSAP); the app
-  screens keep their twilight map (the NIGHT WALK tokens below survive for
-  them — the walk itself still happens after sunset).
+  presses the ones worth keeping into a journal. The whole product is that
+  journal now — landing AND app: grainy cream paper, deep pine ink,
+  brass/moss/clay specimen tags set in a typewriter mono. The landing is
+  scroll cinema (Lenis + GSAP); the walk is the same paper with a survey map
+  printed on it, and the splat stage is the journal's one dark pine plate.
 
   SVG, canvas, WebGL and MapLibre can't read Tailwind classes, so every value
   here is mirrored in lib/theme.ts — change one, change both. The map style in
-  public/map/night-walk.json is GENERATED from these values by
+  public/map/field-notes.json is GENERATED from these values by
   scripts/build-map-style.mjs; re-run it after palette changes.
 */
 @theme {
@@ -80,7 +80,7 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* Star grain — fine turbulence rendered as LIGHT specks for dark grounds.
      Strength knob: the feColorMatrix alpha row (k 0 0 0 -c) → peak alpha k−c.
@@ -91,25 +91,31 @@
      grounds, multiply-blended. The journal's tooth. */
   --papergrain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.12 0 0 0 0 0.1 0.5 0 0 0 -0.42'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23p)'/%3E%3C/svg%3E");
 
-  /* Hairline ring for plates — crisp edge without a border box. */
+  /* Hairline rings — one per register. --ring/-strong are milk hairlines for
+     dark plates; --ring-ink is the journal's fine pen line on paper. */
   --ring: 0 0 0 1px rgb(242 238 252 / 0.12);
   --ring-strong: 0 0 0 1px rgb(242 238 252 / 0.22);
+  --ring-ink: inset 0 0 0 1px rgb(27 27 24 / 0.14);
 
-  /* Elevation — indigo-tinted, never neutral gray. */
+  /* Elevation. Dark plates keep the indigo shadow; paper cards cast the
+     journal's soft ink shadow. */
   --shadow-plate:
     inset 0 1px 0 rgb(242 238 252 / 0.06),
     0 2px 3px -1px rgb(6 5 18 / 0.5),
     0 12px 28px -12px rgb(6 5 18 / 0.7);
+  --shadow-card:
+    0 1px 2px rgb(27 27 24 / 0.07),
+    0 14px 34px -18px rgb(27 27 24 / 0.38);
 }
 
 html,
 body {
   height: 100%;
-  background: var(--color-night);
+  background: var(--color-paper);
 }
 
 body {
-  color: var(--color-starlight);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
@@ -137,7 +143,7 @@ h3 {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-aurora);
+  outline: 2px solid var(--color-clay);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -254,7 +260,7 @@ h3 {
     display: none;
   }
 
-  /* The blurred echo behind marquee headlines — virio's smeared-ink read. */
+  /* The blurred echo behind marquee headlines — the smeared-ink read. */
   .smear {
     filter: blur(7px);
     opacity: 0.55;
@@ -308,9 +314,9 @@ h3 {
     opacity: 0.85;
   }
 
-  /* ════ NIGHT WALK utilities (the twilight map app) ════════════════════ */
+  /* ════ Journal app utilities (walk / splat / bench) ═══════════════════ */
 
-  /* ── Texture: belongs to the FIELD, never the plate ─────────────────── */
+  /* ── Texture: light specks for the journal's dark pine plates ───────── */
   .starfield::after {
     content: "";
     position: absolute;
@@ -322,11 +328,29 @@ h3 {
     border-radius: inherit;
   }
 
-  /* ── The plate: crisp surface over a textured field ─────────────────── */
+  /* ── Landing plate (indigo) — the landing still composes with it ────── */
   .plate {
     background: var(--color-plate);
     border-radius: var(--radius-md);
     box-shadow: var(--ring), var(--shadow-plate);
+  }
+
+  /* ── The vellum card: the app's raised paper surface ────────────────── */
+  .plate-vellum {
+    background: var(--color-vellum);
+    border-radius: var(--radius-md);
+    box-shadow: var(--ring-ink), var(--shadow-card);
+  }
+
+  /* ── The pine plate: the journal's one dark surface — the splat stage
+        and real code/JSON panels. Milk text lives on it. ────────────────── */
+  .plate-pine {
+    background: var(--color-pine);
+    color: var(--color-milk);
+    border-radius: var(--radius-md);
+    box-shadow:
+      inset 0 0 0 1px rgb(246 240 223 / 0.14),
+      var(--shadow-card);
   }
 
   /* ── Metadata voice: quiet sentence-case, dot-separated, tabular ────── */
@@ -336,110 +360,48 @@ h3 {
     letter-spacing: 0.01em;
     font-variant-numeric: tabular-nums;
   }
-  /* Provenance / status chip: hairline box around a short label. */
+
+  /* Provenance / status chip: a fine pen-line box around a short label.
+     Neutral reads ink-soft; the semantic variants carry their ink as text
+     with the label, never color alone. */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 3px 8px;
     border-radius: var(--radius-sm);
-    box-shadow: var(--ring);
-    color: var(--color-moth);
-    background: rgb(15 13 35 / 0.55);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 38%, transparent);
+    color: var(--color-ink-soft);
+    background: rgb(255 251 240 / 0.7);
   }
+  /* Measured / live — moss, the naturalist's "seen it myself" ink. */
   .chip-live {
-    color: var(--color-aurora);
-    box-shadow: 0 0 0 1px rgb(62 230 192 / 0.3);
+    color: var(--color-moss);
   }
+  /* Stand-in / attention — clay, the same ink that crosses out discards. */
   .chip-synth {
-    color: var(--color-ember);
-    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.3);
+    color: var(--color-clay);
+  }
+  /* Chips printed on the pine plate speak milk with the ink as a dot. */
+  .chip-plate {
+    color: var(--color-milk);
+    background: rgb(22 41 46 / 0.72);
+    box-shadow: inset 0 0 0 1px rgb(246 240 223 / 0.22);
   }
 
-  /* ── Buttons: two, forever. Quiet rectangles, no pills ──────────────── */
-  .btn-ember {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border-radius: var(--radius-sm);
-    background: var(--color-ember);
-    color: #241004;
-    font-weight: 600;
-    transition:
-      background-color 0.3s var(--ease-signature),
-      transform 0.3s var(--ease-signature);
-  }
-  .btn-ember:hover {
-    background: var(--color-gold);
-  }
-  .btn-ember:active {
-    transform: scale(0.98);
-  }
-  .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border-radius: var(--radius-sm);
-    color: var(--color-starlight);
-    background: rgb(31 27 64 / 0.65);
-    box-shadow: var(--ring-strong);
-    font-weight: 550;
-    transition:
-      box-shadow 0.3s var(--ease-signature),
-      background-color 0.3s var(--ease-signature),
-      transform 0.3s var(--ease-signature);
-  }
-  .btn-ghost:hover {
-    background: var(--color-haze);
-  }
-  .btn-ghost:active {
-    transform: scale(0.98);
-  }
-
-  /* ── Selection is reverse-video: square block, tight to its label ───── */
+  /* ── Selection is reverse-video: a block of ink, tight to its label ─── */
   .selected-block {
-    background: var(--color-starlight);
-    color: var(--color-night);
+    background: var(--color-ink);
+    color: var(--color-paper);
     border-radius: 0;
   }
 
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgb(242 238 252 / 0.25) transparent;
+    scrollbar-color: rgb(27 27 24 / 0.3) transparent;
   }
 
-  /* ── The highlighter bar: ONE loud accent device, hero only ─────────── */
-  .hl-ember {
-    background: var(--color-ember);
-    color: var(--color-night);
-    padding: 0 0.14em;
-    -webkit-box-decoration-break: clone;
-    box-decoration-break: clone;
-  }
-
-  /* ── Annotation frame: a design-tool selection box pinned on the art ── */
-  .frame-note {
-    position: absolute;
-    border: 1px solid rgb(242 238 252 / 0.55);
-    background: rgb(15 13 35 / 0.62);
-    padding: 6px 10px;
-    backdrop-filter: blur(2px);
-  }
-  .frame-note > i {
-    position: absolute;
-    width: 5px;
-    height: 5px;
-    background: var(--color-starlight);
-    border: 1px solid rgb(15 13 35 / 0.8);
-  }
-  .frame-note > i:nth-child(1) { top: -3px; left: -3px; }
-  .frame-note > i:nth-child(2) { top: -3px; right: -3px; }
-  .frame-note > i:nth-child(3) { bottom: -3px; left: -3px; }
-  .frame-note > i:nth-child(4) { bottom: -3px; right: -3px; }
-
-  /* Range input for the day scrubber — an ember bead on a dusk rail. */
+  /* Range input on the landing — kept for its scrub controls. */
   .scrub {
     appearance: none;
     height: 6px;
@@ -468,38 +430,32 @@ h3 {
     cursor: grab;
   }
 
-  /*
-    Exactly one viewport, with the app bar floating OVER it.
-
-    The negative margin is what pulls the scene up underneath the sticky bar, so
-    the artwork is genuinely full-bleed and the bar reads as chrome laid on top
-    of it rather than a band above it. Without this the bar's transparent state
-    just reveals the page background, which is pointless. The bar is z-30 and
-    everything in the hero is z-3 or below, so it stays on top; and the top 9% of
-    the plate measures 14.8:1 against our text, so the bar needs no scrim there.
-
-    svh, not dvh or vh. dvh re-resolves as mobile browser chrome collapses — and
-    it collapses WHILE you are scrolling out of the hero, so the page would jump
-    under your finger. svh is the smallest (chrome-expanded) viewport, so the
-    scroll cue is guaranteed to be above the fold in the worst case and the hero
-    never resizes mid-gesture.
-
-    `height`, NOT `min-height`, and that is load-bearing rather than stylistic.
-    .hero-stage is a `container-type: size` query container, which requires a
-    DEFINITE size in both axes; with only a min-height its block size still
-    depends on its contents, so `100cqh` resolved to 0. The plate box then sized
-    itself from width alone and came out 347x463 instead of 578x770 — the scene
-    covered barely half the phone screen with black above and below it. Nothing
-    inside the hero is in flow (the copy, the blob and the cue are all absolutely
-    positioned), so a definite height costs nothing.
-
-    The calc() has to live HERE rather than in a :root variable: var() would
-    substitute --frame-inset against :root, so DeviceFrame's override on a
-    descendant would never re-resolve.
-  */
-  .h-hero {
-    height: calc(100svh - var(--frame-inset));
-    margin-top: calc(-1 * var(--appbar-h));
+  /* The app's scrubber — a brass bead drawn along a pen-line rail. */
+  .scrub-paper {
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgb(27 27 24 / 0.12);
+    outline-offset: 3px;
+  }
+  .scrub-paper::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-brass);
+    border: 2.5px solid var(--color-vellum);
+    box-shadow: 0 0 0 1px rgb(27 27 24 / 0.35);
+    cursor: grab;
+  }
+  .scrub-paper::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-brass);
+    border: 2.5px solid var(--color-vellum);
+    box-shadow: 0 0 0 1px rgb(27 27 24 / 0.35);
+    cursor: grab;
   }
 }
 
@@ -543,6 +499,18 @@ html.reveal-armed [data-draw]:not([data-state="in"]) [data-draw-path] {
 html.reveal-armed [data-draw][data-state="in"] [data-draw-path] {
   stroke-dashoffset: 0;
   transition: stroke-dashoffset 1s var(--ease-reveal) 0.35s;
+}
+
+/* The gallery deck is a JS-and-desktop-only upgrade: once motion arms
+   (.reveal-armed), the leafable deck of prints replaces the native strip.
+   Reduced motion never arms, so it always keeps the strip. */
+@media (min-width: 1025px) {
+  html.reveal-armed .deck-when-armed {
+    display: block;
+  }
+  html.reveal-armed .strip-when-armed {
+    display: none;
+  }
 }
 
 /* The field notes' index rings: the clay circle around the active entry's
@@ -612,7 +580,8 @@ button[aria-expanded="true"] .note-ring path {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--color-ember) 55%, transparent);
+  background: color-mix(in oklab, var(--color-brass) 60%, transparent);
+  color: var(--color-ink);
 }
 
 /* The journal reads light-on-cream: its own selection, focus and scheme. */
@@ -628,17 +597,17 @@ button[aria-expanded="true"] .note-ring path {
   outline-offset: 2px;
 }
 
-/* MapLibre chrome: the map is the poster's floor, not a navigation app. */
+/* MapLibre chrome: the map is the journal's page, not a navigation app. */
 .maplibregl-ctrl-attrib {
-  background: rgb(15 13 35 / 0.7) !important;
+  background: rgb(250 244 227 / 0.8) !important;
   font-family: var(--font-sans);
   font-size: 10px !important;
 }
 .maplibregl-ctrl-attrib a {
-  color: var(--color-faint) !important;
+  color: var(--color-ink-faint) !important;
 }
 .maplibregl-canvas:focus-visible {
-  outline: 2px solid var(--color-aurora);
+  outline: 2px solid var(--color-clay);
   outline-offset: -2px;
 }
 
