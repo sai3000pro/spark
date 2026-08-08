@@ -146,8 +146,8 @@ export function Bench() {
   }, [promoted, detections]);
 
   return (
-    <div className="space-y-5">
-      <header className="rise-in max-w-3xl">
+    <div className="space-y-6">
+      <header className="rise-in max-w-2xl">
         <span className="fnote text-[10.5px] text-moss">
           [ stage 1 → stage 2 · runs in your browser ]
         </span>
@@ -163,7 +163,7 @@ export function Bench() {
 
       {/* ── 01 · Model ──────────────────────────────────────────────────── */}
       <section
-        className="plate-vellum rise-in relative p-4 sm:p-5"
+        className="plate-vellum rise-in relative p-5 sm:p-6"
         style={{ "--i": 1 } as React.CSSProperties}
       >
         <CardHead n={1} title="Pick a model" hint="Weights download once, then stay cached.">
@@ -186,24 +186,26 @@ export function Bench() {
                   setPhase("idle");
                   setRaw(null);
                 }}
-                className="rounded-[10px] p-3.5 text-left transition-[box-shadow,background-color] duration-200 ease-(--ease-signature) disabled:opacity-50"
+                className="rounded-[10px] p-4 text-left transition-[box-shadow,background-color] duration-300 ease-(--ease-signature) disabled:opacity-50"
                 style={{
-                  boxShadow: on ? "inset 0 0 0 1.5px var(--color-ink)" : "var(--ring-ink)",
-                  background: on ? "rgb(27 27 24 / 0.05)" : "transparent",
+                  background: on ? "var(--color-pine)" : "transparent",
+                  boxShadow: on ? "var(--shadow-card)" : "var(--ring-ink)",
                 }}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span
-                    className={`text-[15px] font-semibold ${
-                      on ? "selected-block px-1.5" : "text-ink"
-                    }`}
-                  >
+                  <span className={`text-[15px] font-semibold ${on ? "text-milk" : "text-ink"}`}>
                     {m.label}
                   </span>
-                  <span className="fnote tnum text-[10px] text-ink-faint">~{m.approxMb} MB</span>
+                  <span className={`fnote tnum text-[10px] ${on ? "text-brass" : "text-ink-faint"}`}>
+                    ~{m.approxMb} MB
+                  </span>
                 </div>
-                <p className="mt-1.5 text-[12px] leading-snug text-ink-soft">{m.note}</p>
-                <p className="fnote mt-1.5 text-[9.5px] text-ink-faint">{m.id}</p>
+                <p className={`mt-1.5 text-[12px] leading-snug ${on ? "text-mist" : "text-ink-soft"}`}>
+                  {m.note}
+                </p>
+                <p className={`fnote mt-2 text-[9.5px] ${on ? "text-mist/70" : "text-ink-faint"}`}>
+                  {m.id}
+                </p>
               </button>
             );
           })}
@@ -251,7 +253,7 @@ export function Bench() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {/* ── 02 · Frame ────────────────────────────────────────────────── */}
         <section
-          className="plate-vellum rise-in relative h-fit p-4 sm:p-5"
+          className="plate-vellum rise-in relative h-fit p-5 sm:p-6"
           style={{ "--i": 2 } as React.CSSProperties}
         >
           <CardHead n={2} title="Drop a frame" hint="A photo with a few obvious objects in it." />
@@ -263,7 +265,7 @@ export function Bench() {
               onFile(e.dataTransfer.files[0]);
             }}
             className="relative mt-3 overflow-hidden rounded-[14px]"
-            style={{ boxShadow: "var(--ring-ink)" }}
+            style={{ boxShadow: imageUrl ? "var(--ring-ink)" : "none" }}
           >
             {imageUrl ? (
               <div className="relative bg-pine">
@@ -299,11 +301,12 @@ export function Bench() {
                 })}
               </div>
             ) : (
-              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 bg-paper text-center transition-colors duration-200 hover:bg-brass/20">
-                <span className="text-[15px] font-semibold text-ink">
-                  Drop an image, or click to choose
+              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-3 rounded-[14px] border-2 border-dashed border-ink/20 text-center transition-colors duration-300 ease-(--ease-signature) hover:border-ink/40 hover:bg-vellum">
+                <span className="pill-ghost px-4 py-2 text-[13px] text-ink">Choose an image</span>
+                <span className="tag text-[12px] text-ink-soft">
+                  or drag one anywhere in this frame
                 </span>
-                <span className="fnote text-[10px] text-ink-faint">
+                <span className="fnote text-[9.5px] text-ink-faint">
                   [ runs locally — nothing is uploaded ]
                 </span>
                 <input
@@ -362,7 +365,7 @@ export function Bench() {
         {/* ── 03 · Pipeline ─────────────────────────────────────────────── */}
         <section className="space-y-5">
           <div
-            className="plate-vellum rise-in relative p-4 sm:p-5"
+            className="plate-vellum rise-in relative p-5 sm:p-6"
             style={{ "--i": 3 } as React.CSSProperties}
           >
             <CardHead n={3} title="Detection[]" hint="Model output in the pipeline's own type." />
@@ -398,7 +401,7 @@ export function Bench() {
           </div>
 
           <div
-            className="plate-vellum rise-in relative p-4 sm:p-5"
+            className="plate-vellum rise-in relative p-5 sm:p-6"
             style={{ "--i": 4 } as React.CSSProperties}
           >
             <CardHead
@@ -466,7 +469,7 @@ export function Bench() {
           </div>
 
           {momentJson && (
-            <div className="plate-vellum rise-in relative p-4 sm:p-5">
+            <div className="plate-vellum rise-in relative p-5 sm:p-6">
               <CardHead n={5} title="Promoted Moment" hint="What stage 3 would store.">
                 <button
                   type="button"
@@ -501,13 +504,15 @@ function CardHead({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex items-center gap-2.5">
-        <NumberChip n={n} size="sm" />
-        <h2 className="text-[17px] text-ink">{title}</h2>
-        {hint && <span className="hidden text-[11.5px] text-ink-soft sm:inline">{hint}</span>}
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <NumberChip n={n} size="sm" className="mt-[3px]" />
+        <div className="min-w-0">
+          <h2 className="text-[17px] leading-tight text-ink">{title}</h2>
+          {hint && <p className="tag mt-1 text-[11.5px] text-ink-faint">{hint}</p>}
+        </div>
       </div>
-      {children}
+      <div className="flex shrink-0 items-center gap-2 pt-[3px]">{children}</div>
     </div>
   );
 }

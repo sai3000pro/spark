@@ -17,6 +17,7 @@ import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { distance, duration, tripDate } from "@/lib/format";
+import { localToLngLat } from "@/lib/geo";
 import type { TripView } from "@/lib/tripData";
 import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
 
@@ -143,6 +144,12 @@ export function AtlasApp({
           <p className="tag tnum mt-0.5 text-[12px] text-ink-faint">
             {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
             {duration(trip.stats.durationSec)}
+          </p>
+          <p className="fnote mt-2 text-[8.5px] text-ink-faint">
+            {(() => {
+              const [lng, lat] = localToLngLat(trip.path[0].pos);
+              return `[ ${Math.abs(lat).toFixed(4)}° N · ${Math.abs(lng).toFixed(4)}° W ]`;
+            })()}
           </p>
         </div>
 

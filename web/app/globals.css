@@ -568,6 +568,26 @@ button[aria-expanded="true"] .note-ring path {
   animation: marquee var(--marquee-dur, 52s) linear infinite reverse;
 }
 
+/* The surveyor marker's sonar — one ring breathing out of the head, the same
+   pulse the landing's route plate uses. Applied to a ring-shadow element. */
+@keyframes sonar {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.75;
+  }
+  75% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+.sonar {
+  animation: sonar 2.1s var(--ease-reveal) infinite;
+}
+
 /* The soft breath of a live light — the follow pulse and the robot dot. */
 @keyframes glow-breathe {
   0%,
@@ -609,6 +629,22 @@ button[aria-expanded="true"] .note-ring path {
 .maplibregl-canvas:focus-visible {
   outline: 2px solid var(--color-clay);
   outline-offset: -2px;
+}
+/* The scale bar speaks fnote — a fine pen bracket, not a widget. */
+.maplibregl-ctrl-scale {
+  background: rgb(250 244 227 / 0.55) !important;
+  border: 1px solid rgb(27 27 24 / 0.45) !important;
+  border-top: none !important;
+  color: var(--color-ink-soft) !important;
+  font-family: var(--font-mono);
+  font-size: 9px !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 1px 6px 0 !important;
+}
+.maplibregl-ctrl-bottom-left {
+  bottom: 10px;
+  left: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {
