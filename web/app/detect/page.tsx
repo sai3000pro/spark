@@ -11,10 +11,7 @@ export default function DetectPage() {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-6 sm:px-6">
       <nav className="mb-5">
-        <Link
-          href="/"
-          className="riso-card inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-bold text-ink shadow-md shadow-ink/10 transition-transform duration-200 ease-(--ease-pop) hover:scale-[1.04] active:scale-95"
-        >
+        <Link href="/" className="btn-ghost px-3.5 py-2 text-[13px]">
           <span aria-hidden>←</span> Back to the map
         </Link>
       </nav>

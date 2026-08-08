@@ -19,19 +19,20 @@ import * as THREE from "three";
 import { buildSyntheticCloud } from "@/lib/splat/syntheticCloud";
 import { colorForLabel } from "@/lib/mock/labels";
 import { compactNumber } from "@/lib/format";
-import { CANVAS_BG, type RisoInk } from "@/lib/theme";
+import { CANVAS_BG, type MomentInk } from "@/lib/theme";
 import type { Moment } from "@/lib/types";
 
 interface Props {
   moment: Moment;
-  ink: RisoInk;
+  /** The moment's ink — reserved for data accents; provenance chips keep their own semantics. */
+  ink: MomentInk;
   focusTrackId: string | null;
   onSelectObject: (trackId: string | null) => void;
 }
 
 type Mode = "checking" | "spark" | "synthetic";
 
-export function SplatViewer({ moment, ink, focusTrackId, onSelectObject }: Props) {
+export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   const [mode, setMode] = useState<Mode>(() =>
     moment.splat.status === "ready" && moment.splat.url ? "checking" : "synthetic",
   );
@@ -94,34 +95,37 @@ export function SplatViewer({ moment, ink, focusTrackId, onSelectObject }: Props
         <CameraRig anchors={cloud.anchors} focusTrackId={focusTrackId} />
       </Canvas>
 
-      {/* ── Chips over the stage ────────────────────────────────────────── */}
+      {/* ── Provenance chips over the stage ─────────────────────────────── */}
       <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap items-center gap-1.5">
         {mode === "spark" ? (
-          <StageChip color={ink.base}>
+          <StageChip variant="live">
             splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians
           </StageChip>
         ) : (
-          <StageChip>synthetic preview · {compactNumber(cloud.count)} pts</StageChip>
+          <StageChip variant="synth">synthetic preview · {compactNumber(cloud.count)} pts</StageChip>
         )}
-        {moment.splat.status === "processing" && <StageChip color="#b4a6e8">reconstructing</StageChip>}
-        {moment.splat.status === "failed" && <StageChip color="#e8907f">reconstruction failed</StageChip>}
+        {moment.splat.status === "processing" && <StageChip>reconstructing</StageChip>}
+        {moment.splat.status === "failed" && <StageChip variant="synth">reconstruction failed</StageChip>}
       </div>
 
-      <p className="tag pointer-events-none absolute bottom-3 right-3 text-[9px] text-cream-bright/50">
+      <p className="tag pointer-events-none absolute bottom-3 right-3 text-[9px] text-faint">
         drag to orbit · scroll to zoom · click a dot to inspect
       </p>
     </div>
   );
 }
 
-function StageChip({ children, color }: { children: React.ReactNode; color?: string }) {
+function StageChip({
+  children,
+  variant,
+}: {
+  children: React.ReactNode;
+  /** Three semantics, not colors: neutral metadata · live = measured · synth = stand-in/attention. */
+  variant?: "live" | "synth";
+}) {
+  const semantic = variant === "live" ? "chip-live" : variant === "synth" ? "chip-synth" : "";
   return (
-    <span
-      className="tag rounded-full border-[1.5px] border-cream-bright/25 bg-navy-deep/70 px-2.5 py-1 text-[9px] backdrop-blur-sm"
-      style={{ color: color ?? "rgba(253,248,236,0.7)" }}
-    >
-      {children}
-    </span>
+    <span className={`tag chip bg-night/80 text-[9px] ${semantic}`}>[ {children} ]</span>
   );
 }
 
@@ -304,10 +308,13 @@ function Anchors({
 
             {active && (
               <Html center distanceFactor={9} zIndexRange={[10, 0]}>
-                <div className="pointer-events-none -translate-y-7 whitespace-nowrap rounded-[8px] border-[1.5px] border-ink/50 bg-cream-bright/95 px-2 py-1">
-                  <span className="text-[11px] font-bold text-ink">{a.label}</span>
-                  <span className="tag ml-1.5 text-[8.5px] text-ink-soft">
-                    {Math.round(a.confidence * 100)}%
+                <div
+                  className="pointer-events-none -translate-y-7 whitespace-nowrap rounded-[6px] bg-plate/95 px-2 py-1"
+                  style={{ boxShadow: "var(--ring)" }}
+                >
+                  <span className="text-[11px] font-bold text-starlight">{a.label}</span>
+                  <span className="tag ml-1.5 text-[8.5px] text-moth">
+                    [ {Math.round(a.confidence * 100)}% ]
                   </span>
                 </div>
               </Html>

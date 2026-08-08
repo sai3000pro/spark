@@ -36,10 +36,10 @@ export const familyOf = (label: string): LabelFamily =>
  * and DOM stay in sync. (Brand colors live in lib/theme.ts; these are deliberately
  * separate because a categorical scale has different constraints than a palette.)
  *
- * Tuned for the riso cream surfaces (#f6eedd, #fdf8ec): each value is deep
- * enough to hold ≥3:1 against cream as a dot/stroke, the hues sit inside the
- * poster palette's family, and no pair collapses for protan/deutan viewers.
- * `furniture` stays a desaturated slate — the static built environment.
+ * Tuned for the night grounds (#0f0d23, #171432): each value is luminous
+ * enough to hold ≥3:1 against night as a dot/stroke, the hues sit inside the
+ * NIGHT WALK family, and no pair collapses for protan/deutan viewers.
+ * `furniture` stays a desaturated moth — the static built environment.
  *
  * `vehicle` was moved off #008300 when the background became navy. That green sat
  * at 3.63:1 on the old near-black and fell to 3.50:1 on the lighter navy — still
@@ -55,29 +55,29 @@ export const familyOf = (label: string): LabelFamily =>
  * hand-picking any replacement.
  */
 export const FAMILY_COLOR: Record<LabelFamily, string> = {
-  people: "#4227c8",
-  personal: "#bc3a1e",
-  animal: "#0f6b66",
-  sport: "#92670a",
-  food: "#b03a58",
-  vehicle: "#3a7d1e",
-  furniture: "#6b7280",
+  people: "#9d8bfa",
+  personal: "#ff8e5e",
+  animal: "#3ee6c0",
+  sport: "#ffc46b",
+  food: "#ee6fae",
+  vehicle: "#b7e06b",
+  furniture: "#8f9bb8",
 };
 
 /**
- * Sequential ramp for detection DENSITY — one hue, light→dark, because density is
- * a magnitude and not an identity, and on paper "more" reads as more ink.
- * Anchored on the machine teal so it reads as perception data rather than as one
- * of the label families above. Lightness is monotonic, which is what makes the
- * area chart readable.
+ * Sequential ramp for detection DENSITY — one hue, dark→light, because density
+ * is a magnitude and not an identity, and at night "more" reads as more light.
+ * Anchored on the machine aurora so it reads as perception data rather than as
+ * one of the label families above. Lightness is monotonic, which is what makes
+ * the area chart readable.
  */
 export const DENSITY_RAMP = [
-  "#e7ebe4",
-  "#c6ded9",
-  "#8fcac2",
-  "#4eb3a8",
-  "#1ba098",
-  "#0f6b66",
+  "#1a2440",
+  "#173d4d",
+  "#14565a",
+  "#1f7a6d",
+  "#2bb493",
+  "#3ee6c0",
 ] as const;
 
 export function densityColor(value: number, max: number): string {

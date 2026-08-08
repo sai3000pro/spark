@@ -1,17 +1,17 @@
 /**
- * The riso-poster primitives. Server-safe — no hooks, no client directive.
+ * The NIGHT WALK primitives. Server-safe — no hooks, no client directive.
  *
- * The grammar comes from the sound-pack poster: numbered corner chips, round
- * play buttons, mono uppercase tags, chunky outlined cards. Every metadata
- * voice in the app speaks through these.
+ * The grammar comes from the night-sky poster: bracketed mono telemetry,
+ * numbered light-chips, hairline-ringed plates, and exactly two buttons.
+ * Every metadata voice in the app speaks through these.
  */
 import type { CSSProperties, ReactNode } from "react";
 import { placeholderDataUri } from "@/lib/mock/placeholder";
 import { colorForLabel } from "@/lib/mock/labels";
-import { CREAM_BRIGHT, INK, type RisoInk } from "@/lib/theme";
+import { NIGHT, STARLIGHT, type MomentInk } from "@/lib/theme";
 import type { Keyframe as KeyframeModel } from "@/lib/types";
 
-/** The corner chip: `01`, `02`… — the poster's signature index mark. */
+/** The corner chip: `01`, `02`… — the index mark, now a small light. */
 export function NumberChip({
   n,
   ink,
@@ -19,23 +19,27 @@ export function NumberChip({
   className = "",
 }: {
   n: number;
-  /** Colored variant — chip takes the drum ink, numeral goes cream. */
-  ink?: RisoInk;
+  /** Colored variant — the chip glows with the moment's ink, numeral goes night. */
+  ink?: MomentInk;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   const sizes = {
-    sm: "h-6 min-w-6 px-1 text-[11px] rounded-[6px]",
-    md: "h-8 min-w-8 px-1.5 text-[13px] rounded-[8px]",
-    lg: "h-12 min-w-12 px-2 text-[20px] rounded-[10px]",
+    sm: "h-6 min-w-6 px-1 text-[10px] rounded-[6px]",
+    md: "h-8 min-w-8 px-1.5 text-[12px] rounded-[8px]",
+    lg: "h-12 min-w-12 px-2 text-[18px] rounded-[10px]",
   };
   const style: CSSProperties = ink
-    ? { background: ink.base, color: CREAM_BRIGHT, borderColor: INK }
-    : { background: CREAM_BRIGHT, color: INK, borderColor: INK };
+    ? {
+        background: ink.base,
+        color: NIGHT,
+        boxShadow: `0 0 0 1px ${ink.base}, 0 0 12px ${ink.glow}`,
+      }
+    : { color: STARLIGHT, boxShadow: "var(--ring-strong)" };
   return (
     <span
       style={style}
-      className={`tnum inline-flex items-center justify-center border-[1.5px] font-mono font-bold ${sizes[size]} ${className}`}
+      className={`tnum inline-flex items-center justify-center font-mono font-bold ${sizes[size]} ${className}`}
     >
       {String(n).padStart(2, "0")}
     </span>
@@ -46,19 +50,21 @@ export function NumberChip({
 export function PlayGlyph({
   size = 40,
   paused = false,
-  ink = INK,
-  fg = CREAM_BRIGHT,
+  ink,
+  fg = NIGHT,
 }: {
   size?: number;
   paused?: boolean;
+  /** Disc color — defaults to starlight so it reads at a glance on the night. */
   ink?: string;
   fg?: string;
 }) {
+  const disc = ink ?? STARLIGHT;
   return (
     <span
       aria-hidden
       className="grid shrink-0 place-items-center rounded-full"
-      style={{ width: size, height: size, background: ink, border: `1.5px solid ${INK}` }}
+      style={{ width: size, height: size, background: disc }}
     >
       {paused ? (
         <svg width={size * 0.3} height={size * 0.34} viewBox="0 0 10 12" fill={fg}>
@@ -80,14 +86,14 @@ export function PlayGlyph({
   );
 }
 
-/** Chunky primary button — ink pill, cream text, springy press. */
+/** Primary button — the ember pill. */
 export function inkButtonClass(extra = "") {
-  return `inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 font-display text-[14px] font-bold text-cream-bright transition-transform duration-200 ease-(--ease-pop) hover:scale-[1.03] active:scale-[0.96] disabled:opacity-40 disabled:hover:scale-100 ${extra}`;
+  return `btn-ember px-5 py-2.5 text-[14px] disabled:opacity-40 ${extra}`;
 }
 
-/** Secondary — outlined on cream. */
+/** Secondary — starlight outline. */
 export function outlineButtonClass(extra = "") {
-  return `inline-flex items-center justify-center gap-2 rounded-full border-[1.5px] border-ink/50 px-4 py-2 font-display text-[13px] font-bold text-ink transition-all duration-200 ease-(--ease-pop) hover:border-ink hover:scale-[1.03] active:scale-[0.96] ${extra}`;
+  return `btn-ghost px-4 py-2 text-[13px] disabled:opacity-40 ${extra}`;
 }
 
 /** A detected label with its family color — always next to the label text. */
@@ -95,20 +101,25 @@ export function LabelDot({ label, size = 7 }: { label: string; size?: number }) 
   return (
     <span
       aria-hidden
-      className="inline-block shrink-0 rounded-full border border-ink/40"
-      style={{ width: size, height: size, background: colorForLabel(label) }}
+      className="inline-block shrink-0 rounded-full"
+      style={{
+        width: size,
+        height: size,
+        background: colorForLabel(label),
+        boxShadow: `0 0 6px ${colorForLabel(label)}55`,
+      }}
     />
   );
 }
 
-/** Chunky confidence meter. */
+/** Confidence meter — a thin rail with a luminous fill. */
 export function Meter({
   value,
   ink,
   width = 44,
 }: {
   value: number;
-  ink?: RisoInk;
+  ink?: MomentInk;
   width?: number;
 }) {
   return (
@@ -118,23 +129,23 @@ export function Meter({
       aria-label={`confidence ${Math.round(value * 100)}%`}
     >
       <span
-        className="relative inline-block h-[7px] overflow-hidden rounded-full border border-ink/35 bg-cream-deep"
-        style={{ width }}
+        className="relative inline-block h-[6px] overflow-hidden rounded-full bg-haze"
+        style={{ width, boxShadow: "var(--ring)" }}
       >
         <span
           className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${Math.round(value * 100)}%`, background: ink?.base ?? INK }}
+          style={{ width: `${Math.round(value * 100)}%`, background: ink?.base ?? STARLIGHT }}
         />
       </span>
-      <span className="tag text-[10px] text-ink-soft">{value.toFixed(2)}</span>
+      <span className="tag text-[10px] text-moth">{value.toFixed(2)}</span>
     </span>
   );
 }
 
 /**
  * A captured frame. Renders the real image when the robot's capture exists, and
- * a riso-printed stand-in when it does not — so layout, aspect ratio, and
- * loading behaviour are identical tonight and tomorrow.
+ * a printed stand-in when it does not — so layout, aspect ratio, and loading
+ * behaviour are identical tonight and tomorrow.
  */
 export function KeyframeImg({
   keyframe,
@@ -161,19 +172,19 @@ export function KeyframeImg({
   );
 }
 
-/** Small marker for frames that are stand-ins, so nobody is misled on stage. */
+/** Provenance chip for frames that are stand-ins, so nobody is misled on stage. */
 export function SynthNote({ className = "" }: { className?: string }) {
   return (
     <span
-      className={`tag rounded-[6px] border-[1.5px] border-ink/40 bg-cream-bright/90 px-1.5 py-0.5 text-[9px] text-ink-soft ${className}`}
+      className={`tag chip chip-synth text-[9px] ${className}`}
       title="No capture uploaded yet — this frame is printed from the moment's metadata."
     >
-      synthetic
+      [ synthetic ]
     </span>
   );
 }
 
-/** Mono uppercase tag with optional drum-ink color. */
+/** Mono uppercase tag with optional ink color. */
 export function InkTag({
   children,
   color,

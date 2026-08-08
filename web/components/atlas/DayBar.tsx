@@ -41,12 +41,13 @@ export function DayBar({
   const t = playhead ?? 0;
 
   return (
-    <div className="riso-card grained relative pointer-events-auto flex items-center gap-3 rounded-[22px] px-3.5 py-3 shadow-xl shadow-ink/15 sm:gap-4 sm:px-5">
+    <div className="plate pointer-events-auto flex items-center gap-3 px-3.5 py-3 sm:gap-4 sm:px-5">
       <button
         type="button"
         onClick={onPlayToggle}
         aria-label={playing ? "Pause the replay" : "Replay the day"}
-        className="shrink-0 transition-transform duration-200 ease-(--ease-pop) hover:scale-110 active:scale-95"
+        className="shrink-0 rounded-full transition-transform duration-300 ease-(--ease-signature) hover:scale-105 active:scale-95"
+        style={{ boxShadow: playing ? "0 0 18px rgb(255 196 107 / 0.35)" : undefined }}
       >
         <PlayGlyph size={46} paused={playing} />
       </button>
@@ -66,7 +67,7 @@ export function DayBar({
                 onMouseLeave={() => onHover(null)}
                 onClick={() => onOpen(m.id)}
                 aria-label={`Open moment ${i + 1}: ${m.title}`}
-                className="absolute top-0 -translate-x-1/2 transition-all duration-200 ease-(--ease-pop)"
+                className="absolute top-0 -translate-x-1/2 transition-all duration-300 ease-(--ease-signature)"
                 style={{
                   left: `${pct}%`,
                   transform: `translateX(-50%) scale(${on ? 1.25 : 1})`,
@@ -93,11 +94,11 @@ export function DayBar({
       </div>
 
       <div className="hidden shrink-0 flex-col items-end sm:flex">
-        <span className="tag tnum text-[13px] text-ink">
-          {timecode(t)} <span className="text-ink-faint">/ {timecode(durationSec)}</span>
+        <span className="tag tnum text-[13px] text-starlight">
+          {timecode(t)} <span className="text-faint">/ {timecode(durationSec)}</span>
         </span>
-        <span className="tag mt-1 text-[9px] text-ink-faint">
-          {playing ? `replaying · ${replaySpeed}×` : "press play to re-walk the day"}
+        <span className="tag mt-1 text-[9px] text-faint">
+          {playing ? `[ replaying · ${replaySpeed}× ]` : "[ press play to re-walk the day ]"}
         </span>
       </div>
     </div>

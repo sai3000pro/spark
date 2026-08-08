@@ -1,12 +1,12 @@
 /**
- * Procedural keyframe stand-ins, in the riso poster language.
+ * Procedural keyframe stand-ins, in the NIGHT WALK poster language.
  *
  * The robot's real frames do not exist tonight, so every Keyframe carries a
- * `placeholderSeed` and we print a little risograph scene from it: stacked
- * soft arches, a sun, hill blobs, and film grain — the same drum inks as the
- * rest of the app, so a stand-in thumbnail reads as part of the poster rather
- * than as a gray box. Drop a real `url` on the Keyframe and this is never
- * called.
+ * `placeholderSeed` and we print a little twilight scene from it: stacked
+ * soft arches, a low moon or sun, hill silhouettes, and film grain — the same
+ * luminous inks as the rest of the app, so a stand-in thumbnail reads as part
+ * of the poster rather than as a gray box. Drop a real `url` on the Keyframe
+ * and this is never called.
  *
  * Pure string generation — safe on server and client, no network, no canvas.
  */
@@ -42,19 +42,19 @@ interface ScenePalette {
   blob: string;
 }
 
-/** Hue buckets → drum-ink scene palettes (see lib/theme.ts). */
+/** Hue buckets → twilight scene palettes (see lib/theme.ts). */
 function paletteFor(hue: number): ScenePalette {
   if (hue >= 150 && hue < 240)
-    // water — sky blues over teal
-    return { sky: "#cfe7f2", arch1: "#6db5d8", arch2: "#2a6f94", ground: "#1ba098", sun: "#fdf8ec", blob: "#0f6b66" };
+    // water — the lake holding the last blue of the sky
+    return { sky: "#1c2c54", arch1: "#2b4a7a", arch2: "#1e6ca8", ground: "#0b1226", sun: "#f2eefc", blob: "#6cc5ff" };
   if (hue >= 240 || hue < 25)
-    // dusk / indoor — violets and roses
-    return { sky: "#d9d0f8", arch1: "#e9718f", arch2: "#5b3df0", ground: "#4227c8", sun: "#f4b841", blob: "#b03a58" };
+    // dusk / indoor — violets under lamplight
+    return { sky: "#2a2552", arch1: "#5a48c9", arch2: "#9d8bfa", ground: "#171432", sun: "#ffc46b", blob: "#ee6fae" };
   if (hue >= 25 && hue < 60)
-    // golden hour — coral on mustard
-    return { sky: "#fae3ad", arch1: "#f4b841", arch2: "#ef5b3c", ground: "#bc3a1e", sun: "#fdf8ec", blob: "#e9718f" };
-  // park / field — teals with a mustard sun
-  return { sky: "#bfe5df", arch1: "#4eb3a8", arch2: "#1ba098", ground: "#0f6b66", sun: "#f4b841", blob: "#2a6f94" };
+    // golden hour — the ember band low on the horizon
+    return { sky: "#573158", arch1: "#b4491f", arch2: "#ff8e5e", ground: "#2a1836", sun: "#ffc46b", blob: "#ee6fae" };
+  // park / field — aurora greens going dark
+  return { sky: "#1d3050", arch1: "#14565a", arch2: "#2bb493", ground: "#10233c", sun: "#ffc46b", blob: "#3ee6c0" };
 }
 
 export function placeholderDataUri({
@@ -65,28 +65,44 @@ export function placeholderDataUri({
 }: PlaceholderOptions): string {
   const r = makeRng(seed);
   const p = paletteFor(((hue % 360) + 360) % 360);
-  const horizon = rngRange(r, 0.52, 0.68) * height;
+  const horizon = rngRange(r, 0.5, 0.64) * height;
 
-  // Stacked soft arches on the horizon — the "Soft" card move from the poster.
-  const arches = Array.from({ length: 4 }, (_, i) => {
-    const cx = rngRange(r, 0.1, 0.9) * width;
-    const rad = rngRange(r, 0.16, 0.34) * width;
-    const fill = i % 2 === 0 ? p.arch1 : p.arch2;
-    const op = 0.85 + i * 0.04;
-    return `<circle cx="${cx.toFixed(1)}" cy="${(horizon + rad * 0.55).toFixed(1)}" r="${rad.toFixed(1)}" fill="${fill}" opacity="${Math.min(1, op).toFixed(2)}"/>`;
+  // Stars — the sky remembers where the light was.
+  const stars = Array.from({ length: 26 }, () => {
+    const cx = rngRange(r, 0.02, 0.98) * width;
+    const cy = rngRange(r, 0.03, 0.85) * horizon;
+    const rad = rngRange(r, 0.6, 1.9);
+    const op = rngRange(r, 0.25, 0.85);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}" fill="#f2eefc" opacity="${op.toFixed(2)}"/>`;
   }).join("");
 
-  // A sun (or moon) punched into the sky.
+  // A low moon (or last sun) with a soft halo.
   const sunX = rngRange(r, 0.18, 0.82) * width;
-  const sunY = rngRange(r, 0.16, 0.4) * horizon;
-  const sunR = rngRange(r, 0.07, 0.12) * width;
+  const sunY = rngRange(r, 0.25, 0.55) * horizon;
+  const sunR = rngRange(r, 0.05, 0.085) * width;
 
-  // Foreground blobs — the subjects you can't quite make out.
+  // Rolling hill silhouettes — two dark bands behind the ground.
+  const hill = (y: number, fill: string, op: number) => {
+    const h1 = rngRange(r, 0.06, 0.16) * height;
+    const h2 = rngRange(r, 0.04, 0.14) * height;
+    const mid = rngRange(r, 0.3, 0.7) * width;
+    return `<path d="M0 ${(y + h1).toFixed(1)} Q ${(mid / 2).toFixed(1)} ${(y - h1 * 0.4).toFixed(1)} ${mid.toFixed(1)} ${y.toFixed(1)} T ${width} ${(y - h2 * 0.3).toFixed(1)} V ${height} H 0 Z" fill="${fill}" opacity="${op}"/>`;
+  };
+
+  // Soft arches on the horizon — treetops holding the last color.
+  const arches = Array.from({ length: 4 }, (_, i) => {
+    const cx = rngRange(r, 0.1, 0.9) * width;
+    const rad = rngRange(r, 0.12, 0.26) * width;
+    const fill = i % 2 === 0 ? p.arch1 : p.arch2;
+    return `<circle cx="${cx.toFixed(1)}" cy="${(horizon + rad * 0.7).toFixed(1)}" r="${rad.toFixed(1)}" fill="${fill}" opacity="0.7"/>`;
+  }).join("");
+
+  // Foreground silhouettes — the subjects you can't quite make out.
   const blobs = Array.from({ length: 3 }, () => {
     const cx = rngRange(r, 0.08, 0.92) * width;
-    const cy = rngRange(r, 0.86, 1.04) * height;
-    const rad = rngRange(r, 0.1, 0.2) * width;
-    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}" fill="${p.blob}" opacity="0.9"/>`;
+    const cy = rngRange(r, 0.9, 1.06) * height;
+    const rad = rngRange(r, 0.09, 0.17) * width;
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad.toFixed(1)}" fill="${p.blob}" opacity="0.55"/>`;
   }).join("");
 
   // Per-seed suffix on every <defs> id so the markup stays safe to inline.
@@ -99,15 +115,27 @@ export function placeholderDataUri({
 <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0.9 0.9 0 0"/>
 <feComposite operator="in" in2="SourceGraphic"/>
 </filter>
+<radialGradient id="halo${uid}" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="${p.sun}" stop-opacity="0.5"/>
+<stop offset="100%" stop-color="${p.sun}" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="after${uid}" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0%" stop-color="${p.sky}" stop-opacity="0"/>
+<stop offset="100%" stop-color="${p.sun}" stop-opacity="0.28"/>
+</linearGradient>
 <clipPath id="c${uid}"><rect width="${width}" height="${height}"/></clipPath>
 </defs>
 <g clip-path="url(#c${uid})">
 <rect width="${width}" height="${height}" fill="${p.sky}"/>
+<rect x="0" y="0" width="${width}" height="${horizon.toFixed(1)}" fill="url(#after${uid})"/>
+${stars}
+<circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="${(sunR * 3.2).toFixed(1)}" fill="url(#halo${uid})"/>
 <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="${sunR.toFixed(1)}" fill="${p.sun}"/>
 ${arches}
-<rect x="0" y="${(horizon + height * 0.16).toFixed(1)}" width="${width}" height="${height}" fill="${p.ground}"/>
+${hill(horizon * 0.98, p.arch1, 0.45)}
+${hill(horizon * 1.06, p.ground, 1)}
 ${blobs}
-<rect width="${width}" height="${height}" filter="url(#g${uid})" opacity="0.26"/>
+<rect width="${width}" height="${height}" filter="url(#g${uid})" opacity="0.22"/>
 </g>
 </svg>`;
 
