@@ -139,10 +139,23 @@ crossed-out page, marquees still, numbers already true.
 Real OpenFreeMap Liberty tiles restyled by script into the journal's own survey map:
 cream ground a half-step under the page, moss washes for greens, a lagoon wash for water,
 vellum roads with fine sand casings, ink-soft labels, extrusion light flattened so
-buildings print as pale blocks. The walk draws as the journal marks a keeper — a wide
-translucent brass highlighter stroke under a crisp clay pen line — replayed at 120× while
-the full route waits as a dotted pencil trace. Teardrop pins stamp each moment's pressed
-ink; papergrain and a soft ink vignette sit over the tiles so the map reads as a page.
+buildings print as pale blocks. The walk draws as the journal marks a keeper — a DOTTED
+clay pen line over a soft brass highlighter bleed — replayed at 120× while the full route
+waits as a pencil trace. Kept moments are the landing's surveyor's markers planted on the
+park: contact shadow, ink stem, ringed head numbered in typewriter, a sonar ring breathing
+while hot (hollow until the replay reaches them). Trailheads are benchmark rings; the
+scale bar speaks fnote; papergrain and a soft ink vignette sit over the tiles so the map
+reads as a page. The day bar is the same instrument in miniature: a pen-line rail with
+quarter-hour ticks, a brass fill to the playhead with a clay nib riding its edge, and the
+moments planted on the rail at their true time of day.
+
+**The weather** (`components/atlas/CloudLayer.tsx`): a dozen-odd cumulus drift over the
+map on one pointer-transparent canvas, anchored to the WORLD — re-projected through the
+live map transform every frame, so they pan and scale with the ground. Zoomed out you are
+above them (white sprites, faint shadows); zoomed in you are beneath them and only their
+ink shadows stay pressed on the ground, offset to the south-east and squashed by the
+camera pitch. Sprites are pre-rendered gaussian-puff canvases; reduced motion stops the
+wind but keeps the sky.
 
 ## Honesty
 

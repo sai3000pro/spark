@@ -4,20 +4,26 @@
  * The walk on the REAL park, printed on the journal's paper.
  *
  * MapLibre renders actual Waterloo Park vector tiles restyled into a cream
- * survey map (public/map/field-notes.json — generated, never hand-edited), and
- * the robot's odometry is georeferenced onto it (lib/geo.ts). The walk draws
- * the way the journal marks anything worth keeping: a wide translucent brass
- * highlighter stroke under a crisp clay pen line — and every kept moment is a
- * numbered pin stamped in its pressed ink.
+ * survey map (public/map/night-walk.json's sibling, field-notes.json —
+ * generated, never hand-edited), and the robot's odometry is georeferenced
+ * onto it (lib/geo.ts). Everything drawn ON the map speaks the landing's
+ * route-plate language:
+ *
+ *   · the walk is a dotted clay pen line over a soft brass highlighter bleed
+ *   · kept moments are surveyor's markers — ink stem, ringed head, numbered
+ *     in typewriter — that breathe a sonar ring while hot
+ *   · trailheads are benchmark rings, the scale bar speaks fnote
+ *   · fair-weather clouds drift over the whole thing (CloudLayer), above you
+ *     when you zoom out, shadow-only when you zoom in
  *
  * During a replay the pen redraws the route up to the playhead while the full
- * walk waits underneath as a faint dotted pencil trace; pins past the playhead
- * haven't "happened yet" and print as outlines. The camera opens tilted
- * (pitch 48) so the park reads as a place, not a diagram.
+ * walk waits underneath as a faint pencil trace; markers past the playhead
+ * haven't "happened yet" and print hollow. The camera opens tilted (pitch 48)
+ * so the park reads as a place, not a diagram.
  */
 import { useCallback, useMemo, useRef } from "react";
 import { setWorkerUrl } from "maplibre-gl";
-import MapGL, { Layer, Marker, Source, type MapRef } from "react-map-gl/maplibre";
+import MapGL, { Layer, Marker, ScaleControl, Source, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // MapLibre v6 ships its tile worker as a separate module that Turbopack's
@@ -27,8 +33,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
+import { CloudLayer } from "@/components/atlas/CloudLayer";
 import { localToLngLat, tripBounds } from "@/lib/geo";
-import { BRASS, CLAY, PAPER, PINE, VELLUM, inkForMoment, type MomentInk } from "@/lib/theme";
+import { BRASS, CLAY, PAPER, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
 import type { TrackPoint, Vec2 } from "@/lib/types";
 
@@ -36,7 +43,7 @@ interface Props {
   path: TrackPoint[];
   moments: MomentSummary[];
   activeId: string | null;
-  /** Playhead time — pins after it haven't "happened yet" during a replay. */
+  /** Playhead time — markers after it haven't "happened yet" during a replay. */
   reachedT: number | null;
   robotPos: Vec2 | null;
   onHover: (id: string | null) => void;
@@ -101,40 +108,46 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
             type="line"
             paint={{
               "line-color": PINE,
-              "line-width": 2,
-              "line-opacity": reachedT === null ? 0 : 0.3,
-              "line-dasharray": [0.1, 2.2],
+              "line-width": 1.8,
+              "line-opacity": reachedT === null ? 0 : 0.32,
+              "line-dasharray": [0.1, 2.6],
             }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
         </Source>
 
-        {/* The kept route: a brass highlighter stroke under a clay pen line. */}
+        {/* The kept route: a dotted clay pen line over a brass highlighter
+            bleed — the same stroke the journal uses to mark a keeper. */}
         <Source id="route-lit" type="geojson" data={line(reachedCoords)}>
           <Layer
             id="route-marker"
             type="line"
-            paint={{ "line-color": BRASS, "line-width": 12, "line-opacity": 0.55 }}
+            paint={{ "line-color": BRASS, "line-width": 15, "line-blur": 5, "line-opacity": 0.5 }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
           <Layer
             id="route-pen"
             type="line"
-            paint={{ "line-color": CLAY, "line-width": 2.4, "line-opacity": 0.95 }}
+            paint={{
+              "line-color": CLAY,
+              "line-width": 2.8,
+              "line-opacity": 0.95,
+              "line-dasharray": [0.1, 1.9],
+            }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
         </Source>
 
-        {/* Trailheads. */}
+        {/* Trailheads — benchmark rings, the cartographer's ⌖. */}
         <TrailheadMarker at={routeCoords[0]} label="Start" />
         <TrailheadMarker at={routeCoords[routeCoords.length - 1]} label="End" hollow />
 
-        {/* The kept moments — numbered pins stamped on the park. */}
+        {/* The kept moments — surveyor's markers flagging the kept minutes. */}
         {moments.map((m, i) => {
           const [lng, lat] = localToLngLat(m.placePos);
           return (
             <Marker key={m.id} longitude={lng} latitude={lat} anchor="bottom" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
-              <PinMarker
+              <SurveyMarker
                 index={i}
                 ink={inkForMoment(i)}
                 title={m.title}
@@ -154,6 +167,12 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
             <RobotDot />
           </Marker>
         )}
+
+        <ScaleControl position="bottom-left" maxWidth={110} unit="metric" />
+
+        {/* The weather — world-anchored, pointer-transparent, over everything
+            on the page the way weather is. */}
+        <CloudLayer />
       </MapGL>
 
       {/* The page: paper tooth over the tiles, then a soft ink shade at the
@@ -176,11 +195,12 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A map pin in the classic teardrop shape — the moment's pressed ink, a paper
- * numeral, a paper outline so it separates from any tile underneath. Dimmed to
- * an outline while unreached during a replay — not happened yet.
+ * A surveyor's marker — the landing's route-plate flag, planted on the real
+ * park: contact shadow on the ground, a fine ink stem, and a ringed head
+ * numbered in typewriter. Hot markers breathe a sonar ring; markers the
+ * replay hasn't reached yet print hollow — not happened yet.
  */
-function PinMarker({
+function SurveyMarker({
   index,
   ink,
   title,
@@ -208,59 +228,76 @@ function PinMarker({
       onFocus={() => onHover(true)}
       onBlur={() => onHover(false)}
       onClick={onOpen}
-      className="relative block"
+      className="relative block cursor-pointer"
       style={{
-        transform: active ? "scale(1.12)" : "scale(1)",
+        transform: active ? "scale(1.14)" : "scale(1)",
         transformOrigin: "bottom center",
         transition: "transform 0.3s var(--ease-signature)",
       }}
     >
-      <svg
-        width={30}
-        height={40}
-        viewBox="0 0 30 40"
+      {/* Ground contact — a soft ellipse straddling the anchor point. */}
+      <span
         aria-hidden
-        style={{
-          display: "block",
-          filter: active
-            ? `drop-shadow(0 2px 3px rgb(27 27 24 / 0.35)) drop-shadow(0 0 10px ${ink.deep}55)`
-            : "drop-shadow(0 2px 3px rgb(27 27 24 / 0.3))",
-        }}
-      >
-        <path
-          d="M15 1.5c-7.32 0-13 5.72-13 12.8 0 4.9 3.05 9.5 6.1 13.06 2.35 2.74 4.9 5.62 6.9 10.14 2-4.52 4.55-7.4 6.9-10.14 3.05-3.56 6.1-8.16 6.1-13.06 0-7.08-5.68-12.8-13-12.8Z"
-          fill={unreached ? PAPER : ink.deep}
-          stroke={unreached ? ink.deep : "rgb(250 244 227 / 0.92)"}
-          strokeWidth={1.5}
-          opacity={unreached ? 0.9 : 1}
-        />
-        <text
-          x={15}
-          y={19.5}
-          textAnchor="middle"
-          fontSize={12.5}
-          fontWeight={650}
-          fontFamily="var(--font-sans)"
-          fill={unreached ? ink.deep : PAPER}
-        >
-          {index + 1}
-        </text>
-      </svg>
+        className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rounded-full"
+        style={{ width: 15, height: 5, background: "rgb(27 27 24 / 0.3)", filter: "blur(1.6px)" }}
+      />
 
-      {/* Hover label — a small vellum slip floating over the park. */}
+      <span className="flex flex-col items-center">
+        {/* The ringed head. */}
+        <span
+          className="relative grid place-items-center rounded-full"
+          style={{
+            width: 25,
+            height: 25,
+            background: unreached ? "rgb(255 251 240 / 0.94)" : ink.deep,
+            boxShadow: unreached
+              ? `inset 0 0 0 1.5px ${ink.deep}, 0 1px 3px rgb(27 27 24 / 0.22)`
+              : `0 0 0 2px rgb(255 251 240 / 0.95), 0 2px 5px rgb(27 27 24 / 0.28)`,
+          }}
+        >
+          {active && (
+            <span
+              aria-hidden
+              className="sonar absolute inset-0 rounded-full"
+              style={{ boxShadow: `0 0 0 1.5px ${ink.deep}` }}
+            />
+          )}
+          <span
+            className="fnote relative text-[10px] leading-none"
+            style={{ color: unreached ? ink.deep : PAPER, letterSpacing: "0.02em" }}
+          >
+            {index + 1}
+          </span>
+        </span>
+        {/* The stem, planted at the anchor. */}
+        <span
+          aria-hidden
+          className="block"
+          style={{
+            width: 1.5,
+            height: 13,
+            background: ink.deep,
+            opacity: unreached ? 0.55 : 0.9,
+          }}
+        />
+      </span>
+
+      {/* Hover label — a vellum slip pinned over the park. */}
       {active && (
         <span
-          className="tag pointer-events-none absolute bottom-[46px] left-1/2 w-max -translate-x-1/2 rounded-[6px] px-2.5 py-1.5 text-[11.5px] font-semibold"
+          className="pointer-events-none absolute bottom-[calc(100%+9px)] left-1/2 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[6px] px-2.5 py-1.5"
           style={{
-            background: VELLUM,
-            color: "var(--color-ink)",
-            boxShadow: "var(--ring-ink), 0 8px 24px rgb(27 27 24 / 0.25)",
+            background: "var(--color-vellum)",
+            boxShadow: "var(--ring-ink), 0 8px 24px rgb(27 27 24 / 0.22)",
             animation: "takeover 0.3s var(--ease-signature) both",
           }}
         >
-          {title}
-          <span className="ml-1.5 font-medium text-ink-faint">
-            {hasMusic ? "· scored · step inside" : "· step inside"}
+          <span className="fnote text-[9px]" style={{ color: ink.deep }}>
+            [ {String(index + 1).padStart(3, "0")} ]
+          </span>
+          <span className="text-[12px] font-semibold text-ink">{title}</span>
+          <span className="fnote text-[8.5px] text-ink-faint">
+            {hasMusic ? "scored · step inside" : "step inside"}
           </span>
         </span>
       )}
@@ -268,25 +305,28 @@ function PinMarker({
   );
 }
 
+/** A benchmark ring — the cartographer's mark for a measured point. */
 function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: string; hollow?: boolean }) {
-  // Start stacks its label above the dot, End below — the two trailheads sit
+  // Start stacks its label above the ring, End below — the two trailheads sit
   // metres apart and their labels collide otherwise.
   return (
     <Marker longitude={at[0]} latitude={at[1]} anchor="center" offset={hollow ? [0, 14] : [0, -14]} style={{ zIndex: 1 }}>
       <span className={`pointer-events-none flex items-center gap-1.5 ${hollow ? "flex-col" : "flex-col-reverse"}`}>
         <span
           aria-hidden
-          className="block rounded-full"
+          className="grid place-items-center rounded-full"
           style={{
-            width: 9,
-            height: 9,
-            background: hollow ? PAPER : PINE,
-            boxShadow: hollow ? `0 0 0 2px ${PINE}` : "0 0 0 1.5px rgb(250 244 227 / 0.9)",
+            width: 13,
+            height: 13,
+            boxShadow: `inset 0 0 0 1.5px ${PINE}, 0 0 0 2px rgb(255 251 240 / 0.85)`,
+            background: "rgb(255 251 240 / 0.55)",
           }}
-        />
+        >
+          {!hollow && <span className="block rounded-full" style={{ width: 4.5, height: 4.5, background: PINE }} />}
+        </span>
         <span
-          className="fnote rounded-[5px] px-1.5 py-0.5 text-[10px]"
-          style={{ color: PINE, background: "rgb(250 244 227 / 0.85)" }}
+          className="fnote rounded-[5px] px-1.5 py-0.5 text-[9px]"
+          style={{ color: PINE, background: "rgb(255 251 240 / 0.88)", boxShadow: "var(--ring-ink)" }}
         >
           [ {label} ]
         </span>
@@ -310,8 +350,8 @@ function RobotDot() {
       <span
         className="relative block rounded-full"
         style={{
-          width: 14,
-          height: 14,
+          width: 13,
+          height: 13,
           background: CLAY,
           boxShadow: "0 0 0 2.5px rgb(255 251 240 / 0.95), 0 0 0 3.5px rgb(207 94 50 / 0.5)",
         }}
