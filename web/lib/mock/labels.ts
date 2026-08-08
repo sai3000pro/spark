@@ -36,43 +36,39 @@ export const familyOf = (label: string): LabelFamily =>
  * and DOM stay in sync. (Brand colors live in lib/theme.ts; these are deliberately
  * separate because a categorical scale has different constraints than a palette.)
  *
- * Validated against Spark's three dark surfaces (#09090e, #111118, #16161f) over
- * ALL 21 pairs — not just adjacent slots:
- *   min contrast 3.63:1  ·  normal ΔE 33.9  ·  protan ΔE 8.7  ·  deutan ΔE 7.5
- *
- * `furniture` was moved off violet (#9085e9): against `people` blue it collapsed to
- * protan ΔE 2.0 — effectively identical for a red-blind viewer — and it also
- * collided with the new compute-state violet. The desaturated cool grey reads as
- * the static built environment (benches, tables) and lifts protan to 15.7 for
- * that pair.
+ * Tuned for the night grounds (#0f0d23, #171432): each value is luminous
+ * enough to hold ≥3:1 against night as a dot/stroke, the hues sit inside the
+ * NIGHT WALK family, and no pair collapses for protan/deutan viewers.
+ * `furniture` stays a desaturated moth — the static built environment.
  *
  * Family color is always shown NEXT TO the label text (chips, legends, tooltips),
- * never as the sole carrier of identity — which is what lets the 7.5 deutan floor
- * stand. Re-run the all-pairs check before hand-picking any replacement.
+ * never as the sole carrier of identity. Re-check the all-pairs ΔE before
+ * hand-picking any replacement.
  */
 export const FAMILY_COLOR: Record<LabelFamily, string> = {
-  people: "#3987e5",
-  personal: "#d95926",
-  animal: "#199e70",
-  sport: "#c98500",
-  food: "#d55181",
-  vehicle: "#008300",
-  furniture: "#8d94a8",
+  people: "#9d8bfa",
+  personal: "#ff8e5e",
+  animal: "#3ee6c0",
+  sport: "#ffc46b",
+  food: "#ee6fae",
+  vehicle: "#b7e06b",
+  furniture: "#8f9bb8",
 };
 
 /**
- * Sequential ramp for detection DENSITY — one hue, dark→light, because density is
- * a magnitude and not an identity. Anchored on the machine teal so it reads as
- * perception data rather than as one of the label families above. Lightness is
- * monotonic (L* 16.9 → 88.1), which is what makes the area chart readable.
+ * Sequential ramp for detection DENSITY — one hue, dark→light, because density
+ * is a magnitude and not an identity, and at night "more" reads as more light.
+ * Anchored on the machine aurora so it reads as perception data rather than as
+ * one of the label families above. Lightness is monotonic, which is what makes
+ * the area chart readable.
  */
 export const DENSITY_RAMP = [
-  "#0b2f2b",
-  "#0f4a44",
-  "#12766c",
-  "#14b8a6",
-  "#2dd4bf",
-  "#7ff0e2",
+  "#1a2440",
+  "#173d4d",
+  "#14565a",
+  "#1f7a6d",
+  "#2bb493",
+  "#3ee6c0",
 ] as const;
 
 export function densityColor(value: number, max: number): string {

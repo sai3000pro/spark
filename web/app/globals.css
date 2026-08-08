@@ -1,145 +1,539 @@
 @import "tailwindcss";
 
 /*
-  Spark's palette. Dark cinematic / spatial observatory — mission control for
-  your memories.
+  SPARK — the FIELD NOTES system, v5 (see /DESIGN.md).
 
-  Two deliberate accent families, and the split is the whole point:
-    cool (--color-machine-*)  = the robot layer — detections, tracks, confidence, nav
-    warm (--color-memory-*)   = the human layer — moments, places, music, transcript
-  A glance at any screen tells you what was perceived versus what is remembered.
+  The robot is a field naturalist: it walks behind you, notices things, and
+  presses the ones worth keeping into a journal. The site is that journal —
+  grainy cream paper, deep pine ink, brass/moss/clay specimen tags set in a
+  typewriter mono. The landing is scroll cinema (Lenis + GSAP); the app
+  screens keep their twilight map (the NIGHT WALK tokens below survive for
+  them — the walk itself still happens after sunset).
 
-  State colors are hue-separated from both so they never read as either layer:
-    signal  green   ready, promoted, navigable
-    compute violet  reconstructing — the splat is still being computed
-    warn    yellow  stand-in data, nothing was actually captured here
-    fail    rose    reconstruction failed, model error
-
-  SVG and canvas can't use Tailwind classes for fills, so every value here is
-  mirrored in lib/theme.ts. Change one, change both.
+  SVG, canvas, WebGL and MapLibre can't read Tailwind classes, so every value
+  here is mirrored in lib/theme.ts — change one, change both. The map style in
+  public/map/night-walk.json is GENERATED from these values by
+  scripts/build-map-style.mjs; re-run it after palette changes.
 */
 @theme {
-  --color-ink-950: #09090e;
-  --color-ink-900: #111118;
-  --color-ink-850: #16161f;
-  --color-ink-800: #1a1a24;
-  --color-ink-700: #1e1b2e;
-  --color-ink-600: #272433;
-  --color-ink-500: #3a3550;
+  /* ── FIELD NOTES — the journal (landing + brand surfaces) ─────────────── */
+  /* Paper */
+  --color-paper: #faf4e3;
+  --color-vellum: #fffbf0;
+  --color-ink: #1b1b18;
+  --color-ink-soft: #52524a;
+  --color-ink-faint: #78786c;
 
-  --color-fog-400: #6b6880;
-  --color-fog-300: #a8a3c2;
-  --color-fog-200: #c8c4dc;
-  --color-fog-100: #e8e6f0;
+  /* Pressed inks — the journal's dark inks are Spark's own twilight indigo,
+     not a borrowed forest teal. `pine`/`spruce`/`moss` keep their names as
+     roles (deep ground / plate / third ink); their pigments moved. */
+  --color-pine: #16292e;
+  --color-spruce: #2c4347;
+  --color-lagoon: #476d73;
+  --color-brass: #d5b473;
+  --color-brass-deep: #8a6d2f;
+  --color-moss: #7d7730;
+  --color-clay: #cf5e32;
 
-  --color-machine-300: #7ff0e2;
-  --color-machine-400: #2dd4bf;
-  --color-machine-500: #14b8a6;
-  --color-machine-600: #0d9488;
+  /* Text on pine */
+  --color-milk: #f6f0df;
+  --color-mist: #a9bdb9;
 
-  --color-memory-300: #fdba74;
-  --color-memory-400: #f59e0b;
-  --color-memory-500: #d97706;
-  --color-memory-600: #b45309;
+  /* ── NIGHT WALK — the twilight map app (walk / trip / bench) ──────────── */
+  /* Grounds — indigo-violet, never gray-black. */
+  --color-night: #0f0d23;
+  --color-dusk: #171432;
+  --color-plate: #1f1b40;
+  --color-haze: #2a2552;
 
-  --color-signal-400: #34d399;
-  --color-signal-500: #10b981;
-  --color-compute-400: #a78bfa;
-  --color-compute-500: #8b5cf6;
-  --color-warn-400: #facc15;
-  --color-fail-400: #fb7185;
+  /* Text on dark. `faint` is metadata-only, never sentences. */
+  --color-starlight: #f2eefc;
+  --color-moth: #b5aed6;
+  --color-faint: #837daa;
 
-  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  /* The afterglow. Ember is THE accent; gold is its highlight twin. */
+  --color-ember: #ff8e5e;
+  --color-ember-deep: #b4491f;
+  --color-gold: #ffc46b;
 
-  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Live/measured semantics only. Never decoration. */
+  --color-aurora: #3ee6c0;
+  --color-aurora-deep: #0e7a63;
+
+  /* Moment inks — each moment owns one, cycled by index. */
+  --color-orchid: #ee6fae;
+  --color-lilac: #9d8bfa;
+  --color-sky: #6cc5ff;
+
+  --font-display: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-typewriter), ui-monospace, "SF Mono", monospace;
+
+  /* One radius scale. Nothing is a pill except status dots. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Exactly two curves — registered in GSAP CustomEase under the same names. */
+  --ease-signature: cubic-bezier(0.785, 0.135, 0.15, 0.86);
+  --ease-reveal: cubic-bezier(0.5, 0, 0, 1);
 }
 
 :root {
   color-scheme: dark;
-  --bg: var(--color-ink-950);
-  --surface: var(--color-ink-900);
-  --surface-raised: var(--color-ink-850);
-  /* The design's border is a white wash rather than a flat grey, which is what
-     keeps panels feeling lit from within instead of outlined. */
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --radius: 12px;
+
+  /* Star grain — fine turbulence rendered as LIGHT specks for dark grounds.
+     Strength knob: the feColorMatrix alpha row (k 0 0 0 -c) → peak alpha k−c.
+     Keep k−c ≥ 0.1 or the texture stops reading. */
+  --starfield: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.93 0 0 0 0 0.99 0.55 0 0 0 -0.41'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23s)'/%3E%3C/svg%3E");
+
+  /* Paper grain — the same turbulence rendered as DARK flecks for cream
+     grounds, multiply-blended. The journal's tooth. */
+  --papergrain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.12 0 0 0 0 0.1 0.5 0 0 0 -0.42'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23p)'/%3E%3C/svg%3E");
+
+  /* Hairline ring for plates — crisp edge without a border box. */
+  --ring: 0 0 0 1px rgb(242 238 252 / 0.12);
+  --ring-strong: 0 0 0 1px rgb(242 238 252 / 0.22);
+
+  /* Elevation — indigo-tinted, never neutral gray. */
+  --shadow-plate:
+    inset 0 1px 0 rgb(242 238 252 / 0.06),
+    0 2px 3px -1px rgb(6 5 18 / 0.5),
+    0 12px 28px -12px rgb(6 5 18 / 0.7);
 }
 
-html {
-  background: var(--bg);
+html,
+body {
+  height: 100%;
+  background: var(--color-night);
 }
 
 body {
-  background: var(--bg);
-  color: var(--color-fog-100);
+  color: var(--color-starlight);
   font-family: var(--font-sans);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display face carries every heading; body stays Inter for legibility at 12–14px. */
+/* Headlines: one grotesk, medium weight, gently tightened. The voice is a
+   clean modern journal — confident, never shouting. */
 h1,
 h2,
-h3,
-h4,
-h5,
-h6 {
+h3 {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
-/* Tabular figures everywhere we show a timecode, confidence, or coordinate —
-   numbers that change on hover must not reflow. */
+/* Numbers must not reflow on change. */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
 
+/* Cap-trim for display headings so rules and plates align to the cap height. */
+.trim {
+  text-box: trim-both cap alphabetic;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-aurora);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 @layer utilities {
-  .surface {
-    background: var(--surface);
-    border: 1px solid var(--border);
+  /* ════ FIELD NOTES utilities (landing + brand surfaces) ═══════════════ */
+
+  /* Paper tooth — dark flecks, multiply-blended. Give the host position. */
+  .papergrain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--papergrain);
+    mix-blend-mode: multiply;
+    opacity: 0.36;
+    border-radius: inherit;
+    z-index: 1;
   }
-  .surface-raised {
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
+
+  /* Halftone dot field for pine grounds — a print screen, not sci-fi. */
+  .dotfield::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle at center,
+      rgb(246 240 223 / 0.16) 1.1px,
+      transparent 1.6px
+    );
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(
+      120% 90% at 50% 40%,
+      transparent 0%,
+      transparent 34%,
+      black 78%
+    );
+    mask-image: radial-gradient(120% 90% at 50% 40%, transparent 0%, transparent 34%, black 78%);
   }
-  /* Panels that float over the map or the 3D stage. The blur is what makes the
-     map read as a layer underneath rather than a background image. */
-  .glass {
-    background: color-mix(in srgb, var(--color-ink-950) 88%, transparent);
-    border: 1px solid var(--border);
-    backdrop-filter: blur(12px);
-  }
-  .glass-raised {
-    background: color-mix(in srgb, var(--color-ink-900) 92%, transparent);
-    border: 1px solid var(--border-strong);
-    backdrop-filter: blur(16px);
-  }
-  /* Mono uppercase micro-label — the design uses this for every section eyebrow. */
-  .eyebrow {
+
+  /* Specimen tag — the journal's label voice: typewriter mono, uppercase,
+     letterspaced. Brackets are written in the markup: [ KEPT ]. */
+  .fnote {
     font-family: var(--font-mono);
-    font-size: 11px;
-    text-transform: uppercase;
+    font-size: 11.5px;
     letter-spacing: 0.14em;
-    color: var(--color-fog-400);
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
   }
-  /* Faint grid used behind the map and timeline — reads as robot coordinate space. */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 40px 40px;
+
+  /* ── Pills: the ONLY rounded-full controls in the journal ───────────── */
+  .pill-brass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    background: var(--color-brass);
+    color: var(--color-ink);
+    font-weight: 550;
+    transition:
+      background-color 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
   }
+  .pill-brass:hover {
+    background: #e3c98f;
+  }
+  .pill-brass:active {
+    transform: scale(0.97);
+  }
+  /* Inherits its color — set text-* on the element; ring follows via
+     currentColor. (No `color:` here: it would out-cascade text utilities.) */
+  .pill-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 55%, transparent);
+    transition:
+      box-shadow 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
+  }
+  .pill-ghost:hover {
+    box-shadow: inset 0 0 0 1px currentColor;
+  }
+  .pill-ghost:active {
+    transform: scale(0.97);
+  }
+
+  /* Frosted footer / nav bar — the journal's one pane of glass. Tint deep
+     enough that milk text stays readable over the cream sections too. */
+  .glass-bar {
+    background: rgb(22 41 46 / 0.66);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: inset 0 0 0 1px rgb(246 240 223 / 0.16);
+  }
+
+  /* An ink's halo — hairline ring + soft shadow in the moment's own ink,
+     driven by --ink on the element. The gallery cards wear it. */
+  .ink-halo {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--ink, var(--color-ink)) 40%, transparent),
+      0 18px 40px -20px color-mix(in oklab, var(--ink, var(--color-ink)) 60%, transparent);
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* The blurred echo behind marquee headlines — virio's smeared-ink read. */
+  .smear {
+    filter: blur(7px);
+    opacity: 0.55;
+  }
+
+  /* ════ NIGHT WALK utilities (the twilight map app) ════════════════════ */
+
+  /* ── Texture: belongs to the FIELD, never the plate ─────────────────── */
+  .starfield::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: var(--starfield);
+    mix-blend-mode: screen;
+    opacity: 0.5;
+    border-radius: inherit;
+  }
+
+  /* ── The plate: crisp surface over a textured field ─────────────────── */
+  .plate {
+    background: var(--color-plate);
+    border-radius: var(--radius-md);
+    box-shadow: var(--ring), var(--shadow-plate);
+  }
+
+  /* ── Metadata voice: quiet sentence-case, dot-separated, tabular ────── */
+  .tag {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Provenance / status chip: hairline box around a short label. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--ring);
+    color: var(--color-moth);
+    background: rgb(15 13 35 / 0.55);
+  }
+  .chip-live {
+    color: var(--color-aurora);
+    box-shadow: 0 0 0 1px rgb(62 230 192 / 0.3);
+  }
+  .chip-synth {
+    color: var(--color-ember);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.3);
+  }
+
+  /* ── Buttons: two, forever. Quiet rectangles, no pills ──────────────── */
+  .btn-ember {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--color-ember);
+    color: #241004;
+    font-weight: 600;
+    transition:
+      background-color 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
+  }
+  .btn-ember:hover {
+    background: var(--color-gold);
+  }
+  .btn-ember:active {
+    transform: scale(0.98);
+  }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-sm);
+    color: var(--color-starlight);
+    background: rgb(31 27 64 / 0.65);
+    box-shadow: var(--ring-strong);
+    font-weight: 550;
+    transition:
+      box-shadow 0.3s var(--ease-signature),
+      background-color 0.3s var(--ease-signature),
+      transform 0.3s var(--ease-signature);
+  }
+  .btn-ghost:hover {
+    background: var(--color-haze);
+  }
+  .btn-ghost:active {
+    transform: scale(0.98);
+  }
+
+  /* ── Selection is reverse-video: square block, tight to its label ───── */
+  .selected-block {
+    background: var(--color-starlight);
+    color: var(--color-night);
+    border-radius: 0;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-ink-600) transparent;
+    scrollbar-color: rgb(242 238 252 / 0.25) transparent;
+  }
+
+  /* ── The highlighter bar: ONE loud accent device, hero only ─────────── */
+  .hl-ember {
+    background: var(--color-ember);
+    color: var(--color-night);
+    padding: 0 0.14em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* ── Annotation frame: a design-tool selection box pinned on the art ── */
+  .frame-note {
+    position: absolute;
+    border: 1px solid rgb(242 238 252 / 0.55);
+    background: rgb(15 13 35 / 0.62);
+    padding: 6px 10px;
+    backdrop-filter: blur(2px);
+  }
+  .frame-note > i {
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: var(--color-starlight);
+    border: 1px solid rgb(15 13 35 / 0.8);
+  }
+  .frame-note > i:nth-child(1) { top: -3px; left: -3px; }
+  .frame-note > i:nth-child(2) { top: -3px; right: -3px; }
+  .frame-note > i:nth-child(3) { bottom: -3px; left: -3px; }
+  .frame-note > i:nth-child(4) { bottom: -3px; right: -3px; }
+
+  /* Range input for the day scrubber — an ember bead on a dusk rail. */
+  .scrub {
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-haze);
+    box-shadow: var(--ring);
+    outline-offset: 3px;
+  }
+  .scrub::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-ember);
+    border: 2.5px solid var(--color-night);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.55);
+    cursor: grab;
+  }
+  .scrub::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-ember);
+    border: 2.5px solid var(--color-night);
+    box-shadow: 0 0 0 1px rgb(255 142 94 / 0.55);
+    cursor: grab;
+  }
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────
+   Markup defaults are the FINAL state; JS animates FROM elsewhere. The
+   [data-reveal] grammar is armed by JS adding .reveal-armed to <html> — a
+   thrown script or a crawler sees the finished page, never a blank one. */
+
+html.reveal-armed [data-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+}
+html.reveal-armed [data-reveal="fade"] {
+  transform: none;
+}
+html.reveal-armed [data-reveal="scale"] {
+  transform: scale(0.96);
+}
+html.reveal-armed [data-reveal="left"] {
+  transform: translateX(-26px);
+}
+html.reveal-armed [data-reveal="right"] {
+  transform: translateX(26px);
+}
+html.reveal-armed [data-reveal][data-state="in"] {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.8s ease var(--reveal-delay, 0s),
+    transform 0.9s var(--ease-reveal) var(--reveal-delay, 0s);
+}
+
+/* Entrances for floating chrome — used sparingly, once per mount. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: rise-in 0.8s var(--ease-reveal) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* The takeover: one beat of scale+fade, like stepping through a doorway. */
+@keyframes takeover {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The keep-log marquee — one slow lap; duplicated track makes the loop seam-free. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee var(--marquee-dur, 52s) linear infinite;
+}
+.marquee-track-reverse {
+  animation: marquee var(--marquee-dur, 52s) linear infinite reverse;
+}
+
+/* The soft breath of a live light — the follow pulse and the robot dot. */
+@keyframes glow-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--color-machine-500) 34%, transparent);
+  background: color-mix(in oklab, var(--color-ember) 55%, transparent);
+}
+
+/* The journal reads light-on-cream: its own selection, focus and scheme. */
+.field-site {
+  color-scheme: light;
+}
+.field-site ::selection {
+  background: color-mix(in oklab, var(--color-brass) 60%, transparent);
+  color: var(--color-ink);
+}
+.field-site :focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
+}
+
+/* MapLibre chrome: the map is the poster's floor, not a navigation app. */
+.maplibregl-ctrl-attrib {
+  background: rgb(15 13 35 / 0.7) !important;
+  font-family: var(--font-sans);
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-faint) !important;
+}
+.maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--color-aurora);
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -147,6 +541,12 @@ h6 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Ambient motion is ABSENT under reduced motion, not frozen mid-frame. */
+  html.reveal-armed [data-reveal] {
+    opacity: 1;
+    transform: none;
   }
 }

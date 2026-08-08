@@ -122,10 +122,10 @@ Change a weight and run `npm run verify`; it fails loudly if a moment stops bein
 | `POST /api/ingest/detections` | Validates + scores, doesn't persist. One `TODO` marks the DB insert. |
 | `POST /api/ingest/moments` | Same shape. Invalid payloads get a 400 naming the field. |
 | `GET /api/trips/:tripId` | Reads `lib/mock`; swap for the DB behind the same `TripView` shape. |
-| `components/splat/SplatStage.tsx` | Switches purely on `moment.splat.status`. Drop a `.spz` in `public/mock/splats/` and it renders for real. |
-| `components/trip/TripMap.tsx` | Keep `{ path, moments }`; swap internals for MapLibre if you get GPS. |
+| `components/relive/SplatViewer.tsx` | Switches purely on `moment.splat.status`. Drop a `.spz` in `public/mock/splats/` and it renders for real. |
+| `components/atlas/AtlasMap.tsx` | Keep `{ path, moments }`; swap internals for MapLibre if you get GPS. |
 | `lib/momentQA.ts` / `lib/tripQA.ts` | Replace the templated `run()` bodies with a Claude call; keep the citation ids. |
-| `components/moment/NowPlaying.tsx` | The play button opens `music.spotifyUri`; wire the playback SDK here. |
+| `components/relive/ReliveOverlay.tsx` | The soundtrack card opens `music.spotifyUri`; wire the playback SDK here. |
 
 The splat stage probes the asset with a `HEAD` request first and falls back to a synthetic point
 cloud built from each object's `worldPos`, badged honestly as `synthetic preview`. So the demo works
@@ -133,19 +133,17 @@ with zero assets and upgrades itself the moment a real capture appears.
 
 ## Demo path
 
-1. `/` → **Memory Albums**, the trip as a card.
-2. Trip view → **Map** tab: hover the moment list and the pins light up together; click one for the
-   panel → *Relive in 3D*.
-3. **Timeline** tab is the thing to point judges at: dense detections → candidate windows →
-   promoted moments, with discarded windows ghosted. Hover any window to see what fired and, for
-   the rejects, why it was dropped.
-4. **Ask Spark** tab: "where is my nalgene" (alias → bottle, with a nav pose), "what did we decide
-   on the bench" (real quotes from the transcript).
-5. Moment page → click an object chip → the camera flies to that anchor.
-6. `⌘K` → "where is my water bottle" → *Show me in 3D* → lands on the picnic-table moment with the
-   bottle anchor focused → *Send robot here* shows the nav pose.
-7. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate.
-8. The **Phone** toggle (bottom right) shows the on-robot view.
+1. `/` → **the atlas**: the whole day as a full-screen risograph park map, every kept moment a
+   numbered sticker-pin in its own ink.
+2. Press **play** on the day bar: the robot re-walks its odometry at 120× while pins pop from
+   outline to full ink as the playhead reaches them. Scrub the bar or click a chip to jump.
+3. Click any pin → the moment **expands into its Gaussian splat**: the night takeover with the
+   3D stage, what was seen (click an object row and the camera flies to its anchor), what was
+   said, and the soundtrack Spark picked. `←`/`→` step between moments, `esc` back to the map.
+4. `⌘K` → "where is my nalgene" (alias → bottle) → *Step into the splat* → lands inside the
+   picnic-table moment with the bottle anchor focused → *Send robot here* shows the nav pose.
+5. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate.
+6. The **Phone** toggle (bottom right) shows the on-robot view.
 
 ## Gotchas
 

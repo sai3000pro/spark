@@ -1,5 +1,5 @@
-import { DetectorLabClient } from "@/components/detect/DetectorLabClient";
-import { TopBar } from "@/components/shell/TopBar";
+import Link from "next/link";
+import { BenchClient } from "@/components/bench/BenchClient";
 
 export const metadata = {
   title: "Detector bench — Spark",
@@ -9,14 +9,16 @@ export const metadata = {
 
 export default function DetectPage() {
   return (
-    <>
-      <TopBar backHref="/" title="Detector bench" subtitle="stage 1 → stage 2, live" />
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-6 sm:px-6">
+      <nav className="mb-5">
+        <Link href="/" className="btn-ghost px-3.5 py-2 text-[13px]">
+          <span aria-hidden>←</span> Back to Spark
+        </Link>
+      </nav>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-12 pt-5 sm:px-5">
-        {/* Transformers.js is browser-only (WebGPU/WASM) and large, so the bench is
-            loaded client-side inside DetectorLabClient. */}
-        <DetectorLabClient />
-      </main>
-    </>
+      {/* Transformers.js is browser-only (WebGPU/WASM) and large, so the bench
+          is loaded client-side inside BenchClient. */}
+      <BenchClient />
+    </main>
   );
 }

@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // The Figma Make export. Kept on disk as a design reference, but it is a
     // separate Vite app with its own toolchain — not part of this build.
     "Journey Moment Capture App/**",
+    // Vendored MapLibre worker bundles copied by scripts/copy-maplibre-worker.mjs.
+    "public/map-lib/**",
   ]),
 ]);
 

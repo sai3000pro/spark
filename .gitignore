@@ -18,3 +18,14 @@ venv/
 
 # Local capture/session data (not transferred)
 live_sessions/
+
+# Design reference material (cloned locally, not ours to vendor)
+awesome-design-md/
+web/public/map-lib/
+.playwright-mcp/
+superpowers/
+
+# Build / pipeline artifacts
+brush_bin/
+target/
+tools/video_intel/out/

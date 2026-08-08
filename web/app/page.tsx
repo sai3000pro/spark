@@ -1,74 +1,92 @@
-import Link from "next/link";
-import { TopBar } from "@/components/shell/TopBar";
-import { JourneyCard } from "@/components/trip/JourneyCard";
-import { compactNumber, duration } from "@/lib/format";
-import { listTrips } from "@/lib/tripData";
+import { redirect } from "next/navigation";
+import {
+  Landing,
+  type LandingDiscard,
+  type LandingMoment,
+} from "@/components/home/Landing";
+import { clockTime, compactNumber, distance, duration, tripDate } from "@/lib/format";
+import { LABEL_FAMILIES } from "@/lib/mock/labels";
+import { describeTrigger } from "@/lib/triggers";
+import { getTripView } from "@/lib/tripData";
 
-export default function Home() {
-  const trips = listTrips();
+/**
+ * The landing. Everything the page needs is composed here on the server — the
+ * intro storm's noticed words, the six moment cards, the discarded candidates
+ * and the day's honest numbers — so the client ships zero raw telemetry.
+ *
+ * Old `/?m=` deep-links belong to the walk screen now and redirect there.
+ */
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const sp = await searchParams;
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const m = first(sp.m);
+  if (m) {
+    const anchor = first(sp.anchor);
+    redirect(`/walk?m=${m}${anchor ? `&anchor=${anchor}` : ""}`);
+  }
 
-  const totals = trips.reduce(
-    (acc, t) => ({
-      moments: acc.moments + t.stats.momentCount,
-      seconds: acc.seconds + t.stats.durationSec,
-      detections: acc.detections + t.stats.detectionCount,
-    }),
-    { moments: 0, seconds: 0, detections: 0 },
-  );
+  const trip = getTripView();
+
+  const moments: LandingMoment[] = trip.moments.map((mo) => ({
+    id: mo.id,
+    title: mo.title,
+    summary: mo.summary,
+    clock: clockTime(trip.startedAt, mo.tStart),
+    length: duration(mo.tEnd - mo.tStart),
+    place: mo.placeLabel,
+    mood: mo.vibe.mood,
+    hasMusic: mo.hasMusic,
+    seed: mo.thumbnailSeed,
+    hue: mo.thumbnailHue,
+    url: mo.thumbnailUrl,
+  }));
+
+  // The intro storm — everything the cameras and mics noticed, as words. Real
+  // detection vocabulary first (what the moments were actually "of"), then the
+  // wider COCO families it watches for, then what the audio layer heard.
+  const noticed = [
+    ...new Set([
+      ...trip.moments.flatMap((mo) => mo.topLabels),
+      ...Object.values(LABEL_FAMILIES).flat(),
+      "laughter",
+      "voices",
+      "golden light",
+      "footsteps",
+      "wind in the trees",
+      "a name it knows",
+      "still water",
+      "gravel underfoot",
+    ]),
+  ];
+
+  const discards: LandingDiscard[] = trip.candidates
+    .filter((c) => c.status === "discarded")
+    .slice(0, 6)
+    .map((c) => ({
+      id: c.id,
+      clock: clockTime(trip.startedAt, c.tStart),
+      length: duration(c.tEnd - c.tStart),
+      trigger: c.triggers[0] ? describeTrigger(c.triggers[0]) : "quiet stretch",
+      reason: c.discardReason ?? "scored below the keep line",
+      score: c.score,
+    }));
 
   return (
-    <>
-      <TopBar />
-
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-12 pt-6 sm:px-5">
-        <header className="max-w-2xl">
-          <p className="eyebrow text-machine-400">Your journeys</p>
-          <h1 className="mt-1.5 font-display text-3xl font-bold leading-tight text-fog-100">
-            Memory Albums
-          </h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-fog-300">
-            Spark follows you, watches, listens, and decides on its own what was worth keeping.
-            When you get home, the moments are already here.
-          </p>
-        </header>
-
-        <div className="mt-6 grid grid-cols-3 gap-3">
-          <StatTile label="Journeys" value={String(trips.length)} />
-          <StatTile label="Moments" value={String(totals.moments)} />
-          <StatTile label="Captured" value={duration(totals.seconds)} />
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {trips.map((trip) => (
-            <JourneyCard key={trip.id} trip={trip} />
-          ))}
-
-          <section className="surface flex flex-col items-center justify-center gap-1.5 rounded-2xl border-dashed p-6 text-center">
-            <p className="font-display text-[14px] font-semibold text-fog-200">
-              No trip in progress
-            </p>
-            <p className="max-w-xs text-[12px] leading-relaxed text-fog-400">
-              Starting one would put Spark in follow mode and begin the stage-1 detection loop.
-              It has run {compactNumber(totals.detections)} detections so far.
-            </p>
-            <Link
-              href="/detect"
-              className="mt-2 rounded-lg border border-machine-500/45 bg-machine-500/10 px-3 py-1.5 font-display text-[12px] font-semibold text-machine-300 transition-colors hover:bg-machine-500/20"
-            >
-              See what that loop emits →
-            </Link>
-          </section>
-        </div>
-      </main>
-    </>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="surface rounded-xl px-3 py-3 text-center">
-      <div className="tnum font-display text-xl font-bold text-machine-400">{value}</div>
-      <div className="mt-0.5 font-mono text-[11px] text-fog-400">{label}</div>
-    </div>
+    <Landing
+      dateLabel={tripDate(trip.startedAt)}
+      placeLabel={trip.placeLabel}
+      stats={{
+        distance: distance(trip.stats.distanceM),
+        duration: duration(trip.stats.durationSec),
+        detections: compactNumber(trip.stats.detectionCount),
+        detectionsRaw: trip.stats.detectionCount,
+        candidates: trip.stats.candidateCount,
+        moments: trip.stats.momentCount,
+        objects: trip.stats.distinctObjectCount,
+      }}
+      noticed={noticed}
+      moments={moments}
+      discards={discards}
+    />
   );
 }

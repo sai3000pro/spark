@@ -1,37 +1,37 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Outfit } from "next/font/google";
+import { Schibsted_Grotesk, Fragment_Mono } from "next/font/google";
 import { Suspense } from "react";
-import { DeviceFrame } from "@/components/shell/DeviceFrame";
+import { DeviceFrame } from "@/components/system/DeviceFrame";
 import "./globals.css";
 
 // Self-hosted by next/font rather than an @import from fonts.googleapis.com, so
-// the demo still renders correctly with no network.
-const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"], display: "swap" });
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+// the demo still renders correctly with no network. One grotesk carries the
+// whole voice — display through UI — and a typewriter mono carries the
+// journal's specimen tags ([ KEPT ], [ 002 ], timestamps).
+const grotesk = Schibsted_Grotesk({
+  variable: "--font-grotesk",
   subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+const typewriter = Fragment_Mono({
+  variable: "--font-typewriter",
+  subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Spark — relive the trip",
+  title: "Spark — a day, remembered in light",
   description:
-    "A companion robot that follows you, captures the moments worth keeping on its own, and remembers where you left things.",
+    "A companion robot that follows you, keeps the moments worth keeping on its own, and pins them to a real map of your day as Gaussian splats you can step back into.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${outfit.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased`}
-    >
+    <html lang="en" className={`${grotesk.variable} ${typewriter.variable} antialiased`}>
       <body>
-        {/* Each page renders its own <TopBar> so it can set the title and back
-            target — the robot's status bar is part of the screen, not a chrome
-            wrapper around it.
-
-            DeviceFrame reads ?chrome=off via useSearchParams, which needs a
+        {/* DeviceFrame reads ?chrome=off via useSearchParams, which needs a
             Suspense boundary; the fallback renders the app unwrapped so there is
             never a blank frame. */}
         <Suspense fallback={<div className="flex min-h-screen flex-col">{children}</div>}>
