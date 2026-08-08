@@ -1,12 +1,18 @@
 import { redirect } from "next/navigation";
-import { Landing, type LandingMoment } from "@/components/home/Landing";
+import {
+  Landing,
+  type LandingDiscard,
+  type LandingMoment,
+} from "@/components/home/Landing";
 import { clockTime, compactNumber, distance, duration, tripDate } from "@/lib/format";
+import { LABEL_FAMILIES } from "@/lib/mock/labels";
+import { describeTrigger } from "@/lib/triggers";
 import { getTripView } from "@/lib/tripData";
 
 /**
  * The landing. Everything the page needs is composed here on the server — the
- * six moment cards and the day's honest numbers — so the client ships zero raw
- * telemetry.
+ * intro storm's noticed words, the six moment cards, the discarded candidates
+ * and the day's honest numbers — so the client ships zero raw telemetry.
  *
  * Old `/?m=` deep-links belong to the walk screen now and redirect there.
  */
@@ -35,6 +41,36 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     url: mo.thumbnailUrl,
   }));
 
+  // The intro storm — everything the cameras and mics noticed, as words. Real
+  // detection vocabulary first (what the moments were actually "of"), then the
+  // wider COCO families it watches for, then what the audio layer heard.
+  const noticed = [
+    ...new Set([
+      ...trip.moments.flatMap((mo) => mo.topLabels),
+      ...Object.values(LABEL_FAMILIES).flat(),
+      "laughter",
+      "voices",
+      "golden light",
+      "footsteps",
+      "wind in the trees",
+      "a name it knows",
+      "still water",
+      "gravel underfoot",
+    ]),
+  ];
+
+  const discards: LandingDiscard[] = trip.candidates
+    .filter((c) => c.status === "discarded")
+    .slice(0, 6)
+    .map((c) => ({
+      id: c.id,
+      clock: clockTime(trip.startedAt, c.tStart),
+      length: duration(c.tEnd - c.tStart),
+      trigger: c.triggers[0] ? describeTrigger(c.triggers[0]) : "quiet stretch",
+      reason: c.discardReason ?? "scored below the keep line",
+      score: c.score,
+    }));
+
   return (
     <Landing
       dateLabel={tripDate(trip.startedAt)}
@@ -48,7 +84,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         moments: trip.stats.momentCount,
         objects: trip.stats.distinctObjectCount,
       }}
+      noticed={noticed}
       moments={moments}
+      discards={discards}
     />
   );
 }

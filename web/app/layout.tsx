@@ -1,25 +1,23 @@
 import type { Metadata } from "next";
-import { Fraunces, Instrument_Sans } from "next/font/google";
+import { Schibsted_Grotesk, Fragment_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { DeviceFrame } from "@/components/system/DeviceFrame";
 import "./globals.css";
 
 // Self-hosted by next/font rather than an @import from fonts.googleapis.com, so
-// the demo still renders correctly with no network. Two families on a real
-// contrast axis: Fraunces (a warm editorial serif, optical size on) carries
-// every headline; Instrument Sans carries the UI, labels and numbers.
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+// the demo still renders correctly with no network. One grotesk carries the
+// whole voice — display through UI — and a typewriter mono carries the
+// journal's specimen tags ([ KEPT ], [ 002 ], timestamps).
+const grotesk = Schibsted_Grotesk({
+  variable: "--font-grotesk",
   subsets: ["latin"],
-  axes: ["opsz"],
-  // The italic carries the landing's accent words and marquee — Fraunces'
-  // display italic is half the site's voice, not an afterthought.
   style: ["normal", "italic"],
   display: "swap",
 });
-const instrument = Instrument_Sans({
-  variable: "--font-instrument",
+const typewriter = Fragment_Mono({
+  variable: "--font-typewriter",
   subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -31,7 +29,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${instrument.variable} antialiased`}>
+    <html lang="en" className={`${grotesk.variable} ${typewriter.variable} antialiased`}>
       <body>
         {/* DeviceFrame reads ?chrome=off via useSearchParams, which needs a
             Suspense boundary; the fallback renders the app unwrapped so there is
