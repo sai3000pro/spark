@@ -1,7 +1,7 @@
 # Gauzensplat Capture — Implementation Status
 
 End-to-end iPhone LiDAR + local Wi-Fi capture pipeline, built phase-by-phase per
-`gauzensplat_master_iphone_wifi_esp32_implementation_prompt.md`.
+`capture-implementation-prompt.md`.
 
 Last updated: 2026-08-07
 

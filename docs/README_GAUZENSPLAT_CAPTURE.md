@@ -8,7 +8,7 @@ ingest), and validate the trajectory + LiDAR geometry on the Mac. Reconstruction
 trustworthy sensing + transport layer only.
 
 Built phase-by-phase per
-`gauzensplat_master_iphone_wifi_esp32_implementation_prompt.md`. Status per phase:
+`capture-implementation-prompt.md`. Status per phase:
 **`IMPLEMENTATION_STATUS.md`**. Full docs: **`IPHONE_LIDAR_CAPTURE.md`**. Test
 results (what actually ran vs awaiting hardware): **`IPHONE_LIDAR_CAPTURE_TEST_REPORT.md`**.
 
