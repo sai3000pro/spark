@@ -1,7 +1,7 @@
 ---
 version: 5.3
 name: Spark-field-notes
-description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned horizontal shelf of taped-down photographs on vellum mats, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned deck of taped-down photographs leafed through one flick at a time, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -105,11 +105,13 @@ choreography, in order:
 2. **Hero cycle** — the headline's last line blurs out/in every 3.4s (wet ink).
 3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
    copies wear `.smear` (blur 7px) for the smeared-ink read.
-4. **The gallery** — "Six moments, kept." pins on desktop: taped-down photographs on
-   tilted vellum mats scrub horizontally over the evening's rail; each print
-   parallaxes inside its window (containerAnimation) and the whole shelf shears a few
-   degrees with scroll velocity. Hover squares and lifts a print. Mobile and no-JS get
-   native overflow scroll.
+4. **The gallery deck** — "Six moments, kept." pins on desktop as a pile of
+   taped-down prints in the hand: each scroll beat flicks the top one off the pile
+   (alternating left/right, tossed behind the entry text) while the journal entry
+   beside it swaps and a brass rail fills. The deck exists only once motion JS arms
+   (`html.reveal-armed` swaps `.deck-when-armed`/`.strip-when-armed` at ≥1025px);
+   mobile, tablet, no-JS and reduced motion keep the native horizontal strip of the
+   same mounted prints.
 5. **The plates draw themselves** on arrival, then idle: detection dots ripple out and
    the hot ones twinkle; score bars grow against the clay keep-line whose dashes then
    march while the kept bars glow; six surveyor's markers drop onto the dotted route,
@@ -126,8 +128,11 @@ choreography, in order:
 8. **Night air** — opt-in ambient audio (brown-noise wind through a wandering lowpass,
    sparse cricket chirps), synthesized in Web Audio, toggled in the nav.
 
-Lenis smooth scroll is desktop-only. `prefers-reduced-motion` gets the complete static
-page — the sieve resting on its crossed-out page, marquees still, numbers already true.
+Lenis smooth scroll is desktop-only, and because html/body are height:100% its
+ResizeObserver can't see the page grow — `lenis.resize()` re-runs on every
+ScrollTrigger refresh so pin spacers never leave the scroll limit stale.
+`prefers-reduced-motion` gets the complete static page — the sieve resting on its
+crossed-out page, marquees still, numbers already true.
 
 ## The map
 
