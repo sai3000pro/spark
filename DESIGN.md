@@ -1,7 +1,7 @@
 ---
-version: 5
+version: 5.2
 name: Spark-field-notes
-description: "FIELD NOTES v5 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a pinned intro storm (one word, NOTICED, then every detection of the day pressed onto the page as colored chips, then an ink cut — 'It noticed 1,204 things. It kept six.'), a halftone-dot pine hero with a blur-cycling last line, a smeared marquee band, dark grain plates with honest count-ups, a KEPT/DISCARDED journal spread, a scroll-dragged statement, an accordion of field notes, and a finale where the giant wordmark bleeds off the page behind one pane of glass. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups, a pinned horizontal gallery of the six kept moments, a crossed-out-pages ledger of every discard, a scroll-dragged statement, an accordion of field notes, and a finale where the giant wordmark bleeds off the page behind one pane of glass. An opt-in 'night air' layer (wind + crickets) is synthesized on device. The walk/trip/bench app screens keep the NIGHT WALK twilight map — the walk itself still happens after sunset."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -63,8 +63,6 @@ The generated map style still derives from these values.
   the primary action; `.pill-ghost` (hairline ring via currentColor — set a text color on
   the element, never a `color` in the class) is the quiet one. App screens keep their two
   rectangle buttons.
-- `.word-chip` — a noticed thing pressed onto the page: mono uppercase, 7px radius, one
-  of seven pressed-ink wardrobes, hard 1px undershadow.
 - Vellum cards: `vellum` fill + inset hairline ring + soft ink shadow. Nested cards banned.
 - `.glass-bar` — the journal's ONE pane of glass, used twice: sticky nav and the finale
   footer. Tint deep enough that milk text reads over cream sections.
@@ -81,17 +79,27 @@ Exactly two curves, registered in CSS and GSAP CustomEase under the same names:
 Markup defaults are the FINAL state — JS animates *from* elsewhere. The landing's
 choreography, in order:
 
-1. **The storm** — the one pinned scrub section (≈280%): NOTICED alone on paper → chips
-   press on in random stagger → the ink cut fades over ("It noticed N things. It kept
-   six."). No-JS and reduced-motion land directly on the ink cut.
+1. **The sieve** — the one pinned scrub section (≈260%): the day's noticed words typeset
+   as one block on paper; a pen crosses them out in shuffled order while the caption
+   changes overhead ("It noticed N things." → "It weighed 15 of its minutes." → "It kept
+   six."), and six words get circled in their moment's ink with its clock. No-JS and
+   reduced-motion land directly on the final crossed-out page.
 2. **Hero cycle** — the headline's last line blurs out/in every 3.4s (wet ink).
 3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
    copies wear `.smear` (blur 7px) for the smeared-ink read.
-4. **The dragged statement** — one giant line scrubbed `xPercent` across its section.
-5. Reveals via IntersectionObserver once; count-ups once to the real number.
+4. **The gallery** — "Six moments, kept." pins on desktop and scrubs horizontally with
+   the evening's rail beneath; mobile and no-JS get native overflow scroll.
+5. **The plates draw themselves** on arrival: detection dots ripple out from center,
+   score bars grow against the clay keep-line, pins drop onto the route.
+6. **The dragged statement** — one giant line scrubbed `xPercent` across its section.
+7. Reveals via IntersectionObserver once (variants: up/fade/scale/left/right with
+   per-item `--reveal-delay`); ledger score bars grow in; count-ups once to the real
+   number.
+8. **Night air** — opt-in ambient audio (brown-noise wind through a wandering lowpass,
+   sparse cricket chirps), synthesized in Web Audio, toggled in the nav.
 
 Lenis smooth scroll is desktop-only. `prefers-reduced-motion` gets the complete static
-page — the storm resting on its cut, marquees still, numbers already true.
+page — the sieve resting on its crossed-out page, marquees still, numbers already true.
 
 ## The map
 
