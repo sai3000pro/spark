@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The detector bench — the app's product register, a night tool surface.
+ * The detector bench — the journal's workbench page.
  *
  * Its job is to prove the contract end-to-end: a real model runs on a real
  * image, its output is converted to the pipeline's `Detection[]`, and those go
@@ -15,7 +15,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  InkTag,
   LabelDot,
   Meter,
   NumberChip,
@@ -34,7 +33,7 @@ import {
 import { colorForLabel } from "@/lib/mock/labels";
 import { PIPELINE_CONFIG, promoteToMoment, scoreCandidates } from "@/lib/pipeline";
 import { describeTrigger, LAYER_COLOR, TRIGGER_LAYER } from "@/lib/triggers";
-import { NIGHT } from "@/lib/theme";
+import { PINE } from "@/lib/theme";
 import type { Detection, MomentCandidate } from "@/lib/types";
 
 type Phase = "idle" | "loading" | "ready" | "running" | "error";
@@ -149,27 +148,27 @@ export function Bench() {
   return (
     <div className="space-y-5">
       <header className="rise-in max-w-3xl">
-        <InkTag className="text-[12px] text-faint">
-          Stage 1 → stage 2 · runs in your browser
-        </InkTag>
-        <h1 className="mt-2 text-[32px] leading-[1.02] text-starlight sm:text-[38px]">
+        <span className="fnote text-[10.5px] text-moss">
+          [ stage 1 → stage 2 · runs in your browser ]
+        </span>
+        <h1 className="mt-2 text-[32px] leading-[1.02] text-ink sm:text-[38px]">
           The detector bench
         </h1>
-        <p className="mt-2.5 text-[14px] leading-relaxed text-moth">
+        <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
           A real object detector runs on any photo you drop in, and its output goes through the
-          same <code className="font-mono font-semibold text-starlight">scoreCandidates</code> the
+          same <code className="font-mono text-[13px] font-semibold text-ink">scoreCandidates</code> the
           day&apos;s map uses. Nothing is uploaded.
         </p>
       </header>
 
       {/* ── 01 · Model ──────────────────────────────────────────────────── */}
       <section
-        className="plate rise-in relative p-4 sm:p-5"
+        className="plate-vellum rise-in relative p-4 sm:p-5"
         style={{ "--i": 1 } as React.CSSProperties}
       >
         <CardHead n={1} title="Pick a model" hint="Weights download once, then stay cached.">
           {handle && (
-            <span className="tag chip chip-live text-[11px]">loaded · {handle.device}</span>
+            <span className="fnote chip chip-live text-[10px]">[ loaded · {handle.device} ]</span>
           )}
         </CardHead>
 
@@ -189,22 +188,22 @@ export function Bench() {
                 }}
                 className="rounded-[10px] p-3.5 text-left transition-[box-shadow,background-color] duration-200 ease-(--ease-signature) disabled:opacity-50"
                 style={{
-                  boxShadow: on ? "var(--ring-strong)" : "var(--ring)",
-                  background: on ? "var(--color-haze)" : "transparent",
+                  boxShadow: on ? "inset 0 0 0 1.5px var(--color-ink)" : "var(--ring-ink)",
+                  background: on ? "rgb(27 27 24 / 0.05)" : "transparent",
                 }}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span
                     className={`text-[15px] font-semibold ${
-                      on ? "selected-block px-1.5" : "text-starlight"
+                      on ? "selected-block px-1.5" : "text-ink"
                     }`}
                   >
                     {m.label}
                   </span>
-                  <span className="tag tnum text-[11px] text-faint">~{m.approxMb} MB</span>
+                  <span className="fnote tnum text-[10px] text-ink-faint">~{m.approxMb} MB</span>
                 </div>
-                <p className="mt-1.5 text-[12px] leading-snug text-moth">{m.note}</p>
-                <p className="tag mt-1.5 text-[11px] text-faint">{m.id}</p>
+                <p className="mt-1.5 text-[12px] leading-snug text-ink-soft">{m.note}</p>
+                <p className="fnote mt-1.5 text-[9.5px] text-ink-faint">{m.id}</p>
               </button>
             );
           })}
@@ -219,20 +218,20 @@ export function Bench() {
         {phase === "loading" && (
           <div className="mt-3.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="tag truncate text-[12px] text-moth">
+              <span className="tag truncate text-[12px] text-ink-soft">
                 {progress?.file ?? progress?.status ?? "…"}
               </span>
-              <span className="tag tnum shrink-0 text-[11px] text-aurora">
+              <span className="fnote tnum shrink-0 text-[10px] text-moss">
                 {formatBytes(progress?.loaded)}
                 {progress?.total ? ` / ${formatBytes(progress.total)}` : ""}
               </span>
             </div>
             <div
-              className="mt-1.5 h-[8px] overflow-hidden rounded-full bg-haze"
-              style={{ boxShadow: "var(--ring)" }}
+              className="mt-1.5 h-[8px] overflow-hidden rounded-full"
+              style={{ background: "rgb(27 27 24 / 0.1)" }}
             >
               <div
-                className="h-full rounded-full bg-aurora transition-[width] duration-200"
+                className="h-full rounded-full bg-moss transition-[width] duration-200"
                 style={{ width: `${Math.round(progress?.progress ?? 0)}%` }}
               />
             </div>
@@ -241,8 +240,8 @@ export function Bench() {
 
         {error && (
           <p
-            className="mt-3.5 rounded-[10px] px-3 py-2.5 text-[12px] font-medium text-ember"
-            style={{ boxShadow: "0 0 0 1px rgb(255 142 94 / 0.35)" }}
+            className="mt-3.5 rounded-[10px] px-3 py-2.5 text-[12px] font-medium text-clay"
+            style={{ boxShadow: "0 0 0 1px rgb(207 94 50 / 0.4)" }}
           >
             {error}
           </p>
@@ -252,7 +251,7 @@ export function Bench() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {/* ── 02 · Frame ────────────────────────────────────────────────── */}
         <section
-          className="plate rise-in relative h-fit p-4 sm:p-5"
+          className="plate-vellum rise-in relative h-fit p-4 sm:p-5"
           style={{ "--i": 2 } as React.CSSProperties}
         >
           <CardHead n={2} title="Drop a frame" hint="A photo with a few obvious objects in it." />
@@ -264,10 +263,10 @@ export function Bench() {
               onFile(e.dataTransfer.files[0]);
             }}
             className="relative mt-3 overflow-hidden rounded-[14px]"
-            style={{ boxShadow: "var(--ring)" }}
+            style={{ boxShadow: "var(--ring-ink)" }}
           >
             {imageUrl ? (
-              <div className="relative bg-night">
+              <div className="relative bg-pine">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl} alt="Frame to run detection on" className="block w-full" />
                 {raw?.map((d, i) => {
@@ -291,7 +290,7 @@ export function Bench() {
                     >
                       <span
                         className="tag absolute -top-[20px] left-0 whitespace-nowrap rounded-[4px] px-1.5 text-[10px] font-bold"
-                        style={{ background: color, color: NIGHT }}
+                        style={{ background: color, color: PINE }}
                       >
                         {d.label} {d.score.toFixed(2)}
                       </span>
@@ -300,13 +299,13 @@ export function Bench() {
                 })}
               </div>
             ) : (
-              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 bg-dusk text-center transition-colors duration-200 hover:bg-haze">
-                <span className="text-[15px] font-semibold text-starlight">
+              <label className="flex h-64 cursor-pointer flex-col items-center justify-center gap-2 bg-paper text-center transition-colors duration-200 hover:bg-brass/20">
+                <span className="text-[15px] font-semibold text-ink">
                   Drop an image, or click to choose
                 </span>
-                <InkTag className="text-[11px] text-faint">
-                  Runs locally — nothing is uploaded
-                </InkTag>
+                <span className="fnote text-[10px] text-ink-faint">
+                  [ runs locally — nothing is uploaded ]
+                </span>
                 <input
                   ref={fileRef}
                   type="file"
@@ -319,7 +318,7 @@ export function Bench() {
           </div>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-3">
-            <label className="tag flex items-center gap-2 text-[12px] text-moth">
+            <label className="tag flex items-center gap-2 text-[12px] text-ink-soft">
               Threshold
               <input
                 type="range"
@@ -328,9 +327,9 @@ export function Bench() {
                 step={0.05}
                 value={threshold}
                 onChange={(e) => setThreshold(Number(e.target.value))}
-                className="scrub w-28"
+                className="scrub-paper w-28"
               />
-              <span className="tnum text-starlight">{threshold.toFixed(2)}</span>
+              <span className="tnum text-ink">{threshold.toFixed(2)}</span>
             </label>
 
             <button
@@ -353,8 +352,8 @@ export function Bench() {
             )}
 
             {elapsedMs !== null && (
-              <span className="tag chip chip-live tnum text-[11px]">
-                {raw?.length ?? 0} boxes · {elapsedMs} ms
+              <span className="fnote chip chip-live tnum text-[10px]">
+                [ {raw?.length ?? 0} boxes · {elapsedMs} ms ]
               </span>
             )}
           </div>
@@ -363,7 +362,7 @@ export function Bench() {
         {/* ── 03 · Pipeline ─────────────────────────────────────────────── */}
         <section className="space-y-5">
           <div
-            className="plate rise-in relative p-4 sm:p-5"
+            className="plate-vellum rise-in relative p-4 sm:p-5"
             style={{ "--i": 3 } as React.CSSProperties}
           >
             <CardHead n={3} title="Detection[]" hint="Model output in the pipeline's own type." />
@@ -375,31 +374,31 @@ export function Bench() {
                     onMouseEnter={() => setHoveredIdx(i)}
                     onMouseLeave={() => setHoveredIdx(null)}
                     className={`flex items-center justify-between gap-2 rounded-[8px] px-2 py-1.5 transition-colors duration-150 ${
-                      hoveredIdx === i ? "bg-haze" : ""
+                      hoveredIdx === i ? "bg-ink/5" : ""
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <LabelDot label={d.label} />
-                      <span className="truncate text-[13px] font-medium text-starlight">
+                      <span className="truncate text-[13px] font-medium text-ink">
                         {d.label}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="tag tnum text-[11px] text-faint">{d.depthM} m</span>
+                      <span className="fnote tnum text-[10px] text-ink-faint">{d.depthM} m</span>
                       <Meter value={d.confidence} />
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[12px] text-moth">
+              <p className="mt-2 text-[12px] text-ink-soft">
                 Load a model and run detection to see records here.
               </p>
             )}
           </div>
 
           <div
-            className="plate rise-in relative p-4 sm:p-5"
+            className="plate-vellum rise-in relative p-4 sm:p-5"
             style={{ "--i": 4 } as React.CSSProperties}
           >
             <CardHead
@@ -408,10 +407,10 @@ export function Bench() {
               hint={`Same scorer as the day. Promote ≥ ${PIPELINE_CONFIG.promoteThreshold}.`}
             >
               <span
-                className="tag chip chip-synth text-[11px]"
+                className="fnote chip chip-synth text-[10px]"
                 title="A still frame has no timeline — the scorer sees the frame replayed across a synthetic 16 s window."
               >
-                synthetic window
+                [ synthetic window ]
               </span>
             </CardHead>
 
@@ -421,15 +420,15 @@ export function Bench() {
                   <li
                     key={c.id}
                     className="rounded-[10px] p-2.5"
-                    style={{ boxShadow: "var(--ring)" }}
+                    style={{ boxShadow: "var(--ring-ink)" }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="tag tnum text-[11px] text-faint">
+                      <span className="fnote tnum text-[10px] text-ink-faint">
                         {c.tStart}s–{c.tEnd}s
                       </span>
                       <span
-                        className={`tag tnum text-[11px] ${
-                          c.status === "promoted" ? "text-aurora" : "text-moth"
+                        className={`fnote tnum text-[10px] ${
+                          c.status === "promoted" ? "text-moss" : "text-ink-soft"
                         }`}
                       >
                         score {c.score.toFixed(2)}
@@ -439,7 +438,7 @@ export function Bench() {
                       {c.triggers.slice(0, 4).map((t, i) => (
                         <li
                           key={i}
-                          className="flex items-center gap-1.5 text-[11.5px] text-starlight"
+                          className="flex items-center gap-1.5 text-[11.5px] text-ink"
                         >
                           <span
                             aria-hidden
@@ -451,7 +450,7 @@ export function Bench() {
                       ))}
                     </ul>
                     {c.discardReason && (
-                      <p className="mt-1.5 text-[10.5px] font-semibold text-ember">
+                      <p className="mt-1.5 text-[10.5px] font-semibold text-clay">
                         discarded — {c.discardReason}
                       </p>
                     )}
@@ -459,7 +458,7 @@ export function Bench() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[12px] leading-relaxed text-moth">
+              <p className="mt-2 text-[12px] leading-relaxed text-ink-soft">
                 No candidates yet. A still frame has no audio or odometry, so only the vision
                 triggers can fire — that is the honest result, not a bug.
               </p>
@@ -467,19 +466,18 @@ export function Bench() {
           </div>
 
           {momentJson && (
-            <div className="plate rise-in relative p-4 sm:p-5">
+            <div className="plate-vellum rise-in relative p-4 sm:p-5">
               <CardHead n={5} title="Promoted Moment" hint="What stage 3 would store.">
                 <button
                   type="button"
                   onClick={() => navigator.clipboard?.writeText(momentJson)}
-                  className="tag text-[11px] text-moth transition-colors duration-150 hover:text-starlight"
+                  className="fnote text-[10px] text-ink-soft transition-colors duration-150 hover:text-ink"
                 >
                   Copy JSON
                 </button>
               </CardHead>
               <pre
-                className="scrollbar-thin mt-2 max-h-64 overflow-auto rounded-[10px] bg-night p-3 font-mono text-[11px] leading-relaxed text-moth"
-                style={{ boxShadow: "var(--ring)" }}
+                className="plate-pine scrollbar-thin mt-2 max-h-64 overflow-auto p-3 font-mono text-[11px] leading-relaxed text-mist"
               >
                 {momentJson}
               </pre>
@@ -506,8 +504,8 @@ function CardHead({
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex items-center gap-2.5">
         <NumberChip n={n} size="sm" />
-        <h2 className="text-[17px] text-starlight">{title}</h2>
-        {hint && <span className="hidden text-[11.5px] text-moth sm:inline">{hint}</span>}
+        <h2 className="text-[17px] text-ink">{title}</h2>
+        {hint && <span className="hidden text-[11.5px] text-ink-soft sm:inline">{hint}</span>}
       </div>
       {children}
     </div>

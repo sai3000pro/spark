@@ -1,18 +1,18 @@
 "use client";
 
 /**
- * The walk screen is one surface: the real park at night.
+ * The walk screen is one surface: the real park, printed on the journal's page.
  *
- * Owns every piece of cross-cutting state — which marker is hot, where the
+ * Owns every piece of cross-cutting state — which pin is hot, where the
  * replay playhead is, which moment is expanded into its splat, and the ⌘K find
  * palette. The map, the day bar and the overlay are all views of the same
- * little store, which is what makes hovering a chip light a marker and
+ * little store, which is what makes hovering a chip light a pin and
  * clicking a search result land inside the right splat.
  */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { NightMap } from "@/components/atlas/NightMap";
+import { FieldMap } from "@/components/atlas/FieldMap";
 import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
@@ -117,8 +117,8 @@ export function AtlasApp({
   };
 
   return (
-    <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-night text-starlight">
-      <NightMap
+    <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
+      <FieldMap
         path={trip.path}
         moments={trip.moments}
         activeId={activeId}
@@ -128,27 +128,19 @@ export function AtlasApp({
         onOpen={(id) => open(id)}
       />
 
-      {/* ── Floating chrome. The header is the app's ONE frosted element. ── */}
+      {/* ── Floating chrome — vellum slips pinned over the page. ─────────── */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
-        <div
-          className="rise-in pointer-events-auto rounded-[10px] px-4 py-3"
-          style={{
-            background: "rgb(23 20 50 / 0.78)",
-            backdropFilter: "blur(14px) saturate(1.15)",
-            WebkitBackdropFilter: "blur(14px) saturate(1.15)",
-            boxShadow: "var(--ring), var(--shadow-plate)",
-          }}
-        >
+        <div className="plate-vellum papergrain rise-in pointer-events-auto relative overflow-hidden px-4 py-3">
           <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
             <span className="font-display text-[19px] leading-none" style={{ fontWeight: 560 }}>
-              Spark
+              Spark<span className="text-clay">.</span>
             </span>
-            <span className="tag text-[11px] text-faint">the walk</span>
+            <span className="fnote text-[10px] text-ink-faint">[ the walk ]</span>
           </Link>
-          <p className="tag tnum mt-1.5 text-[12px] text-moth">
+          <p className="tag tnum mt-1.5 text-[12px] text-ink-soft">
             {tripDate(trip.startedAt)} · {trip.placeLabel}
           </p>
-          <p className="tag tnum mt-0.5 text-[12px] text-faint">
+          <p className="tag tnum mt-0.5 text-[12px] text-ink-faint">
             {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
             {duration(trip.stats.durationSec)}
           </p>
@@ -158,29 +150,29 @@ export function AtlasApp({
           <button
             type="button"
             onClick={() => setFindOpen(true)}
-            className="btn-ghost px-3.5 py-2 text-[13px]"
+            className="pill-ghost bg-vellum/80 px-3.5 py-2 text-[13px] text-ink"
           >
             <Search size={14} strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Where&apos;s my…</span>
-            <kbd className="tag rounded-[4px] px-1.5 py-0.5 text-[10px] text-faint" style={{ boxShadow: "var(--ring)" }}>
+            <kbd className="fnote rounded-[4px] px-1.5 py-0.5 text-[10px] text-ink-faint" style={{ boxShadow: "var(--ring-ink)" }}>
               ⌘K
             </kbd>
           </button>
 
-          {/* .btn-ghost sets display, so `hidden` must live on a wrapper. */}
+          {/* .pill-ghost sets display, so `hidden` must live on a wrapper. */}
           <span className="hidden md:block">
-            <Link href="/detect" className="btn-ghost px-3.5 py-2 text-[13px]">
+            <Link href="/detect" className="pill-ghost bg-vellum/80 px-3.5 py-2 text-[13px] text-ink">
               Detector bench
             </Link>
           </span>
 
           <span className="hidden sm:block">
             <span
-              className="chip chip-live tag pointer-events-auto whitespace-nowrap py-2 text-[11px] font-semibold"
+              className="chip chip-live fnote pointer-events-auto whitespace-nowrap py-2 text-[10px]"
               title="Follow mode. Mock telemetry — no robot is connected yet."
             >
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-aurora" aria-hidden />
-              Following · 78%
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-moss" aria-hidden />
+              [ following · 78% ]
             </span>
           </span>
         </div>
@@ -192,7 +184,7 @@ export function AtlasApp({
           className="rise-in pointer-events-none absolute left-1/2 top-20 z-10 hidden -translate-x-1/2 sm:block"
           style={{ "--i": 6 } as React.CSSProperties}
         >
-          <span className="tag rounded-[6px] bg-night/75 px-3 py-1.5 text-[12px] text-moth" style={{ boxShadow: "var(--ring)" }}>
+          <span className="tag rounded-[6px] bg-vellum/85 px-3 py-1.5 text-[12px] text-ink-soft" style={{ boxShadow: "var(--ring-ink)" }}>
             Every pin is a kept moment — click one to step inside
           </span>
         </div>

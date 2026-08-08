@@ -99,16 +99,16 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
       <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap items-center gap-1.5">
         {mode === "spark" ? (
           <StageChip variant="live">
-            splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians
+            [ splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians ]
           </StageChip>
         ) : (
-          <StageChip variant="synth">synthetic preview · {compactNumber(cloud.count)} pts</StageChip>
+          <StageChip variant="synth">[ synthetic preview · {compactNumber(cloud.count)} pts ]</StageChip>
         )}
-        {moment.splat.status === "processing" && <StageChip>reconstructing</StageChip>}
-        {moment.splat.status === "failed" && <StageChip variant="synth">reconstruction failed</StageChip>}
+        {moment.splat.status === "processing" && <StageChip>[ reconstructing ]</StageChip>}
+        {moment.splat.status === "failed" && <StageChip variant="synth">[ reconstruction failed ]</StageChip>}
       </div>
 
-      <p className="tag pointer-events-none absolute bottom-3 right-3 text-[9px] text-faint">
+      <p className="fnote pointer-events-none absolute bottom-3 right-3 text-[9px] text-mist">
         drag to orbit · scroll to zoom · click a dot to inspect
       </p>
     </div>
@@ -123,9 +123,15 @@ function StageChip({
   /** Three semantics, not colors: neutral metadata · live = measured · synth = stand-in/attention. */
   variant?: "live" | "synth";
 }) {
-  const semantic = variant === "live" ? "chip-live" : variant === "synth" ? "chip-synth" : "";
+  // Milk text carries the words on the pine plate; the semantic ink rides
+  // beside them as a dot, never as the only carrier.
+  const dot =
+    variant === "live" ? "var(--color-brass)" : variant === "synth" ? "var(--color-clay)" : null;
   return (
-    <span className={`tag chip bg-night/80 text-[10px] ${semantic}`}>{children}</span>
+    <span className="fnote chip chip-plate text-[9.5px]">
+      {dot && <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />}
+      {children}
+    </span>
   );
 }
 
@@ -309,11 +315,11 @@ function Anchors({
             {active && (
               <Html center distanceFactor={9} zIndexRange={[10, 0]}>
                 <div
-                  className="pointer-events-none -translate-y-7 whitespace-nowrap rounded-[6px] bg-plate/95 px-2 py-1"
-                  style={{ boxShadow: "var(--ring)" }}
+                  className="pointer-events-none -translate-y-7 whitespace-nowrap rounded-[6px] bg-vellum/95 px-2 py-1"
+                  style={{ boxShadow: "var(--ring-ink), 0 4px 12px rgb(6 10 11 / 0.4)" }}
                 >
-                  <span className="text-[11px] font-bold text-starlight">{a.label}</span>
-                  <span className="tag tnum ml-1.5 text-[10px] text-moth">
+                  <span className="text-[11px] font-bold text-ink">{a.label}</span>
+                  <span className="fnote tnum ml-1.5 text-[9px] text-ink-faint">
                     {Math.round(a.confidence * 100)}%
                   </span>
                 </div>

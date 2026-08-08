@@ -1,18 +1,19 @@
 "use client";
 
 /**
- * The walk on the REAL park.
+ * The walk on the REAL park, printed on the journal's paper.
  *
- * MapLibre renders actual Waterloo Park vector tiles restyled into twilight
- * (public/map/night-walk.json — generated, never hand-edited), and the robot's
- * odometry is georeferenced onto it (lib/geo.ts). The walk draws as a ribbon
- * of light — a wide ember glow under a crisp gold core — and every kept moment
- * is a numbered light-marker that expands into its splat.
+ * MapLibre renders actual Waterloo Park vector tiles restyled into a cream
+ * survey map (public/map/field-notes.json — generated, never hand-edited), and
+ * the robot's odometry is georeferenced onto it (lib/geo.ts). The walk draws
+ * the way the journal marks anything worth keeping: a wide translucent brass
+ * highlighter stroke under a crisp clay pen line — and every kept moment is a
+ * numbered pin stamped in its pressed ink.
  *
- * During a replay the ribbon fills gold up to the playhead while the full
- * route waits underneath as a faint trace; markers past the playhead haven't
- * "happened yet" and print as outlines. The camera opens tilted (pitch 48) so
- * the park reads as a place, not a diagram.
+ * During a replay the pen redraws the route up to the playhead while the full
+ * walk waits underneath as a faint dotted pencil trace; pins past the playhead
+ * haven't "happened yet" and print as outlines. The camera opens tilted
+ * (pitch 48) so the park reads as a place, not a diagram.
  */
 import { useCallback, useMemo, useRef } from "react";
 import { setWorkerUrl } from "maplibre-gl";
@@ -27,7 +28,7 @@ if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
 import { localToLngLat, tripBounds } from "@/lib/geo";
-import { EMBER, GOLD, NIGHT, STARLIGHT, inkForMoment, type MomentInk } from "@/lib/theme";
+import { BRASS, CLAY, PAPER, PINE, VELLUM, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
 import type { TrackPoint, Vec2 } from "@/lib/types";
 
@@ -49,7 +50,7 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
   const routeCoords = useMemo(() => path.map((p) => localToLngLat(p.pos)), [path]);
@@ -58,7 +59,7 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
     [path, moments],
   );
 
-  /** The replayed portion — the light the robot has re-earned so far. */
+  /** The replayed portion — the route the pen has re-drawn so far. */
   const reachedCoords = useMemo(() => {
     if (reachedT === null) return routeCoords;
     const out: [number, number][] = [];
@@ -81,10 +82,10 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
   );
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-night">
+    <div className="absolute inset-0 overflow-hidden bg-paper">
       <MapGL
         ref={mapRef}
-        mapStyle="/map/night-walk.json"
+        mapStyle="/map/field-notes.json"
         initialViewState={{ longitude: center[0], latitude: center[1], zoom: 15.4, pitch: 48, bearing: -14 }}
         onLoad={fit}
         onResize={fit}
@@ -93,32 +94,33 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
         attributionControl={{ compact: true }}
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       >
-        {/* The full walk — a faint trace waiting to be re-earned. */}
+        {/* The full walk — a faint dotted pencil trace waiting to be re-drawn. */}
         <Source id="route-all" type="geojson" data={line(routeCoords)}>
           <Layer
             id="route-trace"
             type="line"
             paint={{
-              "line-color": EMBER,
+              "line-color": PINE,
               "line-width": 2,
-              "line-opacity": reachedT === null ? 0 : 0.25,
+              "line-opacity": reachedT === null ? 0 : 0.3,
+              "line-dasharray": [0.1, 2.2],
             }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
         </Source>
 
-        {/* The ribbon of light: wide ember glow under a crisp gold core. */}
+        {/* The kept route: a brass highlighter stroke under a clay pen line. */}
         <Source id="route-lit" type="geojson" data={line(reachedCoords)}>
           <Layer
-            id="route-glow"
+            id="route-marker"
             type="line"
-            paint={{ "line-color": EMBER, "line-width": 13, "line-blur": 9, "line-opacity": 0.5 }}
+            paint={{ "line-color": BRASS, "line-width": 12, "line-opacity": 0.55 }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
           <Layer
-            id="route-core"
+            id="route-pen"
             type="line"
-            paint={{ "line-color": GOLD, "line-width": 2.4, "line-opacity": 0.95 }}
+            paint={{ "line-color": CLAY, "line-width": 2.4, "line-opacity": 0.95 }}
             layout={{ "line-cap": "round", "line-join": "round" }}
           />
         </Source>
@@ -127,7 +129,7 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
         <TrailheadMarker at={routeCoords[0]} label="Start" />
         <TrailheadMarker at={routeCoords[routeCoords.length - 1]} label="End" hollow />
 
-        {/* The kept moments — numbered pins on the park. */}
+        {/* The kept moments — numbered pins stamped on the park. */}
         {moments.map((m, i) => {
           const [lng, lat] = localToLngLat(m.placePos);
           return (
@@ -154,14 +156,15 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
         )}
       </MapGL>
 
-      {/* The night air: grain + vignette over the tiles, under the chrome. */}
-      <div className="starfield pointer-events-none absolute inset-0" aria-hidden />
+      {/* The page: paper tooth over the tiles, then a soft ink shade at the
+          edges so the map sits IN the journal instead of ending at the glass. */}
+      <div className="papergrain pointer-events-none absolute inset-0" aria-hidden />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `linear-gradient(180deg, rgb(15 13 35 / 0.6) 0%, rgb(15 13 35 / 0) 16%, rgb(15 13 35 / 0) 70%, rgb(15 13 35 / 0.72) 100%),
-            radial-gradient(120% 90% at 50% 50%, rgb(15 13 35 / 0) 58%, rgb(15 13 35 / 0.42) 100%)`,
+          background: `linear-gradient(180deg, rgb(250 244 227 / 0.75) 0%, rgb(250 244 227 / 0) 15%, rgb(250 244 227 / 0) 72%, rgb(250 244 227 / 0.8) 100%),
+            radial-gradient(120% 90% at 50% 50%, rgb(27 27 24 / 0) 62%, rgb(27 27 24 / 0.12) 100%)`,
         }}
       />
     </div>
@@ -173,9 +176,9 @@ export function NightMap({ path, moments, activeId, reachedT, robotPos, onHover,
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A map pin in the classic teardrop shape — the moment's ink, a dark number,
- * a hairline night outline so it separates from any tile underneath. Dimmed
- * to an outline while unreached during a replay — not happened yet.
+ * A map pin in the classic teardrop shape — the moment's pressed ink, a paper
+ * numeral, a paper outline so it separates from any tile underneath. Dimmed to
+ * an outline while unreached during a replay — not happened yet.
  */
 function PinMarker({
   index,
@@ -220,16 +223,16 @@ function PinMarker({
         style={{
           display: "block",
           filter: active
-            ? `drop-shadow(0 2px 3px rgb(6 5 18 / 0.55)) drop-shadow(0 0 10px ${ink.glow})`
-            : "drop-shadow(0 2px 3px rgb(6 5 18 / 0.55))",
+            ? `drop-shadow(0 2px 3px rgb(27 27 24 / 0.35)) drop-shadow(0 0 10px ${ink.deep}55)`
+            : "drop-shadow(0 2px 3px rgb(27 27 24 / 0.3))",
         }}
       >
         <path
           d="M15 1.5c-7.32 0-13 5.72-13 12.8 0 4.9 3.05 9.5 6.1 13.06 2.35 2.74 4.9 5.62 6.9 10.14 2-4.52 4.55-7.4 6.9-10.14 3.05-3.56 6.1-8.16 6.1-13.06 0-7.08-5.68-12.8-13-12.8Z"
-          fill={unreached ? NIGHT : ink.base}
-          stroke={unreached ? ink.base : "rgb(15 13 35 / 0.75)"}
+          fill={unreached ? PAPER : ink.deep}
+          stroke={unreached ? ink.deep : "rgb(250 244 227 / 0.92)"}
           strokeWidth={1.5}
-          opacity={unreached ? 0.85 : 1}
+          opacity={unreached ? 0.9 : 1}
         />
         <text
           x={15}
@@ -238,25 +241,25 @@ function PinMarker({
           fontSize={12.5}
           fontWeight={650}
           fontFamily="var(--font-sans)"
-          fill={unreached ? ink.base : NIGHT}
+          fill={unreached ? ink.deep : PAPER}
         >
           {index + 1}
         </text>
       </svg>
 
-      {/* Hover label — a small plate floating over the park. */}
+      {/* Hover label — a small vellum slip floating over the park. */}
       {active && (
         <span
           className="tag pointer-events-none absolute bottom-[46px] left-1/2 w-max -translate-x-1/2 rounded-[6px] px-2.5 py-1.5 text-[11.5px] font-semibold"
           style={{
-            background: "rgb(31 27 64 / 0.96)",
-            color: STARLIGHT,
-            boxShadow: "var(--ring), 0 8px 24px rgb(6 5 18 / 0.6)",
+            background: VELLUM,
+            color: "var(--color-ink)",
+            boxShadow: "var(--ring-ink), 0 8px 24px rgb(27 27 24 / 0.25)",
             animation: "takeover 0.3s var(--ease-signature) both",
           }}
         >
           {title}
-          <span className="ml-1.5 font-medium text-faint">
+          <span className="ml-1.5 font-medium text-ink-faint">
             {hasMusic ? "· scored · step inside" : "· step inside"}
           </span>
         </span>
@@ -277,22 +280,22 @@ function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: s
           style={{
             width: 9,
             height: 9,
-            background: hollow ? NIGHT : GOLD,
-            boxShadow: hollow ? `0 0 0 2px ${GOLD}` : "0 0 0 1.5px rgb(15 13 35 / 0.7)",
+            background: hollow ? PAPER : PINE,
+            boxShadow: hollow ? `0 0 0 2px ${PINE}` : "0 0 0 1.5px rgb(250 244 227 / 0.9)",
           }}
         />
         <span
-          className="tag rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold"
-          style={{ color: GOLD, background: "rgb(15 13 35 / 0.75)" }}
+          className="fnote rounded-[5px] px-1.5 py-0.5 text-[10px]"
+          style={{ color: PINE, background: "rgb(250 244 227 / 0.85)" }}
         >
-          {label}
+          [ {label} ]
         </span>
       </span>
     </Marker>
   );
 }
 
-/** The robot re-walking the path — a warm light moving through the dark. */
+/** The robot re-walking the path — the pen's nib moving across the page. */
 function RobotDot() {
   return (
     <span className="pointer-events-none relative grid place-items-center" style={{ width: 40, height: 40 }}>
@@ -300,7 +303,7 @@ function RobotDot() {
         aria-hidden
         className="absolute inset-0 rounded-full"
         style={{
-          background: "radial-gradient(circle, rgb(255 196 107 / 0.35) 0%, rgb(0 0 0 / 0) 70%)",
+          background: "radial-gradient(circle, rgb(207 94 50 / 0.3) 0%, rgb(0 0 0 / 0) 70%)",
           animation: "glow-breathe 1.4s ease-in-out infinite",
         }}
       />
@@ -309,8 +312,8 @@ function RobotDot() {
         style={{
           width: 14,
           height: 14,
-          background: GOLD,
-          boxShadow: "0 0 0 2.5px rgb(15 13 35 / 0.9), 0 0 0 4px rgb(255 196 107 / 0.5)",
+          background: CLAY,
+          boxShadow: "0 0 0 2.5px rgb(255 251 240 / 0.95), 0 0 0 3.5px rgb(207 94 50 / 0.5)",
         }}
       />
     </span>

@@ -3,7 +3,7 @@ import { buildTrip } from "@/lib/mock/trip-waterloo-park";
 import { getObjectIndexView, getTripView } from "@/lib/tripData";
 
 /**
- * The walk: the day as a full-screen twilight map of the real park, with every
+ * The walk: the day as a full-screen survey map of the real park, with every
  * kept moment pinned as a Gaussian splat you can step inside. Everything is
  * composed here on the server so the client gets exactly the shapes it renders —
  * full moments for the takeover, the thinned path for the map, the object index
