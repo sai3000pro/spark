@@ -103,8 +103,13 @@ export function VideoWalkPanel() {
         const perFrame: FrameDetections[] = [];
         for (let i = 0; i < frames.length; i++) {
           if (controller.signal.aborted) throw new DOMException("cancelled", "AbortError");
-          const raw = await detector.detect(frames[i].dataUrl, THRESHOLD);
-          perFrame.push({ t: frames[i].t, frameId: frames[i].frameId, raw });
+          // One pass per frame — the video already gives the detector many looks
+          // at each object, so the still-frame TTA presets would only slow it.
+          const run = await detector.detect(frames[i].dataUrl, {
+            threshold: THRESHOLD,
+            quality: "fast",
+          });
+          perFrame.push({ t: frames[i].t, frameId: frames[i].frameId, raw: run.detections });
           setStep({ done: i + 1, total: frames.length });
         }
 
