@@ -21,6 +21,7 @@ export const TRIP_ID = stacktMarket.id;
 const buildTrip = () => buildSpecTrip(stacktMarket);
 import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
+import { buildWalkLedger, type WalkLedger } from "./walkLedger";
 import type { GeoRef } from "./geo";
 import type {
   GeoPoint,
@@ -365,6 +366,8 @@ export interface AtlasView {
   entries: ObjectIndexEntry[];
   navTargets: NavTargetMap;
   geo: GeoRef;
+  /** The dashboard behind the map plate's summary — aggregated here, server-side. */
+  ledger: WalkLedger;
 }
 
 export const getAtlasView = cache((tripId: string): AtlasView | null => {
@@ -393,6 +396,7 @@ export const getAtlasView = cache((tripId: string): AtlasView | null => {
     entries,
     navTargets,
     geo: getGeoRefFor(tripId),
+    ledger: buildWalkLedger(trip, built.distanceM, familyOf),
   };
 });
 

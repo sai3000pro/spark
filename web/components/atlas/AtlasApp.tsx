@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
 import { DayBar } from "@/components/atlas/DayBar";
+import { LedgerOverlay } from "@/components/atlas/LedgerOverlay";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { clockShort, distance, duration, tripDate } from "@/lib/format";
@@ -52,6 +53,7 @@ export function AtlasApp({
   navTargets,
   geo,
   globe,
+  ledger,
   initialMomentId,
   initialAnchor,
 }: Props) {
@@ -62,6 +64,7 @@ export function AtlasApp({
   const [anchor, setAnchor] = useState<string | null>(initialAnchor ?? null);
   const [findOpen, setFindOpen] = useState(false);
   const [globeOpen, setGlobeOpen] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
 
   // ── The replay ─────────────────────────────────────────────────────────
   const [playhead, setPlayhead] = useState<number | null>(null);
@@ -156,10 +159,29 @@ export function AtlasApp({
             <p className="tag tnum mt-1.5 text-[12.5px] text-ink">
               {tripDate(trip.startedAt)} · {trip.placeLabel}
             </p>
-            <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
-              {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
-              {duration(trip.stats.durationSec)}
-            </p>
+            {/* The summary IS the door: clicking the day's totals opens the
+                full ledger, the way clicking a banner opens its splat. */}
+            <button
+              type="button"
+              onClick={() => {
+                setPlaying(false);
+                setLedgerOpen(true);
+              }}
+              aria-label="Open the walk's ledger — the full dashboard of this walk"
+              className="group block text-left"
+            >
+              <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
+                {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
+                {duration(trip.stats.durationSec)}
+              </p>
+              <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
+                {ledger.company.people.length} companions · {ledger.company.laughT.length} laughs ·{" "}
+                {trip.stats.distinctObjectCount} kinds of thing
+              </p>
+              <p className="fnote mt-1 text-[8.5px] text-ink-faint transition-colors duration-300 group-hover:text-clay">
+                [ open the ledger ]
+              </p>
+            </button>
             <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">
               {(() => {
                 const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);
@@ -254,6 +276,19 @@ export function AtlasApp({
           view={globe}
           currentTripId={trip.id}
           onClose={() => setGlobeOpen(false)}
+        />
+      )}
+
+      {/* ── The ledger: the plate's summary, opened to a full page ───────── */}
+      {ledgerOpen && (
+        <LedgerOverlay
+          trip={trip}
+          ledger={ledger}
+          onClose={() => setLedgerOpen(false)}
+          onOpenMoment={(id) => {
+            setLedgerOpen(false);
+            open(id);
+          }}
         />
       )}
 
