@@ -235,15 +235,25 @@ function ResultRow({
 
           {showNav && navigable && entry.navTarget && (
             <div className="mt-2 rounded-md border border-signal-500/30 bg-signal-500/5 p-2">
+              {/* `pos` is a standing position offset back from the object along
+                  the direction its best look came from — not the object's own
+                  coordinates, which is what this used to send the robot to. */}
               <p className="text-[11px] text-signal-400">
-                Nav goal queued — the robot would drive back to this spot.
+                Nav goal queued — the robot would drive here and turn to face it
+                {entry.navTarget.distanceM !== undefined
+                  ? ` from ${entry.navTarget.distanceM.toFixed(1)} m back`
+                  : ""}
+                .
               </p>
+              {entry.navTarget.why && (
+                <p className="mt-1 text-[11px] text-fog-400">{entry.navTarget.why}</p>
+              )}
               {/* navTarget.heading is ALREADY a compass bearing in degrees — see the
                   note on ObjectIndexEntry. It used to be re-multiplied by 180/π
                   here, which rendered a 214° bearing as 12262°. */}
               <p className="tnum mt-1 font-mono text-[10px] text-fog-400">
-                target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
-                heading {entry.navTarget.heading}° · rejoins the route at{" "}
+                stand at ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
+                heading {entry.navTarget.heading}° · best look at{" "}
                 {timecode(entry.navTarget.approachFromT)}
               </p>
             </div>

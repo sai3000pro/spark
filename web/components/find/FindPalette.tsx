@@ -269,12 +269,24 @@ function ResultRow({
               }}
             >
               <p className="fnote text-[10px] text-moss">[ nav goal queued ]</p>
+              {/* `pos` is where the robot STANDS, offset back from the object
+                  along the direction its best look came from — not the object's
+                  own coordinates, which is what this used to show. */}
               <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">
-                The robot would drive back to this spot.
+                The robot would drive here and turn to face it
+                {entry.navTarget.distanceM !== undefined
+                  ? ` from ${entry.navTarget.distanceM.toFixed(1)} m back`
+                  : ""}
+                .
               </p>
+              {entry.navTarget.why && (
+                <p className="mt-1 text-[11px] leading-snug text-ink-soft">
+                  {entry.navTarget.why}
+                </p>
+              )}
               <p className="fnote tnum mt-1 text-[10px] text-ink-faint">
-                Target ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
-                heading {entry.navTarget.heading.toFixed(0)}° · rejoins at{" "}
+                Stand at ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
+                heading {entry.navTarget.heading.toFixed(0)}° · best look at{" "}
                 {timecode(entry.navTarget.approachFromT)}
               </p>
             </div>
