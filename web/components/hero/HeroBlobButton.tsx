@@ -59,9 +59,11 @@ import {
 import {
   airFraction,
   clamp,
+  isLastDescent,
   releaseVelocity,
   stepBallistic,
   stepWalk,
+  timeToGround,
   tumble,
   type Env,
   type Motion,
@@ -114,6 +116,15 @@ const ANCHOR_PAUSE_MS = 5000;
 const CROUCH_MS = (2 / BLOB_CLIPS.jump.fps) * 1000;
 /** The squash on touchdown. */
 const LAND_MS = 220;
+/**
+ * How long before impact it starts bracing, in ms.
+ *
+ * Long enough to read as anticipation, short enough that it is not holding the
+ * pose through half the descent. It only ever fires on the LAST fall — see
+ * `isLastDescent` — so a bouncing throw keeps its shocked face until the hop
+ * that finally settles it.
+ */
+const BRACE_LEAD_MS = 130;
 /** If the server never answers, come back down rather than hang in the air. */
 const LAUNCH_TIMEOUT_MS = 6000;
 
@@ -356,6 +367,16 @@ export function HeroBlobButton() {
    */
   const [skidding, setSkidding] = useState(false);
   const skidRef = useRef(false);
+  /**
+   * Bracing for a landing it can already see coming.
+   *
+   * State and not just an imperative frame, for the same reason `skidding` is:
+   * the touchdown drawing lives in the JUMP cell and everything else in a throw
+   * lives in the base one, so React has to re-poster or the drawing and the box
+   * underneath it disagree and the character changes size in mid-air.
+   */
+  const [bracing, setBracing] = useState(false);
+  const braceRef = useRef(false);
 
   /** On its feet at home — so the offsets should be back at zero. */
   const grounded =
@@ -377,7 +398,10 @@ export function HeroBlobButton() {
         : shownPhase === "flying"
           ? skidding
             ? "skid"
-            : flight === "leap"
+            : // Bracing borrows the jump clip because that is where the drawn
+              // touchdown lives — the same clip `landing` posters from, so the
+              // brace runs straight into the landing beat with no swap at all.
+              bracing || flight === "leap"
               ? "air"
               : "tossed"
           : shownPhase === "landing"
@@ -414,7 +438,7 @@ export function HeroBlobButton() {
    * first frame, because it is a single held frame out of the middle of a clip.
    */
   const poster: BlobFrame =
-    shownPhase === "landing"
+    shownPhase === "landing" || (shownPhase === "flying" && bracing)
       ? seq.frames[seq.frames.length - 1]
       : seq.frames[seq.from ?? (seq.reverse ? seq.frames.length - 1 : 0)];
   const cell = blobCell(poster);
@@ -574,6 +598,37 @@ export function HeroBlobButton() {
   // what keeps a live trip's 1 Hz clock from restarting every clip.
   const showFrame = useCallback(
     (frame: BlobFrame, face: BlobFacing) => {
+      /*
+        THE BOX MOVES WITH THE DRAWING, IN THE SAME BREATH.
+
+        The element is a CELL and the sprite fills it with `object-fit: contain`,
+        so the character's size on screen is decided by the cell geometry the box
+        is currently wearing — not by the drawing. Show a jump-cell drawing in a
+        base-cell box and the character renders at 0.4608/0.7264 = 63% of itself;
+        the other way round, 158%. That is the "randomly resizing".
+
+        It used to be possible because these four came from React (via the
+        poster) while the `src` came from here. Every frame the driver drew from
+        a different cell than the poster's was a mismatch until React caught up —
+        at least one painted frame, and the brace crosses exactly that seam:
+        `tossed` is base-cell and the drawn touchdown is jump-cell.
+
+        Written BEFORE the unchanged-url early return, on purpose. The physics
+        clips call this every animation frame, so the geometry is re-asserted
+        ~60x a second and a stale React render cannot leave the box wrong for
+        longer than a frame. Cheap: these are four string writes to the same
+        element, and the browser coalesces them into the one style recalc it was
+        already doing for `src`.
+      */
+      const el = rootRef.current;
+      if (el) {
+        const c = blobCell(frame);
+        el.style.setProperty("--sprite-cell-ar", String(c.cellAr));
+        el.style.setProperty("--sprite-foot-y", String(c.footY));
+        el.style.setProperty("--sprite-body-h", String(c.bodyH));
+        el.style.setProperty("--sprite-body-w", String(c.bodyW));
+      }
+
       const url = blobSprite(frame, face);
       if (url === lastSrc.current) return;
       lastSrc.current = url;
@@ -679,6 +734,18 @@ export function HeroBlobButton() {
           skidRef.current = onGround;
           setSkidding(onGround); // once per transition — the cell has to follow
         }
+        // THE BRACE, AND IT HAS TO BE EARLY TO BE WORTH ANYTHING. The touchdown
+        // drawing used to appear only once `stepBallistic` reported `landed` —
+        // i.e. after the last bounce had already happened — so the beat it was
+        // drawn for was over before it was shown. Predicting the final descent
+        // instead puts it on screen during the fall it belongs to.
+        const brace =
+          !onGround && isLastDescent(m, env) && timeToGround(m, env) * 1000 <= BRACE_LEAD_MS;
+        if (brace !== braceRef.current) {
+          braceRef.current = brace;
+          setBracing(brace); // once per transition — the cell has to follow
+        }
+
         if (onGround) {
           // Scrabbling along the ground: the walk cycle, driven by ground
           // covered. This is the beat the old version showed one static drawing
@@ -687,6 +754,9 @@ export function HeroBlobButton() {
           const step = (SKID_CYCLE_UNITS * env.unit) / skid.length;
           if (travelled >= step) travelled -= step;
           showFrame(skid[Math.floor(travelled / step) % skid.length], facing);
+        } else if (brace) {
+          // The drawn touchdown, held through the last of the fall.
+          showFrame(air[air.length - 1], facing);
         } else if (flight === "throw") {
           // Thrown: one shocked face for the whole arc, bounces and all. It must
           // also be the frame the SEQUENCE posters, or the cell underneath does
@@ -709,6 +779,11 @@ export function HeroBlobButton() {
           paint(m.x, 0, 0, 0);
           skidRef.current = false;
           setSkidding(false);
+          // Cleared, not carried: `landing` posters the same touchdown drawing
+          // from the same cell, so dropping the flag here changes nothing on
+          // screen — it just stops a stale brace surviving into the next throw.
+          braceRef.current = false;
+          setBracing(false);
           setPhase("landing");
           return;
         }

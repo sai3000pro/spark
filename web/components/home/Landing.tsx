@@ -47,8 +47,11 @@ import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from "lucide-react";
 import { KeyframeImg } from "@/components/system/ui";
+import { BlobMark } from "@/components/shell/BlobMark";
+import { TickerBlob } from "@/components/home/TickerBlob";
 import { distance, duration, shortDate } from "@/lib/format";
 import { BRASS, CLAY, MOMENT_INKS } from "@/lib/theme";
+import type { ActiveTripSnapshot } from "@/lib/liveTrip";
 import type { TripListItem } from "@/lib/tripData";
 
 export interface LandingMoment {
@@ -93,6 +96,12 @@ export interface LandingProps {
   discards: LandingDiscard[];
   /** Every pressed album, for the shelf. */
   albums: TripListItem[];
+  /**
+   * The live-trip snapshot, read on the server so the companion on the ticker
+   * paints its first frame already correct — no idle→recording flash while the
+   * client's first poll is in flight. Null when nothing is running.
+   */
+  activeTrip: ActiveTripSnapshot | null;
 }
 
 gsap.registerPlugin(ScrollTrigger, CustomEase, SplitText);
@@ -240,7 +249,7 @@ function useNightAir() {
 
 /* ═════════════════════════════════ page ════════════════════════════════ */
 
-export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums }: LandingProps) {
+export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums, activeTrip }: LandingProps) {
   const root = useRef<HTMLDivElement>(null);
   const heroWord = useRef<HTMLSpanElement>(null);
   const [note, setNote] = useState(0);
@@ -709,9 +718,23 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
           cream page a translucent bar picked up whatever scrolled beneath it
           and read as fading out at the sides. */}
       <header className="sticky top-0 z-40 flex items-center justify-between bg-pine px-5 py-3 text-milk shadow-[inset_0_-1px_0_rgb(246_240_223_/_0.14)] sm:px-8">
-        <Link href="/" className="flex items-baseline gap-0.5 text-[20px] font-semibold tracking-tight" aria-label="Spark home">
-          spark
-          <span aria-hidden className="pulse-dot inline-block h-[7px] w-[7px] rounded-full bg-clay" />
+        {/* The robot sleeps beside its own name. Inside the link on purpose: it
+            has no drag, only hover and focus, so clicking it goes home exactly
+            as clicking the word does — and a mark you can click is a logo, while
+            a mark you cannot is an obstacle sitting in one.
+
+            `items-center` on the row, `items-baseline` kept on the word and its
+            dot: the blob wants to be centred against the bar, but the clay dot
+            is the PERIOD in "spark." and has to sit on the text's baseline. */}
+        <Link href="/" className="flex items-center gap-1.5 text-[20px] font-semibold tracking-tight" aria-label="Spark home">
+          {/* 30, not smaller. 26 was tried and the closed-eye sleeping pose
+              degraded into a featureless grey oval — see the note on BlobMark.
+              The cell is 41px tall, which clears the 57px bar. */}
+          <BlobMark size={30} />
+          <span className="flex items-baseline gap-0.5">
+            spark
+            <span aria-hidden className="pulse-dot inline-block h-[7px] w-[7px] rounded-full bg-clay" />
+          </span>
         </Link>
         <nav className="flex items-center gap-3 sm:gap-5">
           <a href="#albums" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk md:block">
@@ -823,15 +846,28 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         {/* The seam: the kept moments lapping like a ticker of the day — the
             open album handing off to the journal that pressed it. No edge
             mask: the band stays solid pine all the way across. */}
-        <div aria-hidden className="relative overflow-hidden border-t border-milk/10 bg-pine py-4">
-          <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
-            {[0, 1].map((dup) => (
-              <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
-                {dateLabel} · {placeLabel}  ·  {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
-                {"  ·  "}
-              </span>
-            ))}
+        {/* THE CLIPPING BELONGS TO THE MARQUEE, NOT THE BAND. The strip used to
+            be one overflow-hidden box, which is right for a lapping ticker and
+            fatal for a character standing on it: every throw was guillotined at
+            the band's top edge. So the band keeps the pine and the rule, the
+            inner box keeps the clip, and the companion is a sibling free to arc
+            up into the page above.
+
+            aria-hidden likewise moved inward. It belongs on the ticker — a
+            decorative restatement of moments listed properly further down — but
+            on the band it would have swallowed an interactive control. */}
+        <div className="ticker-band relative border-t border-milk/10 bg-pine">
+          <div aria-hidden className="overflow-hidden py-4">
+            <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
+              {[0, 1].map((dup) => (
+                <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
+                  {dateLabel} · {placeLabel}  ·  {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
+                  {"  ·  "}
+                </span>
+              ))}
+            </div>
           </div>
+          <TickerBlob initialTrip={activeTrip} />
         </div>
       </section>
 
