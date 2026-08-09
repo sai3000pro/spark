@@ -6,6 +6,7 @@
  * this has to run instantly and offline on the robot, and the hard part was never
  * the language — it was having a trustworthy index to look things up in.
  */
+import { bestViewpoint, scoreView } from "./detect/viewQuality";
 import { LABEL_ALIASES, LABEL_FAMILIES, familyOf } from "./mock/labels";
 import { nearestPathPoint } from "./mock/generatePath";
 import type {
@@ -141,6 +142,24 @@ const crossRank = (s: IndexedSighting, newestMs: number, span: number) =>
 /**
  * The pose the robot would drive to in order to show you the thing.
  *
+ * WHAT CHANGED AND WHY. This used to return the object's OWN coordinates, with a
+ * bearing measured from whichever path point happened to be closest. Both halves
+ * were wrong in the same way — they described where the thing is, not where to
+ * stand to look at it:
+ *
+ *   · Driving to an object's coordinates drives INTO the object.
+ *   · The nearest point on the walk is not where the good look happened. The
+ *     robot may have passed within a metre of the bench with the bench out of
+ *     frame, and got its only clean view of it from ten metres back.
+ *
+ * So the pose now reproduces the best VIEW: stand off from the object along the
+ * direction the best-scoring look came from, at a distance that would frame it
+ * properly, facing it. `bestT` — the time of that look, recorded by
+ * collapseToSightings — is what makes this recoverable at all.
+ *
+ * Falls back to the old nearest-path-point behaviour for sightings that predate
+ * view scoring, so an index built from older data still navigates.
+ *
  * `heading` is a compass bearing in DEGREES, 0–360, measured clockwise from +z.
  * It used to be raw `Math.atan2` radians while every caller rendered it with a
  * "°" suffix, so every object in the trip reported a heading between -3° and 3°.
@@ -152,13 +171,52 @@ function navTargetFor(
   if (!sighting.worldPos || !path.length) return undefined;
   // worldPos is [x, up, z]; the robot navigates the ground plane.
   const ground: Vec2 = [sighting.worldPos[0], sighting.worldPos[2]];
-  const near = nearestPathPoint(path, ground);
-  const deg = (Math.atan2(ground[0] - near.pos[0], ground[1] - near.pos[1]) * 180) / Math.PI;
+
+  // Where the robot actually was when it got its best look. Falling back to the
+  // nearest path point keeps this defined for sightings with no `bestT`.
+  const observer =
+    sighting.bestT !== undefined
+      ? pathPointAt(path, sighting.bestT)
+      : nearestPathPoint(path, ground);
+
+  const view = scoreView(
+    sighting.bestBbox,
+    sighting.label,
+    sighting.confidence,
+    sighting.bestT ?? observer.t,
+    { path },
+  );
+
+  const vp = bestViewpoint({
+    objectPos: ground,
+    observerPos: observer.pos,
+    t: observer.t,
+    view,
+    bbox: sighting.bestBbox,
+  });
+
   return {
-    pos: ground,
-    heading: Math.round(((deg % 360) + 360) % 360),
-    approachFromT: near.t,
+    pos: vp.pos,
+    heading: vp.heading,
+    approachFromT: vp.approachFromT,
+    distanceM: vp.distanceM,
+    viewScore: vp.viewScore,
+    why: vp.why,
   };
+}
+
+/** The odometry sample closest in TIME to `t` — not in space. */
+function pathPointAt(path: TrackPoint[], t: number): TrackPoint {
+  let best = path[0];
+  let bestD = Infinity;
+  for (const p of path) {
+    const d = Math.abs(p.t - t);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

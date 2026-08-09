@@ -12,6 +12,15 @@
  * see what fires. This is where the pipeline's honesty lives — discarded
  * candidates stay visible, thresholds stay legible, and every stat speaks the
  * quiet metadata voice.
+ *
+ * Two readouts here exist to make previously invisible things visible:
+ *
+ *   · AGREEMENT — how many of the augmented passes found each object. This is
+ *     what "the detector is inconsistent" looks like when you measure it instead
+ *     of watching boxes flicker. A 6/6 detection and a 1/6 detection used to be
+ *     rendered identically.
+ *   · BEST ANGLE — which look the pipeline would keep, scored on framing rather
+ *     than on the model's confidence, plus the one thing most wrong with it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -23,13 +32,19 @@ import {
 } from "@/components/system/ui";
 import {
   DETECTOR_MODELS,
+  QUALITY_PRESETS,
   formatBytes,
   loadDetector,
+  passCountFor,
   toDetections,
+  trackFrames,
+  type DetectRun,
   type DetectorHandle,
+  type Precision,
   type ProgressInfo,
-  type RawDetection,
+  type QualityMode,
 } from "@/lib/detector";
+import { scoreView, type ViewScore } from "@/lib/detect/viewQuality";
 import { colorForLabel } from "@/lib/mock/labels";
 import { PIPELINE_CONFIG, promoteToMoment, scoreCandidates } from "@/lib/pipeline";
 import { describeTrigger, LAYER_COLOR, TRIGGER_LAYER } from "@/lib/triggers";
@@ -38,8 +53,12 @@ import type { Detection, MomentCandidate } from "@/lib/types";
 
 type Phase = "idle" | "loading" | "ready" | "running" | "error";
 
+const QUALITY_ORDER: QualityMode[] = ["fast", "balanced", "thorough"];
+
 export function Bench() {
   const [modelId, setModelId] = useState(DETECTOR_MODELS[0].id);
+  const [quality, setQuality] = useState<QualityMode>("balanced");
+  const [precision, setPrecision] = useState<Precision>("auto");
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<ProgressInfo | null>(null);
   const [handle, setHandle] = useState<DetectorHandle | null>(null);
@@ -47,11 +66,12 @@ export function Bench() {
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(0.5);
-  const [raw, setRaw] = useState<RawDetection[] | null>(null);
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [run, setRun] = useState<DetectRun | null>(null);
+  const [passDone, setPassDone] = useState<[number, number] | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const raw = run?.detections ?? null;
 
   // Revoke object URLs so repeated drops don't leak.
   useEffect(() => {
@@ -64,36 +84,48 @@ export function Bench() {
     setPhase("loading");
     setError(null);
     try {
-      const h = await loadDetector(modelId, setProgress);
+      const h = await loadDetector(modelId, setProgress, precision);
       setHandle(h);
       setPhase("ready");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setPhase("error");
     }
-  }, [modelId]);
+  }, [modelId, precision]);
 
-  const run = useCallback(async () => {
+  const detect = useCallback(async () => {
     if (!handle || !imageUrl) return;
     setPhase("running");
-    const started = performance.now();
+    setPassDone([0, passCountFor(QUALITY_PRESETS[quality])]);
     try {
-      const out = await handle.detect(imageUrl, threshold);
-      setRaw(out);
-      setElapsedMs(Math.round(performance.now() - started));
+      const out = await handle.detect(imageUrl, {
+        threshold,
+        quality,
+        onPass: (done, total) => setPassDone([done, total]),
+      });
+      setRun(out);
       setPhase("ready");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setPhase("error");
+    } finally {
+      setPassDone(null);
     }
-  }, [handle, imageUrl, threshold]);
+  }, [handle, imageUrl, threshold, quality]);
 
   const onFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
     if (imageUrl?.startsWith("blob:")) URL.revokeObjectURL(imageUrl);
     setImageUrl(URL.createObjectURL(file));
-    setRaw(null);
-    setElapsedMs(null);
+    setRun(null);
+  };
+
+  const resetModel = (next: Partial<{ modelId: string; precision: Precision }>) => {
+    if (next.modelId !== undefined) setModelId(next.modelId);
+    if (next.precision !== undefined) setPrecision(next.precision);
+    setHandle(null);
+    setPhase("idle");
+    setRun(null);
   };
 
   // ── The contract check: model output → Detection[] → scoreCandidates ──────
@@ -105,17 +137,43 @@ export function Bench() {
     [raw],
   );
 
+  /**
+   * Best angle, per detection.
+   *
+   * Scored on the frame's own geometry, so it works on a still with no odometry
+   * — the steadiness term simply stays neutral, which the panel says out loud.
+   */
+  const views: ViewScore[] = useMemo(
+    () => detections.map((d) => scoreView(d.bbox, d.label, d.confidence, d.t)),
+    [detections],
+  );
+
+  const bestIdx = useMemo(() => {
+    if (!views.length) return null;
+    let idx = 0;
+    for (let i = 1; i < views.length; i++) if (views[i].score > views[idx].score) idx = i;
+    return idx;
+  }, [views]);
+
+  /**
+   * A single frame is a degenerate case for a temporal scorer, so synthesize a
+   * short window by replaying the frame across it. The replay goes through
+   * `trackFrames` rather than being hand-stamped: that is the real tracker, so
+   * the resulting Detections carry real trackIds and `collapseToSightings` will
+   * actually accept them — which is the whole seam being tested.
+   */
+  const replayed: Detection[] = useMemo(() => {
+    if (!raw) return [];
+    const frames = Array.from({ length: 12 }, (_, k) => ({
+      frameId: `live_r${k}`,
+      t: Number((k * 1.2).toFixed(1)),
+      detections: raw,
+    }));
+    return trackFrames(frames, { tripId: "trip_live", source: "manual" });
+  }, [raw]);
+
   const candidates: MomentCandidate[] = useMemo(() => {
-    if (!detections.length) return [];
-    // A single frame is a degenerate case for a temporal scorer, so synthesize a
-    // short window by replaying the frame across it — enough to exercise the
-    // novelty and face-count triggers honestly.
-    const replayed: Detection[] = [];
-    for (let k = 0; k < 12; k++) {
-      for (const d of detections) {
-        replayed.push({ ...d, id: `${d.id}_r${k}`, t: Number((k * 1.2).toFixed(1)) });
-      }
-    }
+    if (!replayed.length) return [];
     return scoreCandidates({
       tripId: "trip_live",
       durationSec: 16,
@@ -125,13 +183,12 @@ export function Bench() {
       audioEvents: [],
       path: [],
     });
-  }, [detections]);
+  }, [replayed]);
 
   const promoted = candidates.find((c) => c.status !== "discarded") ?? candidates[0] ?? null;
 
   const momentJson = useMemo(() => {
-    if (!promoted || !detections.length) return null;
-    const replayed = detections.map((d) => ({ ...d, t: 6 }));
+    if (!promoted || !replayed.length) return null;
     const moment = promoteToMoment(promoted, replayed, {
       id: "m_live_preview",
       title: "Live detector frame",
@@ -143,7 +200,9 @@ export function Bench() {
       vibe: { mood: "n/a", energy: 0, tags: ["bench"] },
     });
     return JSON.stringify(moment, null, 2);
-  }, [promoted, detections]);
+  }, [promoted, replayed]);
+
+  const preset = QUALITY_PRESETS[quality];
 
   return (
     <div className="space-y-6">
@@ -168,7 +227,9 @@ export function Bench() {
       >
         <CardHead n={1} title="Pick a model" hint="Weights download once, then stay cached.">
           {handle && (
-            <span className="fnote chip chip-live text-[10px]">[ loaded · {handle.device} ]</span>
+            <span className="fnote chip chip-live text-[10px]">
+              [ loaded · {handle.device} · {handle.dtype} ]
+            </span>
           )}
         </CardHead>
 
@@ -180,12 +241,7 @@ export function Bench() {
                 key={m.id}
                 type="button"
                 disabled={phase === "loading" || phase === "running"}
-                onClick={() => {
-                  setModelId(m.id);
-                  setHandle(null);
-                  setPhase("idle");
-                  setRaw(null);
-                }}
+                onClick={() => resetModel({ modelId: m.id })}
                 className="rounded-[10px] p-4 text-left transition-[box-shadow,background-color,transform] duration-300 ease-(--ease-signature) hover:-translate-y-0.5 disabled:opacity-50"
                 style={{
                   background: on ? "var(--color-pine)" : "transparent",
@@ -209,6 +265,34 @@ export function Bench() {
               </button>
             );
           })}
+        </div>
+
+        {/* Precision. The default on a machine without WebGPU is int8, which is
+            the single biggest hidden quality difference between two laptops. */}
+        <div className="mt-3.5 flex flex-wrap items-center gap-2">
+          <span className="tag text-[12px] text-ink-soft">Weights</span>
+          {(
+            [
+              ["auto", "Auto", "fp32 on WebGPU, int8 on WASM"],
+              ["full", "Full (fp32)", "Best boxes everywhere. Big download, slow on WASM."],
+              ["quantized", "Int8", "Smallest and fastest. Looser boxes."],
+            ] as const
+          ).map(([id, label, tip]) => (
+            <button
+              key={id}
+              type="button"
+              title={tip}
+              disabled={phase === "loading" || phase === "running"}
+              onClick={() => resetModel({ precision: id })}
+              className={
+                precision === id
+                  ? "pill-ghost bg-ink/8 px-3 py-1.5 text-[11.5px] font-semibold text-ink disabled:opacity-50"
+                  : "pill-ghost px-3 py-1.5 text-[11.5px] text-ink-soft disabled:opacity-50"
+              }
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {phase === "idle" && (
@@ -274,19 +358,22 @@ export function Bench() {
                 {raw?.map((d, i) => {
                   const color = colorForLabel(d.label.toLowerCase());
                   const dim = hoveredIdx !== null && hoveredIdx !== i;
+                  const isBest = bestIdx === i;
                   return (
                     <span
                       key={i}
                       onMouseEnter={() => setHoveredIdx(i)}
                       onMouseLeave={() => setHoveredIdx(null)}
-                      className="absolute rounded-[4px] border-2 transition-opacity duration-200"
+                      className="absolute rounded-[4px] transition-opacity duration-200"
                       style={{
                         left: `${d.box.xmin * 100}%`,
                         top: `${d.box.ymin * 100}%`,
                         width: `${(d.box.xmax - d.box.xmin) * 100}%`,
                         height: `${(d.box.ymax - d.box.ymin) * 100}%`,
-                        borderColor: color,
-                        boxShadow: `0 0 10px ${color}40`,
+                        // The best-angle box is drawn solid and the rest dashed,
+                        // so the pick is legible without reading a number.
+                        border: `2px ${isBest ? "solid" : "dashed"} ${color}`,
+                        boxShadow: isBest ? `0 0 0 2px ${color}55, 0 0 14px ${color}55` : "none",
                         opacity: dim ? 0.25 : 1,
                       }}
                     >
@@ -295,6 +382,7 @@ export function Bench() {
                         style={{ background: color, color: PINE }}
                       >
                         {d.label} {d.score.toFixed(2)}
+                        {d.agreement < 1 && ` · ${d.support}/${run?.passCount}`}
                       </span>
                     </span>
                   );
@@ -320,7 +408,36 @@ export function Bench() {
             )}
           </div>
 
-          <div className="mt-3.5 flex flex-wrap items-center gap-3">
+          {/* Quality preset — how many looks the detector gets at the frame. */}
+          <div className="mt-3.5 flex flex-wrap items-center gap-2">
+            <span className="tag text-[12px] text-ink-soft">Looks</span>
+            {QUALITY_ORDER.map((id) => {
+              const p = QUALITY_PRESETS[id];
+              const on = quality === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  title={p.note}
+                  disabled={phase === "running"}
+                  onClick={() => setQuality(id)}
+                  className={
+                    on
+                      ? "pill-ghost bg-ink/8 px-3 py-1.5 text-[11.5px] font-semibold text-ink disabled:opacity-50"
+                      : "pill-ghost px-3 py-1.5 text-[11.5px] text-ink-soft disabled:opacity-50"
+                  }
+                >
+                  {p.label}
+                  <span className="fnote tnum ml-1.5 text-[9.5px] text-ink-faint">
+                    ×{passCountFor(p)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="tag mt-1.5 text-[11.5px] text-ink-faint">{preset.note}</p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="tag flex items-center gap-2 text-[12px] text-ink-soft">
               Threshold
               <input
@@ -338,10 +455,14 @@ export function Bench() {
             <button
               type="button"
               disabled={!handle || !imageUrl || phase === "running"}
-              onClick={run}
+              onClick={detect}
               className={inkButtonClass("px-4 py-2 text-[13px]")}
             >
-              {phase === "running" ? "Detecting…" : "Run detection"}
+              {phase === "running"
+                ? passDone
+                  ? `Pass ${passDone[0]}/${passDone[1]}…`
+                  : "Detecting…"
+                : "Run detection"}
             </button>
 
             {imageUrl && (
@@ -354,9 +475,9 @@ export function Bench() {
               </button>
             )}
 
-            {elapsedMs !== null && (
+            {run && (
               <span className="fnote chip chip-live tnum text-[10px]">
-                [ {raw?.length ?? 0} boxes · {elapsedMs} ms ]
+                [ {run.detections.length} boxes · {run.passCount} passes · {run.elapsedMs} ms ]
               </span>
             )}
           </div>
@@ -364,11 +485,60 @@ export function Bench() {
 
         {/* ── 03 · Pipeline ─────────────────────────────────────────────── */}
         <section className="space-y-5">
+          {/* Best angle. The pick the pipeline would keep, and why. */}
           <div
             className="plate-vellum rise-in relative p-5 sm:p-6"
             style={{ "--i": 3 } as React.CSSProperties}
           >
-            <CardHead n={3} title="Detection[]" hint="Model output in the pipeline's own type." />
+            <CardHead
+              n={3}
+              title="Best angle"
+              hint="Scored on framing, not on the model's confidence."
+            >
+              <span
+                className="fnote chip chip-synth text-[10px]"
+                title="A still has no odometry, so the motion-blur term stays neutral for every box here."
+              >
+                [ no odometry ]
+              </span>
+            </CardHead>
+
+            {bestIdx !== null && detections[bestIdx] ? (
+              <>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <LabelDot label={detections[bestIdx].label} />
+                  <span className="text-[15px] font-semibold text-ink">
+                    {detections[bestIdx].label}
+                  </span>
+                  <span className="fnote tnum ml-auto text-[10px] text-moss">
+                    view {(views[bestIdx].score * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-ink-soft">
+                  Weakest: {views[bestIdx].critique}.
+                </p>
+                <TermBars view={views[bestIdx]} />
+                <p className="fnote mt-2.5 text-[9.5px] leading-relaxed text-ink-faint">
+                  [ this is the box the moment would keep, and the pose the robot would drive back
+                  to — not the highest-confidence one ]
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-[12px] text-ink-soft">
+                Run detection to see which look the pipeline would keep.
+              </p>
+            )}
+          </div>
+
+          <div
+            className="plate-vellum rise-in relative p-5 sm:p-6"
+            style={{ "--i": 4 } as React.CSSProperties}
+          >
+            <CardHead
+              n={4}
+              title="Detection[]"
+              hint="Model output in the pipeline's own type."
+            />
             {detections.length ? (
               <ul className="scrollbar-thin mt-2 max-h-52 overflow-y-auto pr-1">
                 {detections.map((d, i) => (
@@ -382,11 +552,24 @@ export function Bench() {
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <LabelDot label={d.label} />
-                      <span className="truncate text-[13px] font-medium text-ink">
-                        {d.label}
-                      </span>
+                      <span className="truncate text-[13px] font-medium text-ink">{d.label}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
+                      {/* Agreement across passes — the consistency readout. */}
+                      <span
+                        className="fnote tnum text-[10px]"
+                        title={`${raw?.[i].support ?? 0} of ${run?.passCount ?? 1} passes found this`}
+                        style={{
+                          color:
+                            (raw?.[i].agreement ?? 1) >= 0.75
+                              ? "var(--color-moss)"
+                              : (raw?.[i].agreement ?? 1) >= 0.4
+                                ? "var(--color-brass)"
+                                : "var(--color-clay)",
+                        }}
+                      >
+                        {raw?.[i].support}/{run?.passCount}
+                      </span>
                       <span className="fnote tnum text-[10px] text-ink-faint">{d.depthM} m</span>
                       <Meter value={d.confidence} />
                     </span>
@@ -402,16 +585,16 @@ export function Bench() {
 
           <div
             className="plate-vellum rise-in relative p-5 sm:p-6"
-            style={{ "--i": 4 } as React.CSSProperties}
+            style={{ "--i": 5 } as React.CSSProperties}
           >
             <CardHead
-              n={4}
+              n={5}
               title="What stage 2 makes of it"
               hint={`Same scorer as the day. Promote ≥ ${PIPELINE_CONFIG.promoteThreshold}.`}
             >
               <span
                 className="fnote chip chip-synth text-[10px]"
-                title="A still frame has no timeline — the scorer sees the frame replayed across a synthetic 16 s window."
+                title="A still frame has no timeline — the frame is replayed across a synthetic 16 s window and run through the real tracker, so the detections carry real trackIds."
               >
                 [ synthetic window ]
               </span>
@@ -439,10 +622,7 @@ export function Bench() {
                     </div>
                     <ul className="mt-1.5 space-y-1">
                       {c.triggers.slice(0, 4).map((t, i) => (
-                        <li
-                          key={i}
-                          className="flex items-center gap-1.5 text-[11.5px] text-ink"
-                        >
+                        <li key={i} className="flex items-center gap-1.5 text-[11.5px] text-ink">
                           <span
                             aria-hidden
                             className="inline-block h-2 w-2 shrink-0 rounded-[3px]"
@@ -470,7 +650,7 @@ export function Bench() {
 
           {momentJson && (
             <div className="plate-vellum rise-in relative p-5 sm:p-6">
-              <CardHead n={5} title="Promoted Moment" hint="What stage 3 would store.">
+              <CardHead n={6} title="Promoted Moment" hint="What stage 3 would store.">
                 <button
                   type="button"
                   onClick={() => navigator.clipboard?.writeText(momentJson)}
@@ -479,9 +659,7 @@ export function Bench() {
                   Copy JSON
                 </button>
               </CardHead>
-              <pre
-                className="plate-pine scrollbar-thin mt-2 max-h-64 overflow-auto p-3 font-mono text-[11px] leading-relaxed text-mist"
-              >
+              <pre className="plate-pine scrollbar-thin mt-2 max-h-64 overflow-auto p-3 font-mono text-[11px] leading-relaxed text-mist">
                 {momentJson}
               </pre>
             </div>
@@ -489,6 +667,43 @@ export function Bench() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** The six view terms as bars — makes "why this angle" readable at a glance. */
+function TermBars({ view }: { view: ViewScore }) {
+  const rows: Array<[string, number]> = [
+    ["framing", view.terms.framing],
+    ["wholeness", view.terms.wholeness],
+    ["centering", view.terms.centering],
+    ["aspect", view.terms.aspect],
+    ["certainty", view.terms.certainty],
+    ["steadiness", view.terms.steadiness],
+  ];
+  return (
+    <ul className="mt-2.5 space-y-1">
+      {rows.map(([name, value]) => (
+        <li key={name} className="flex items-center gap-2">
+          <span className="tag w-[68px] shrink-0 text-[11px] text-ink-soft">{name}</span>
+          <span
+            aria-hidden
+            className="h-[6px] flex-1 overflow-hidden rounded-full"
+            style={{ background: "rgb(27 27 24 / 0.08)" }}
+          >
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${Math.round(value * 100)}%`,
+                background: value >= 0.7 ? "var(--color-moss)" : "var(--color-brass)",
+              }}
+            />
+          </span>
+          <span className="fnote tnum w-[30px] shrink-0 text-right text-[9.5px] text-ink-faint">
+            {(value * 100).toFixed(0)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

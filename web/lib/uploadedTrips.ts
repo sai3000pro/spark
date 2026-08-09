@@ -32,7 +32,7 @@
  * No `next/*` imports: scripts/verify-pipeline.ts can reach this and runs under tsx.
  */
 import { promoteToMoment, scoreCandidates, type MomentContent } from "./pipeline";
-import { pathDistanceM } from "./mock/generatePath";
+import { generatePath, pathDistanceM, type Stop } from "./mock/generatePath";
 import { familyOf } from "./mock/labels";
 import { SCENE_HUES } from "./mock/placeholder";
 import { estimateCameraPath } from "./video/estimateMotion";
@@ -169,7 +169,7 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
   // reachable without odometry — without it the only signals are novelty and
   // face count, novelty all fires in the opening seconds, and every upload
   // returns zero moments. See the header of lib/video/estimateMotion.ts.
-  const path = estimateCameraPath(detections, durationSec);
+  const motionPath = estimateCameraPath(detections, durationSec);
 
   // Stage 2, for real. Still no audio, so the speech triggers cannot fire —
   // which is why an uploaded walk finds fewer moments than an authored one, and
@@ -179,7 +179,7 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
     durationSec,
     detections,
     audioEvents: [],
-    path,
+    path: motionPath,
   });
 
   const promoted = candidates.filter((c) => c.status !== "discarded");
