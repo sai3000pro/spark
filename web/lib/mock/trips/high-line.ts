@@ -9,20 +9,63 @@
  * one metro area to collapse.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  LAWN_TO_SPUR,
+  OVERLOOK_TO_LAWN,
+  SPUR_TO_END,
+  START_TO_OVERLOOK,
+} from "./high-line-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_high_line";
 const DURATION_SEC = 3120; // 52 min
 
-/** Local metres. The line runs roughly south → north, so +south decreases. */
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 40.73941, lng: -74.00811 }, bearingDeg: 0 });
+
+/** A baked leg (high-line-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots on the line, south to north. */
 const PLACES = {
-  start: [40, 520] as Vec2,
-  overlook: [130, 430] as Vec2,
-  lawn: [300, 260] as Vec2,
-  spur: [470, 90] as Vec2,
-  end: [520, 40] as Vec2,
+  start: P(40.73941, -74.00811), // the Gansevoort St stairs
+  overlook: P(40.74245, -74.00575), // the 10th Ave Square amphitheatre
+  lawn: P(40.746, -74.0048), // Chelsea Grasslands, around 20th St
+  spur: P(40.75335, -74.00095), // the Spur over 30th & 10th
+  end: P(40.754, -74.0023), // the 30th St run toward 11th Ave
 };
+
+/* ── The route — the actual elevated railbed, end to end ────────────────────
+ *
+ * The polylines live in high-line-route.gen.ts, baked from OpenStreetMap
+ * foot-way data by scripts/bake-routes.mjs. The line is one continuous
+ * elevated path, so every leg follows its real curves — the jog west of 10th
+ * Ave at the Standard, the bend at the rail yards — rather than a straight
+ * line drawn over city blocks it never touches.
+ */
+const ROUTE: RouteSegment[] = [
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 12, radiusM: 2.0 },
+
+  // Up the Gansevoort stairs and north at Manhattan pace.
+  { kind: "walk", departT: 12, arriveT: 412, via: LEG(START_TO_OVERLOOK) },
+  // The amphitheatre bleachers: the moment, then staying for the show.
+  { kind: "dwell", at: PLACES.overlook, fromT: 412, toT: 900, radiusM: 2.6 },
+
+  // Through the Chelsea Market passage to the grasslands.
+  { kind: "walk", departT: 900, arriveT: 1412, via: LEG(OVERLOOK_TO_LAWN) },
+  { kind: "dwell", at: PLACES.lawn, fromT: 1412, toT: 1538, radiusM: 3.0 },
+
+  // The long slow drift north with the crowd to the Spur.
+  { kind: "walk", departT: 1538, arriveT: 2502, via: LEG(LAWN_TO_SPUR) },
+  { kind: "dwell", at: PLACES.spur, fromT: 2502, toT: 2630, radiusM: 2.6 },
+
+  // The last stretch along 30th toward the yards.
+  { kind: "walk", departT: 2630, arriveT: 3010, via: LEG(SPUR_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 3010, toT: 3120, radiusM: 2.4 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -164,10 +207,14 @@ export const highLine: TripSpec = {
     label: "The High Line",
     region: "Manhattan, NY",
     country: "United States",
-    origin: { lat: 40.748, lng: -74.0048 },
+    // The authoring anchor: the Gansevoort St stairs, where the walk starts.
+    // The route is authored from real coordinates (bearing 0) — no calibration.
+    origin: { lat: 40.73941, lng: -74.00811 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

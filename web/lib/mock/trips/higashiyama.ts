@@ -4,19 +4,64 @@
  * A "postcard" trip. See the authoring rules in lib/mock/buildTrip.ts.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  BAMBOO_TO_END,
+  GATE_TO_BAMBOO,
+  LANE_TO_GATE,
+  START_TO_LANE,
+} from "./higashiyama-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_higashiyama";
 const DURATION_SEC = 4440; // 74 min
 
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 35.00095, lng: 135.77867 }, bearingDeg: 0 });
+
+/** A baked leg (higashiyama-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots in the temple district, in walking order. */
 const PLACES = {
-  start: [30, 460] as Vec2,
-  lane: [180, 380] as Vec2,
-  gate: [400, 220] as Vec2,
-  bamboo: [560, 80] as Vec2,
-  end: [600, 40] as Vec2,
+  start: P(35.00095, 135.77867), // Ishibe-kōji lane
+  lane: P(34.9987, 135.7808), // Ninenzaka, before the shops open
+  gate: P(34.9949, 135.7846), // Kiyomizu-dera's vermilion Niōmon
+  bamboo: P(34.9996, 135.7805), // the bamboo cut by Kōdai-ji
+  end: P(35.0008, 135.7801), // Nene-no-Michi
 };
+
+/* ── The route — every leg SNAPPED to the district's real lanes ─────────────
+ *
+ * The polylines live in higashiyama-route.gen.ts, baked from OpenStreetMap
+ * foot-way data by scripts/bake-routes.mjs: Ishibe-kōji's flagstones,
+ * Ninenzaka and Sannenzaka's steps, the climb up Kiyomizu-zaka to the gate,
+ * and the lanes back down past Kōdai-ji. Dawn pace — every leg is an amble,
+ * and nothing cuts through a temple wall.
+ */
+const ROUTE: RouteSegment[] = [
+  // Standing in Ishibe-kōji while the light comes up.
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 80, radiusM: 2.2 },
+
+  // Down the flagstones to an empty Ninenzaka.
+  { kind: "walk", departT: 80, arriveT: 602, via: LEG(START_TO_LANE) },
+  // The moment, then photographing the whole street before anyone comes.
+  { kind: "dwell", at: PLACES.lane, fromT: 602, toT: 1300, radiusM: 2.6 },
+
+  // Up Sannenzaka and Kiyomizu-zaka to the vermilion gate.
+  { kind: "walk", departT: 1300, arriveT: 2122, via: LEG(LANE_TO_GATE) },
+  { kind: "dwell", at: PLACES.gate, fromT: 2122, toT: 2266, radiusM: 2.4 },
+
+  // The long drift back down through the lanes to the bamboo by Kōdai-ji.
+  { kind: "walk", departT: 2266, arriveT: 3542, via: LEG(GATE_TO_BAMBOO) },
+  { kind: "dwell", at: PLACES.bamboo, fromT: 3542, toT: 3683, radiusM: 2.2 },
+
+  // Out to Nene-no-Michi for tea.
+  { kind: "walk", departT: 3683, arriveT: 3980, via: LEG(BAMBOO_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 3980, toT: 4440, radiusM: 2.6 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -158,10 +203,14 @@ export const higashiyama: TripSpec = {
     label: "Higashiyama",
     region: "Kyoto",
     country: "Japan",
-    origin: { lat: 34.998, lng: 135.785 },
+    // The authoring anchor: Ishibe-kōji, where the walk starts. The route is
+    // authored from real coordinates (bearing 0) — no calibration.
+    origin: { lat: 35.00095, lng: 135.77867 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

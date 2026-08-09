@@ -111,22 +111,35 @@ export function makeGeo(ref: GeoRef): TripGeo {
   return geo;
 }
 
-/* ── Authoring helper ──────────────────────────────────────────────────────────
+/* ── Authoring helpers ─────────────────────────────────────────────────────────
  *
- * The STACKT flagship's route is AUTHORED from real lat/lng waypoints read off
- * the actual streets and parks (see lib/mock/trips/stackt-market.ts), so the
- * drawn walk genuinely follows Bathurst, Fort York Blvd and the Martin Goodman
- * Trail instead of crossing buildings. This is the inverse transform for that
- * one authoring anchor — local frame true-north aligned (bearing 0), pinned at
- * STACKT Market's courtyard, matching that trip's `place.origin` exactly.
+ * Every trip's route is AUTHORED from real lat/lng waypoints read off the
+ * actual streets, trails and park paths (baked by scripts/bake-routes.mjs into
+ * the *-route.gen.ts files), so the drawn walks genuinely follow sidewalks and
+ * crossings instead of cutting through buildings. This is the inverse of
+ * localToLngLat for one trip's authoring anchor: build it with the SAME origin
+ * and bearing the trip's map calibration uses (`mapOrigin ?? origin`,
+ * `bearingDeg ?? 0`) and the map transform puts every waypoint back on the
+ * exact street it was read from. Waterloo Park is the trip that needs the
+ * bearing arm — its calibration is frozen bit-identical in verify-pipeline.
  */
-const STACKT_ORIGIN = { lng: -79.4022, lat: 43.6408 };
-const STACKT_M_PER_DEG_LNG = 111_320 * Math.cos((STACKT_ORIGIN.lat * Math.PI) / 180);
+export function makeLngLatToLocal(ref: GeoRef): (lat: number, lng: number) => Vec2 {
+  const mPerDegLng = 111_320 * Math.cos((ref.origin.lat * Math.PI) / 180);
+  const rot = (ref.bearingDeg * Math.PI) / 180;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  return (lat, lng) => {
+    const east = (lng - ref.origin.lng) * mPerDegLng;
+    const south = (ref.origin.lat - lat) * M_PER_DEG_LAT;
+    return [
+      Number((east * cos + south * sin).toFixed(1)),
+      Number((-east * sin + south * cos).toFixed(1)),
+    ];
+  };
+}
 
 /** Real [lat, lng] → the STACKT walk's local [x, z] metres. Authoring only. */
-export function lngLatToLocal(lat: number, lng: number): Vec2 {
-  return [
-    Number(((lng - STACKT_ORIGIN.lng) * STACKT_M_PER_DEG_LNG).toFixed(1)),
-    Number(((STACKT_ORIGIN.lat - lat) * M_PER_DEG_LAT).toFixed(1)),
-  ];
-}
+export const lngLatToLocal = makeLngLatToLocal({
+  origin: { lng: -79.4022, lat: 43.6408 },
+  bearingDeg: 0,
+});

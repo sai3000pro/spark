@@ -5,19 +5,64 @@
  * See the authoring rules in lib/mock/buildTrip.ts.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  CHAINS_TO_SUMMIT,
+  CONTOUR_TO_CHAINS,
+  START_TO_CONTOUR,
+  SUMMIT_TO_END,
+} from "./lions-head-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_lions_head";
 const DURATION_SEC = 3660; // 61 min
 
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: -33.93691, lng: 18.3949 }, bearingDeg: 0 });
+
+/** A baked leg (lions-head-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots on the mountain, trailhead to summit. */
 const PLACES = {
-  start: [40, 520] as Vec2,
-  contour: [220, 400] as Vec2,
-  chains: [430, 230] as Vec2,
-  summit: [560, 70] as Vec2,
-  end: [545, 95] as Vec2,
+  start: P(-33.93691, 18.3949), // the trailhead off Signal Hill Rd
+  contour: P(-33.93967, 18.39117), // the switchback where Camps Bay opens
+  chains: P(-33.93615, 18.3902), // the chain section, upper east face
+  summit: P(-33.93504, 18.38914), // Lion's Head peak
+  end: P(-33.9352, 18.389), // the summit rocks, a step off the beacon
 };
+
+/* ── The route — the real spiral path, baked from OSM ───────────────────────
+ *
+ * The polylines live in lions-head-route.gen.ts (scripts/bake-routes.mjs):
+ * the wide track that corkscrews up from Signal Hill Rd, the singletrack
+ * around the west face, and the chain scramble to the summit plateau. Leg
+ * speeds fall as the mountain steepens — 1.1 m/s on the lower track, ~0.7
+ * hauling the robot up the chains.
+ */
+const ROUTE: RouteSegment[] = [
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 30, radiusM: 2.0 },
+
+  // Up the track to the first switchback with the whole bay below.
+  { kind: "walk", departT: 30, arriveT: 522, via: LEG(START_TO_CONTOUR) },
+  { kind: "dwell", at: PLACES.contour, fromT: 522, toT: 807, radiusM: 2.6 },
+
+  // Around the west face on the narrowing singletrack.
+  { kind: "walk", departT: 807, arriveT: 1662, via: LEG(CONTOUR_TO_CHAINS) },
+  // The moment, then the honest queue at the bottom of the chains.
+  { kind: "dwell", at: PLACES.chains, fromT: 1662, toT: 2400, radiusM: 2.2 },
+
+  // The scramble itself — forty kilos of robot, hand over hand.
+  { kind: "walk", departT: 2400, arriveT: 2742, via: LEG(CHAINS_TO_SUMMIT) },
+  { kind: "dwell", at: PLACES.summit, fromT: 2742, toT: 2898, radiusM: 2.4 },
+
+  // Picking across the summit rocks to sit facing Table Mountain.
+  { kind: "walk", departT: 2898, arriveT: 3000, via: LEG(SUMMIT_TO_END) },
+  // Sunset. The whole reason for the climb.
+  { kind: "dwell", at: PLACES.end, fromT: 3000, toT: 3660, radiusM: 2.6 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -153,10 +198,14 @@ export const lionsHead: TripSpec = {
     label: "Lion's Head",
     region: "Cape Town",
     country: "South Africa",
-    origin: { lat: -33.935, lng: 18.389 },
+    // The authoring anchor: the Signal Hill Rd trailhead, where the walk
+    // starts. The route is authored from real coordinates (bearing 0).
+    origin: { lat: -33.93691, lng: 18.3949 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

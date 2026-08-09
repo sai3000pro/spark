@@ -16,20 +16,63 @@
  * backpack are not. No bottle anywhere in this trip: rule 6.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  BUILD_ROOM_TO_DEMO,
+  COURTYARD_TO_BUILD_ROOM,
+  DEMO_TO_END,
+  START_TO_COURTYARD,
+} from "./summerhacks-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_summerhacks";
 const DURATION_SEC = 3480; // 58 min
 
-/** Local metres. The yard runs roughly north–south along Bathurst. */
+/** Real [lat, lng] → yard-local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 43.64058, lng: -79.4019 }, bearingDeg: 0 });
+
+/** A baked leg (summerhacks-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots in the STACKT yard, read off the containers themselves. */
 const PLACES = {
-  start: [20, 210] as Vec2,
-  courtyard: [70, 165] as Vec2,
-  buildRoom: [150, 95] as Vec2,
-  demo: [225, 40] as Vec2,
-  end: [250, 20] as Vec2,
+  start: P(43.64058, -79.4019), // the Front St gate
+  courtyard: P(43.64085, -79.40235), // the container courtyard, mid-yard
+  buildRoom: P(43.6411, -79.40218), // the build-room container, east aisle
+  demo: P(43.64135, -79.40248), // the demo tables, north end
+  end: P(43.64142, -79.40232), // the north gate
 };
+
+/* ── The route — hand-read off the yard's aisles ────────────────────────────
+ *
+ * The legs live in summerhacks-route.gen.ts. The STACKT yard is private
+ * ground no mapper has drawn, so these are hand-read waypoints threading the
+ * lanes between the container stacks (see scripts/bake-routes.mjs) — never
+ * through a container. The long dwells are the honest shape of a hackathon:
+ * a day parked in one room, three short walks.
+ */
+const ROUTE: RouteSegment[] = [
+  // Arriving, finding the gate, gawking at the stacks.
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 168, radiusM: 2.0 },
+
+  // In through the yard to the badge table.
+  { kind: "walk", departT: 168, arriveT: 232, via: LEG(START_TO_COURTYARD) },
+  { kind: "dwell", at: PLACES.courtyard, fromT: 232, toT: 1480, radiusM: 3.0 },
+
+  // Badges done, coffee found: into the build room.
+  { kind: "walk", departT: 1480, arriveT: 1532, via: LEG(COURTYARD_TO_BUILD_ROOM) },
+  { kind: "dwell", at: PLACES.buildRoom, fromT: 1532, toT: 2820, radiusM: 2.2 },
+
+  // Up the aisle to the demo tables at the north end.
+  { kind: "walk", departT: 2820, arriveT: 2874, via: LEG(BUILD_ROOM_TO_DEMO) },
+  { kind: "dwell", at: PLACES.demo, fromT: 2874, toT: 3420, radiusM: 2.6 },
+
+  // Out the north gate.
+  { kind: "walk", departT: 3420, arriveT: 3438, via: LEG(DEMO_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 3438, toT: 3480, radiusM: 1.8 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -188,14 +231,15 @@ export const summerhacks: TripSpec = {
     label: "Stackt Market",
     region: "Toronto, ON",
     country: "Canada",
-    origin: { lat: 43.6415, lng: -79.4046 }, // 28 Bathurst St
-    // No mapOrigin: the pin and the walk want the same point here. The bearing
-    // turns the authored yard to run with Bathurst rather than due east —
-    // nudge it if the route sits crooked on the containers (authoring rule 8).
-    bearingDeg: -18,
+    // The authoring anchor: the yard's Front St gate at 28 Bathurst St. The
+    // route is authored from real coordinates (bearing 0), so the pin and the
+    // walk want exactly this point and no calibration nudge exists to make.
+    origin: { lat: 43.64058, lng: -79.4019 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

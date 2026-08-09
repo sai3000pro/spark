@@ -3,8 +3,9 @@
  * pedestrian ways (sidewalks, signalled crossings, park paths, the Martin
  * Goodman Trail) from OpenStreetMap foot-way data: Overpass pull over the
  * Fort York bbox, Dijkstra between the trip's stops with road classes
- * cost-penalized, Douglas-Peucker simplified to ~3.5 m. Re-bake with the
- * scratch script if a stop moves. Coordinates are [lat, lng].
+ * cost-penalized, Douglas-Peucker simplified to ~3.5 m. Re-bake with
+ * scripts/bake-routes.mjs (the stackt config, skipped by default) if a stop
+ * moves. Coordinates are [lat, lng].
  */
 
 /** courtyard->ramparts — 870 m on real ways. */

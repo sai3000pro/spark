@@ -42,3 +42,6 @@ next-env.d.ts
 # with its own lockfile and AGENTS.md; the design it produced lives in this repo as
 # app/globals.css tokens plus components/shell and components/trip.
 /Journey Moment Capture App/
+
+# bake-routes.mjs Overpass cache — 5 MB of raw OSM pulls, refetched on demand
+scripts/.bake-cache/

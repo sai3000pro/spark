@@ -5,18 +5,58 @@
  * See the authoring rules in lib/mock/buildTrip.ts.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  COLUMNS_TO_WATERLINE,
+  START_TO_COLUMNS,
+  WATERLINE_TO_END,
+} from "./reynisfjara-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_reynisfjara";
 const DURATION_SEC = 2640; // 44 min
 
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 63.40433, lng: -19.04523 }, bearingDeg: 0 });
+
+/** A baked leg (reynisfjara-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots on the beach, out and back. */
 const PLACES = {
-  start: [40, 300] as Vec2,
-  columns: [200, 220] as Vec2,
-  waterline: [380, 120] as Vec2,
-  end: [420, 90] as Vec2,
+  start: P(63.40433, -19.04523), // the car park above the beach
+  columns: P(63.40263, -19.03999), // the basalt columns at Hálsanefshellir
+  waterline: P(63.4033, -19.0428), // well back from the surf, mid-beach
+  end: P(63.40433, -19.04523), // back at the car park
 };
+
+/* ── The route — the real approach, then honest sand ────────────────────────
+ *
+ * The legs live in reynisfjara-route.gen.ts (scripts/bake-routes.mjs). The
+ * car park connects to the beach on its mapped path; the beach itself has no
+ * ways because sand doesn't, so those legs are hand-read arcs — out along
+ * the cliff base to the columns, back nearer the dunes — that keep a
+ * respectful distance from the waterline. Sneaker waves are real.
+ */
+const ROUTE: RouteSegment[] = [
+  // Zipping jackets in the car park wind.
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 100, radiusM: 2.2 },
+
+  // Down onto the sand and east under the cliff to the columns.
+  { kind: "walk", departT: 100, arriveT: 462, via: LEG(START_TO_COLUMNS) },
+  // The moment, then scrambling on the staircase built for nobody.
+  { kind: "dwell", at: PLACES.columns, fromT: 462, toT: 1100, radiusM: 2.6 },
+
+  // Back west along the sand, stopping well short of the surf.
+  { kind: "walk", departT: 1100, arriveT: 1330, via: LEG(COLUMNS_TO_WATERLINE) },
+  { kind: "dwell", at: PLACES.waterline, fromT: 1330, toT: 1718, radiusM: 3.0 },
+
+  // Up the beach to the car park and the warm car.
+  { kind: "walk", departT: 1718, arriveT: 1950, via: LEG(WATERLINE_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 1950, toT: 2640, radiusM: 2.4 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -116,10 +156,14 @@ export const reynisfjara: TripSpec = {
     label: "Reynisfjara",
     region: "Vík í Mýrdal",
     country: "Iceland",
-    origin: { lat: 63.403, lng: -19.044 },
+    // The authoring anchor: the beach car park, where the walk starts and
+    // ends. The route is authored from real coordinates (bearing 0).
+    origin: { lat: 63.40433, lng: -19.04523 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

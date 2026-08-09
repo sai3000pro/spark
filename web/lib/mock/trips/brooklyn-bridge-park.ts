@@ -8,18 +8,55 @@
  * A "postcard" trip. See the authoring rules in lib/mock/buildTrip.ts.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  CAROUSEL_TO_END,
+  PIER_TO_CAROUSEL,
+  START_TO_PIER,
+} from "./brooklyn-bridge-park-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_brooklyn_bridge_park";
 const DURATION_SEC = 2280; // 38 min
 
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 40.6975, lng: -73.9985 }, bearingDeg: 0 });
+
+/** A baked leg (brooklyn-bridge-park-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots along the piers, south to north. */
 const PLACES = {
-  start: [30, 380] as Vec2,
-  pier: [180, 280] as Vec2,
-  carousel: [340, 130] as Vec2,
-  end: [380, 90] as Vec2,
+  start: P(40.6975, -73.9985), // the greenway at Pier 3
+  pier: P(40.6995, -73.9989), // Pier 2's courts, under the bridge deck
+  carousel: P(40.70443, -73.99238), // Jane's Carousel in its glass box
+  end: P(40.7041, -73.9899), // the Main Street lawn
 };
+
+/* ── The route — every leg SNAPPED to the park's real greenway ──────────────
+ *
+ * The polylines live in brooklyn-bridge-park-route.gen.ts, baked from
+ * OpenStreetMap foot-way data by scripts/bake-routes.mjs: the waterfront
+ * greenway past Pier 1, under the Brooklyn Bridge, through Empire Fulton
+ * Ferry to the carousel — never through a pier shed or off the esplanade.
+ */
+const ROUTE: RouteSegment[] = [
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 60, radiusM: 2.2 },
+
+  // North on the greenway to the courts under the bridge deck.
+  { kind: "walk", departT: 60, arriveT: 442, via: LEG(START_TO_PIER) },
+  { kind: "dwell", at: PLACES.pier, fromT: 442, toT: 680, radiusM: 3.2 },
+
+  // Past Pier 1 and under the bridge to the carousel at dusk.
+  { kind: "walk", departT: 680, arriveT: 1402, via: LEG(PIER_TO_CAROUSEL) },
+  { kind: "dwell", at: PLACES.carousel, fromT: 1402, toT: 1548, radiusM: 2.6 },
+
+  // Around to the Main Street lawn to watch the lights come on.
+  { kind: "walk", departT: 1548, arriveT: 1790, via: LEG(CAROUSEL_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 1790, toT: 2280, radiusM: 3.0 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -119,10 +156,14 @@ export const brooklynBridgePark: TripSpec = {
     label: "Brooklyn Bridge Park",
     region: "Brooklyn, NY",
     country: "United States",
-    origin: { lat: 40.7002, lng: -73.9967 },
+    // The authoring anchor: the Pier 3 greenway, where the walk starts. The
+    // route is authored from real coordinates (bearing 0) — no calibration.
+    origin: { lat: 40.6975, lng: -73.9985 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

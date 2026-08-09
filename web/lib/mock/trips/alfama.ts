@@ -6,19 +6,66 @@
  * gallery and the album screen both have a reconstruction still cooking.
  */
 import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  STAIRS_TO_TERRACE,
+  START_TO_STAIRS,
+  TERRACE_TO_TRAM,
+  TRAM_TO_END,
+} from "./alfama-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 const TRIP_ID = "trip_alfama";
 const DURATION_SEC = 4080; // 68 min
 
+/** Real [lat, lng] → local metres. The whole file authors in coordinates. */
+const P = makeLngLatToLocal({ origin: { lat: 38.7099, lng: -9.12966 }, bearingDeg: 0 });
+
+/** A baked leg (alfama-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
+/** Real spots in the quarter, uphill in walking order. */
 const PLACES = {
-  start: [60, 480] as Vec2,
-  stairs: [190, 360] as Vec2,
-  terrace: [380, 200] as Vec2,
-  tram: [250, 90] as Vec2,
-  end: [120, 60] as Vec2,
+  start: P(38.7099, -9.12966), // Largo de São Rafael, low Alfama
+  stairs: P(38.71156, -9.12931), // the tiled steps by São Miguel
+  terrace: P(38.71174, -9.13022), // Miradouro de Santa Luzia
+  tram: P(38.71306, -9.12974), // Rua das Escolas Gerais — tram 28's street
+  end: P(38.7146, -9.1277), // Largo de São Vicente
 };
+
+/* ── The route — every leg SNAPPED to Alfama's real lanes ───────────────────
+ *
+ * The polylines live in alfama-route.gen.ts, baked from OpenStreetMap
+ * foot-way data by scripts/bake-routes.mjs: the stepped becos off São Miguel,
+ * the climb to Santa Luzia, and the tram-track street of Escolas Gerais. The
+ * lanes are three metres wide and the route threads them exactly — nothing
+ * cuts through a block. Slow leg speeds are the honest pace of Alfama:
+ * everything is uphill and half of it is stairs.
+ */
+const ROUTE: RouteSegment[] = [
+  // Coffee at São Rafael before committing to the hill.
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 230, radiusM: 2.6 },
+
+  // Up through the lanes to the foot of the tiled stairs.
+  { kind: "walk", departT: 230, arriveT: 542, via: LEG(START_TO_STAIRS) },
+  // The staircase negotiation, then a long recovery with the cat.
+  { kind: "dwell", at: PLACES.stairs, fromT: 542, toT: 1500, radiusM: 2.2 },
+
+  // The last climb to the miradouro.
+  { kind: "walk", departT: 1500, arriveT: 1780, via: LEG(STAIRS_TO_TERRACE) },
+  // A long sit at Santa Luzia — the view, the guitar, the running capture.
+  { kind: "dwell", at: PLACES.terrace, fromT: 1780, toT: 2800, radiusM: 2.8 },
+
+  // Around to Escolas Gerais, where the 28 owns the street.
+  { kind: "walk", departT: 2800, arriveT: 3192, via: LEG(TERRACE_TO_TRAM) },
+  { kind: "dwell", at: PLACES.tram, fromT: 3192, toT: 3318, radiusM: 2.0 },
+
+  // The tired final climb to São Vicente.
+  { kind: "walk", departT: 3318, arriveT: 3960, via: LEG(TRAM_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 3960, toT: 4080, radiusM: 2.4 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -153,12 +200,15 @@ export const alfama: TripSpec = {
     label: "Alfama",
     region: "Lisbon",
     country: "Portugal",
-    // Nudged uphill so the whole authored shape stays on Alfama's streets —
-    // at the old anchor the first minutes printed in the Tagus.
-    origin: { lat: 38.7138, lng: -9.1308 },
+    // The authoring anchor: Largo de São Rafael, where the walk starts. The
+    // route is authored from real coordinates (bearing 0), so the walk sits
+    // on Alfama's actual lanes by construction — no calibration nudging.
+    origin: { lat: 38.7099, lng: -9.12966 },
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   seeds: defaultSeeds(TRIP_ID),
 };

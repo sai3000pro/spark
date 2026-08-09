@@ -9,25 +9,94 @@
  * this trip — 6 moments, the water bottle's last sighting, the discard-reason
  * histogram. Changing a seed here reshuffles the detection stream and breaks all
  * of them. See the authoring rules in lib/mock/buildTrip.ts.
+ *
+ * The route is street-following like the STACKT flagship: every leg is baked
+ * onto the park's real paths (waterloo-park-route.gen.ts, from OpenStreetMap
+ * foot-way data), so the drawn walk follows the shore of Silver Lake and the
+ * park's actual promenades instead of flying straight lines between pins.
  */
 import { at, type MomentSpec, type TripSpec } from "../buildTrip";
+import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  BANDSTAND_TO_PAVILION,
+  GREEN_TO_BANDSTAND,
+  HILL_TO_END,
+  LAKE_TO_GREEN,
+  PAVILION_TO_SNACK_BAR,
+  SNACK_BAR_TO_HILL,
+  START_TO_LAKE,
+} from "./waterloo-park-route.gen";
+import { makeLngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
 export const TRIP_ID = "trip_waterloo_park";
 const DURATION_SEC = 5700; // 95 min
 
-/** Park-local metres. Ground plane is [east, south]; moment pins live in this frame. */
+/**
+ * Real [lat, lng] → park-local metres, through the SAME calibrated frame the
+ * map renders with (`place.mapOrigin` + `bearingDeg`, frozen bit-identical in
+ * verify-pipeline). Authoring through it means every baked waypoint lands back
+ * on the exact path it was read from. Ground plane is [east, south]; moment
+ * pins live in this frame.
+ */
+const P = makeLngLatToLocal({ origin: { lat: 43.4672, lng: -80.5372 }, bearingDeg: 8 });
+
+/** A baked leg (waterloo-park-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
+
 const PLACES = {
-  start: [40, 420] as Vec2,
-  lake: [150, 330] as Vec2,
-  green: [350, 240] as Vec2,
-  bandstand: [560, 340] as Vec2,
-  pavilion: [700, 120] as Vec2,
-  snackBar: [480, 60] as Vec2,
-  hill: [200, 110] as Vec2,
-  end: [55, 400] as Vec2,
+  start: P(43.46407, -80.53301), // the West Entrance off Father David Bauer Dr
+  lake: P(43.46568, -80.52765), // Silver Lake's south shore, grass off the path
+  green: P(43.4656, -80.5315), // the open lawn mid-park
+  bandstand: P(43.466, -80.5264), // the promenade by the Grist Mill
+  pavilion: P(43.46517, -80.53651), // the picnic shelter, west side
+  snackBar: P(43.4665, -80.5295), // the central path by the lagoon
+  hill: P(43.467, -80.5335), // the rise on the north path
+  end: P(43.46396, -80.53189), // the South Entrance
 };
+
+/* ── The route — every leg SNAPPED to the park's real paths ─────────────────
+ *
+ * The polylines live in waterloo-park-route.gen.ts, baked from OpenStreetMap
+ * foot-way data by scripts/bake-routes.mjs: the entrance paths off Father
+ * David Bauer, the shore path around Silver Lake, the promenade past the
+ * Grist Mill, and the Laurel Trail's crossings. The robot never cuts across
+ * the lake or through a building — the ways it follows are the ones a person
+ * can actually walk. Dwells cover each moment's window (padded ~18 s) so the
+ * pipeline's dwell trigger fires where the moments live.
+ */
+const ROUTE: RouteSegment[] = [
+  { kind: "dwell", at: PLACES.start, fromT: 0, toT: 20, radiusM: 2.0 },
+
+  // Straight to the water — the "it's actually following us" march.
+  { kind: "walk", departT: 20, arriveT: 462, via: LEG(START_TO_LAKE) },
+  { kind: "dwell", at: PLACES.lake, fromT: 462, toT: 900, radiusM: 3.0 },
+
+  // Along the shore and up onto the lawn for frisbee.
+  { kind: "walk", departT: 900, arriveT: 1287, via: LEG(LAKE_TO_GREEN) },
+  { kind: "dwell", at: PLACES.green, fromT: 1287, toT: 1700, radiusM: 3.6 },
+
+  // Back east along the promenade to the bench by the bandstand.
+  { kind: "walk", departT: 1700, arriveT: 2122, via: LEG(GREEN_TO_BANDSTAND) },
+  { kind: "dwell", at: PLACES.bandstand, fromT: 2122, toT: 2286, radiusM: 2.6 },
+
+  // The long cross-park leg to the pavilion steps.
+  { kind: "walk", departT: 2286, arriveT: 3047, via: LEG(BANDSTAND_TO_PAVILION) },
+  { kind: "dwell", at: PLACES.pavilion, fromT: 3047, toT: 3158, radiusM: 2.4 },
+
+  // Over to the snack bar; the fries dwell runs long on purpose.
+  { kind: "walk", departT: 3158, arriveT: 3827, via: LEG(PAVILION_TO_SNACK_BAR) },
+  { kind: "dwell", at: PLACES.snackBar, fromT: 3827, toT: 4400, radiusM: 2.8 },
+
+  // Up the north path to the lookout hill for golden hour.
+  { kind: "walk", departT: 4400, arriveT: 4817, via: LEG(SNACK_BAR_TO_HILL) },
+  { kind: "dwell", at: PLACES.hill, fromT: 4817, toT: 4980, radiusM: 3.0 },
+
+  // Down and out the South Entrance.
+  { kind: "walk", departT: 4980, arriveT: 5640, via: LEG(HILL_TO_END) },
+  { kind: "dwell", at: PLACES.end, fromT: 5640, toT: 5700, radiusM: 2.2 },
+];
 
 const MOMENTS: MomentSpec[] = [
   {
@@ -347,15 +416,17 @@ export const waterlooPark: TripSpec = {
     region: "Waterloo, ON",
     country: "Canada",
     origin: { lat: 43.4735, lng: -80.531 },
-    // The map calibration, deliberately ~860 m from the globe pin above: this is
-    // the park's south-west path entrance near Father David Bauer Dr, nudged
-    // with the 8° bearing until the authored walk hugs the real lawns rather
-    // than crossing Silver Lake. `origin` moves the pin, these move the walk.
+    // The map calibration, deliberately ~860 m from the globe pin above, and
+    // FROZEN bit-identical in verify-pipeline. The route is authored through
+    // this exact frame (see P above), so the walk lands on the park's real
+    // paths by construction. `origin` moves the pin, these move the walk.
     mapOrigin: { lat: 43.4672, lng: -80.5372 },
     bearingDeg: 8,
   },
   start: PLACES.start,
   end: PLACES.end,
+  route: ROUTE,
+  sampleSec: 3,
   moments: MOMENTS,
   // PINNED — do not replace with defaultSeeds(). See the file header.
   seeds: { detections: 1337, path: 4242, ambient: 90210, audio: 7788 },

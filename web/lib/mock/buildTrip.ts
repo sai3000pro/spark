@@ -45,11 +45,13 @@
  *   7. Splat status across the light trips: mostly ready, exactly one processing,
  *      zero failed. Waterloo already owns the failed case and it is the better
  *      story — two failures reads as a broken pipeline rather than an honest one.
- *   8. A new trip needs no map calibration. Omit `place.mapOrigin` and
- *      `place.bearingDeg` and the walk anchors on `place.origin` facing east,
- *      which is right often enough. Add them only after looking at the route on
- *      the real tiles — that is what they are for, and guessing them is worse
- *      than leaving them out.
+ *   8. Author the route from REAL coordinates. Add the trip's stops to
+ *      scripts/bake-routes.mjs, bake the legs onto OSM foot-ways, and write
+ *      PLACES/ROUTE through makeLngLatToLocal anchored at the start stop
+ *      (bearing 0). Then `place.origin` IS the anchor and no map calibration
+ *      exists to guess — every trip works this way now. Waterloo Park is the
+ *      one exception: it authors through its frozen mapOrigin + 8° bearing
+ *      because verify-pipeline pins that transform bit-identically.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import type {

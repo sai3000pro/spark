@@ -19,7 +19,9 @@ import { waterlooPark } from "./waterloo-park";
 
 /** Sorted newest first — the gallery groups by month and reads top-down. */
 export const TRIP_SPECS: readonly TripSpec[] = [
-  stacktMarket, // 2026-08-08 · Toronto, ON — the flagship, street-following route
+  // Every trip's route is street-following — baked onto real OSM foot-ways by
+  // scripts/bake-routes.mjs, the way the flagship always was.
+  stacktMarket, // 2026-08-08 · Toronto, ON — the flagship
   summerhacks, // 2026-08-08 · Toronto, ON — carries the one real capture
   waterlooPark, // 2026-08-02 · Waterloo, ON
   brooklynBridgePark, // 2026-06-16 · Brooklyn, NY
