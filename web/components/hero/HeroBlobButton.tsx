@@ -1050,11 +1050,13 @@ export function HeroBlobButton() {
           ? "Building the album…"
           : state === "error"
             ? (error ?? "Something went wrong")
-            // "Trip", not "journey". The app bar's green pill says "Start a
-            // trip?" forty pixels above this, the API route is /api/trip/start,
-            // and the library counts trips — a third word for the same act made
-            // one page read as three products.
-            : "Start a trip";
+            // "Trip", not "journey". The record pill says "Start a trip?" in the
+            // bar above this, the API route is /api/trip/start, and the library
+            // counts trips — a third word for the same act made one page read as
+            // three products. The question mark matches the pill too: the blob is
+            // asking, not announcing, and two controls that do the same thing
+            // should not be worded as if they were different.
+            : "Start a trip?";
 
   // A live trip is a state worth announcing whether or not you are looking at
   // the blob, so it overrides the sleep cycle.
@@ -1165,12 +1167,14 @@ export function HeroBlobButton() {
       // accessible name lives here permanently — a control whose name appears
       // only on hover is nameless to a screen reader. It carries the error too:
       // otherwise a failed trip is announced nowhere at all.
+      // Question mark and all — it has to match the visible label exactly, or a
+      // speech-input user cannot say what they can see.
       aria-label={
         state === "pending"
           ? "Setting off"
           : state === "error"
             ? `Could not start a trip: ${error ?? "something went wrong"}`
-            : "Start a trip"
+            : "Start a trip?"
       }
       // NO `title`. It carried "the rover-follow behaviour is not implemented
       // yet", which the browser showed as a native tooltip on the hero's primary

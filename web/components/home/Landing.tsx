@@ -759,6 +759,18 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
             )}
             <span className="sr-only">{air.on ? "Turn night air off" : "Turn night air on"}</span>
           </button>
+          {/* Ghost, not a second brass pill. Both of these are primary-ish, and
+              two solid fills side by side make neither one the answer to "what
+              do I do here?". The walk is what the page has been arguing for, so
+              it keeps the fill; starting a trip sits beside it in outline.
+              Worded exactly as the blob and the record pill word it. */}
+          <Link
+            href="/live"
+            className="pill-ghost hidden px-3.5 py-2 text-[13px] text-milk/85 transition-colors hover:text-milk sm:inline-flex"
+          >
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-clay" />
+            Start a trip?
+          </Link>
           <Link href="/walk" className="pill-brass px-4 py-2 text-[13px]">
             <Plus size={14} strokeWidth={2} aria-hidden />
             Step into the walk
