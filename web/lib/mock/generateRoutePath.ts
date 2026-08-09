@@ -110,8 +110,11 @@ export function generateRoutePath(
       via: seg.via,
       cum,
       total: cum[cum.length - 1],
-      weave: [rngRange(r, 1.1, 2.4), rngRange(r, 34, 70), rngRange(r, 0, 6.28)],
-      wobble: [rngRange(r, 0.35, 0.7), rngRange(r, 6, 12), rngRange(r, 0, 6.28)],
+      // Tight enough to stay on a sidewalk: the waypoints are real ways now,
+      // so the wander is drift WITHIN the walkable corridor, not a detour
+      // off it.
+      weave: [rngRange(r, 0.6, 1.3), rngRange(r, 34, 70), rngRange(r, 0, 6.28)],
+      wobble: [rngRange(r, 0.22, 0.45), rngRange(r, 6, 12), rngRange(r, 0, 6.28)],
     };
   });
 

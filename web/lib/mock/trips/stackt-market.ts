@@ -25,6 +25,14 @@ import { at, defaultSeeds, type MomentSpec, type TripSpec } from "../buildTrip";
 import type { TrackSpec } from "../generateDetections";
 import type { RouteSegment } from "../generateRoutePath";
 import { SCENE_HUES } from "../placeholder";
+import {
+  CANOE_TO_COURTYARD,
+  COMMON_TO_MAPLES,
+  COURTYARD_TO_RAMPARTS,
+  MAPLES_TO_SILOS,
+  RAMPARTS_TO_COMMON,
+  SILOS_TO_CANOE,
+} from "./stackt-route.gen";
 import { lngLatToLocal } from "../../geo";
 import type { Vec2 } from "../../types";
 
@@ -34,6 +42,9 @@ const STARTED_AT = "2026-08-08T18:10:00-04:00";
 
 /** Real [lat, lng] → robot-local metres. The whole file authors in coordinates. */
 const P = (lat: number, lng: number): Vec2 => lngLatToLocal(lat, lng);
+
+/** A baked leg (stackt-route.gen.ts) → local-frame waypoints. */
+const LEG = (pts: Array<[number, number]>): Vec2[] => pts.map(([lat, lng]) => P(lat, lng));
 
 /* ── The named spots ────────────────────────────────────────────────────── */
 const PLACES = {
@@ -45,138 +56,45 @@ const PLACES = {
   canoe: P(43.63918, -79.39565), // the red canoe, Canoe Landing
 };
 
-/* ── The route — every leg traced along the real streets ────────────────── */
+/* ── The route — every leg SNAPPED to real pedestrian ways ──────────────────
+ *
+ * The polylines live in stackt-route.gen.ts, baked from OpenStreetMap
+ * foot-way data: sidewalks along Bathurst and Strachan, the signalled
+ * crossings at Fort York Blvd and Lake Shore, the fort's paths, Remembrance
+ * Drive and the Martin Goodman Trail along the water, Dan Leckie Way through
+ * CityPlace, and a grass lap of Canoe Landing's field. The robot never walks
+ * through a building, across the rail corridor, or down a traffic lane —
+ * because the ways it follows are the ones a person can actually walk.
+ */
 const ROUTE: RouteSegment[] = [
   // Kickoff at the market (moment 1 lives in this dwell).
   { kind: "dwell", at: PLACES.courtyard, fromT: 0, toT: 283, radiusM: 3.2 },
 
-  // South on Bathurst, over the rail bridge, west under the fort's berm along
-  // Fort York Blvd, then up the garrison ramp onto the ramparts.
-  {
-    kind: "walk",
-    departT: 283,
-    arriveT: 972,
-    via: [
-      PLACES.courtyard,
-      P(43.64062, -79.40198), // out the Front St gate
-      P(43.6401, -79.40164), // Bathurst, past the brewery patio
-      P(43.6396, -79.40134), // the rail bridge — trains below
-      P(43.6392, -79.40109),
-      P(43.63875, -79.40082), // Fort York Blvd
-      P(43.63888, -79.402), // the path along the fort's south wall
-      P(43.63896, -79.4032),
-      P(43.639, -79.4044),
-      P(43.63898, -79.4054),
-      P(43.63905, -79.406), // through the west works
-      PLACES.ramparts,
-    ],
-  },
+  // Down Bathurst's sidewalk, over the rail bridge, the signalled crossing at
+  // Fort York Blvd, and the fort's own paths up to the western ramparts.
+  { kind: "walk", departT: 283, arriveT: 972, via: LEG(COURTYARD_TO_RAMPARTS) },
   { kind: "dwell", at: PLACES.ramparts, fromT: 972, toT: 1123, radiusM: 2.6 },
 
-  // Out the fort's west gate onto Garrison Common.
-  {
-    kind: "walk",
-    departT: 1123,
-    arriveT: 1382,
-    via: [
-      PLACES.ramparts,
-      P(43.6391, -79.4068),
-      P(43.63925, -79.4074), // the west gate
-      P(43.6395, -79.4079), // onto the open lawn
-      PLACES.common,
-    ],
-  },
+  // Out the west gate onto Garrison Common's lawn.
+  { kind: "walk", departT: 1123, arriveT: 1382, via: LEG(RAMPARTS_TO_COMMON) },
   { kind: "dwell", at: PLACES.common, fromT: 1382, toT: 1533, radiusM: 3.6 },
 
-  // South across the common, over Lake Shore at Strachan, into Coronation Park.
-  {
-    kind: "walk",
-    departT: 1533,
-    arriveT: 2202,
-    via: [
-      PLACES.common,
-      P(43.63935, -79.4088), // cutting across the grass
-      P(43.6388, -79.4093), // down Strachan's east side
-      P(43.6382, -79.4098),
-      P(43.6375, -79.4101),
-      P(43.6368, -79.41035),
-      P(43.6362, -79.4104), // Strachan & Lake Shore
-      P(43.6358, -79.4102), // the crossing
-      P(43.6354, -79.4094), // Coronation's northwest path
-      P(43.635, -79.4084),
-      PLACES.maples,
-    ],
-  },
+  // Strachan's sidewalk south, the Lake Shore crossing, into Coronation Park.
+  { kind: "walk", departT: 1533, arriveT: 2202, via: LEG(COMMON_TO_MAPLES) },
   { kind: "dwell", at: PLACES.maples, fromT: 2202, toT: 2363, radiusM: 2.6 },
 
-  // East along the water on the Martin Goodman Trail, past the yacht club to
-  // the silos at Bathurst Quay.
-  {
-    kind: "walk",
-    departT: 2363,
-    arriveT: 3342,
-    via: [
-      PLACES.maples,
-      P(43.6344, -79.4064), // down to the water's edge
-      P(43.6341, -79.4053),
-      P(43.634, -79.4042),
-      P(43.6342, -79.4031),
-      P(43.6345, -79.4021), // the yacht club gates
-      P(43.6348, -79.4011),
-      P(43.63475, -79.3999), // the quay's south walk
-      PLACES.silos,
-    ],
-  },
+  // Down to the water: Remembrance Drive and the Martin Goodman Trail past
+  // the yacht club, up Stadium Road to the silos at Bathurst Quay.
+  { kind: "walk", departT: 2363, arriveT: 3342, via: LEG(MAPLES_TO_SILOS) },
   { kind: "dwell", at: PLACES.silos, fromT: 3342, toT: 3498, radiusM: 2.2 },
 
-  // North up Bathurst past Fleet, then east on Fort York Blvd through
-  // CityPlace to Canoe Landing.
-  {
-    kind: "walk",
-    departT: 3498,
-    arriveT: 4482,
-    via: [
-      PLACES.silos,
-      P(43.6356, -79.3988), // up Eireann Quay, Little Norway on the left
-      P(43.63655, -79.39935), // Queens Quay & Bathurst
-      P(43.637, -79.39975), // north on Bathurst
-      P(43.6375, -79.40005),
-      P(43.6377, -79.40017), // Fleet St
-      P(43.6383, -79.40053),
-      P(43.63875, -79.40082), // Fort York Blvd again — east this time
-      P(43.63888, -79.3999),
-      P(43.639, -79.3989),
-      P(43.63912, -79.3979),
-      P(43.63922, -79.397), // Dan Leckie Way
-      P(43.63925, -79.3963),
-      PLACES.canoe,
-    ],
-  },
+  // Queens Quay, then Dan Leckie Way north through CityPlace to Canoe Landing.
+  { kind: "walk", departT: 3498, arriveT: 4482, via: LEG(SILOS_TO_CANOE) },
   { kind: "dwell", at: PLACES.canoe, fromT: 4482, toT: 4653, radiusM: 2.4 },
 
-  // A slow lap of the field, then home: west on Fort York Blvd, north over
-  // the bridge, back into the courtyard for food-hall hour.
-  {
-    kind: "walk",
-    departT: 4653,
-    arriveT: 5900,
-    via: [
-      PLACES.canoe,
-      P(43.63955, -79.3956), // up the field
-      P(43.6396, -79.3964), // and across it
-      P(43.63928, -79.3968), // back onto Fort York Blvd
-      P(43.63915, -79.3979),
-      P(43.63903, -79.3989),
-      P(43.6389, -79.3999),
-      P(43.63875, -79.40082),
-      P(43.6392, -79.4011), // north on Bathurst
-      P(43.6396, -79.40134), // the bridge again, dusk this time
-      P(43.64005, -79.40162),
-      P(43.64055, -79.40193), // Front St
-      P(43.6407, -79.4021),
-      PLACES.courtyard,
-    ],
-  },
+  // A slow grass lap of the field, then home: Fort York Blvd's sidewalk west,
+  // Bathurst north over the bridge, into the courtyard for food-hall hour.
+  { kind: "walk", departT: 4653, arriveT: 5900, via: LEG(CANOE_TO_COURTYARD) },
   { kind: "dwell", at: PLACES.courtyard, fromT: 5900, toT: 6300, radiusM: 3.4 },
 ];
 
@@ -478,12 +396,12 @@ const STREET_LIFE: TrackSpec[] = [
   { trackId: "t_sl_car2", label: "car", tStart: 2090, tEnd: 2108, worldPos: at(P(43.6362, -79.4104), 5.2, 0.7, 3.6), peakConfidence: 0.84, hz: 2.4, baseDepthM: 8.4, dropRate: 0.2 },
   { trackId: "t_sl_bus1", label: "bus", tStart: 2118, tEnd: 2136, worldPos: at(P(43.6362, -79.4104), -7.6, 1.5, 4.0), peakConfidence: 0.82, hz: 1.8, baseDepthM: 10.2 },
   // The Martin Goodman Trail: runners and gulls all the way east.
-  { trackId: "t_sl_runner1", label: "person", tStart: 2470, tEnd: 2500, worldPos: at(P(43.6344, -79.4064), 1.8, 0.9, -1.2), peakConfidence: 0.85, hz: 2.4, baseDepthM: 3.8 },
-  { trackId: "t_sl_runner2", label: "person", tStart: 2740, tEnd: 2768, worldPos: at(P(43.634, -79.4042), -2.0, 0.9, 1.4), peakConfidence: 0.83, hz: 2.4, baseDepthM: 4.2 },
-  { trackId: "t_sl_runner3", label: "person", tStart: 3080, tEnd: 3106, worldPos: at(P(43.6345, -79.4021), 2.4, 0.9, -0.8), peakConfidence: 0.8, hz: 2.2, baseDepthM: 4.6, dropRate: 0.2 },
-  { trackId: "t_sl_gull1", label: "bird", tStart: 2550, tEnd: 2604, worldPos: at(P(43.6344, -79.4064), -6.0, 3.8, -8.0), peakConfidence: 0.62, hz: 1.6, baseDepthM: 14.0, dropRate: 0.32 },
-  { trackId: "t_sl_gull2", label: "bird", tStart: 2880, tEnd: 2926, worldPos: at(P(43.6342, -79.4031), -4.2, 3.2, -9.6), peakConfidence: 0.6, hz: 1.6, baseDepthM: 15.5, dropRate: 0.34 },
-  { trackId: "t_sl_dog2", label: "dog", tStart: 2952, tEnd: 2988, worldPos: at(P(43.6342, -79.4031), 3.0, 0.4, 1.8), peakConfidence: 0.74, hz: 2, baseDepthM: 5.4, dropRate: 0.24 },
+  { trackId: "t_sl_runner1", label: "person", tStart: 2470, tEnd: 2500, worldPos: at(P(43.63385, -79.40595), 1.8, 0.9, -1.2), peakConfidence: 0.85, hz: 2.4, baseDepthM: 3.8 },
+  { trackId: "t_sl_runner2", label: "person", tStart: 2740, tEnd: 2768, worldPos: at(P(43.6336, -79.4043), -2.0, 0.9, 1.4), peakConfidence: 0.83, hz: 2.4, baseDepthM: 4.2 },
+  { trackId: "t_sl_runner3", label: "person", tStart: 3080, tEnd: 3106, worldPos: at(P(43.63345, -79.4025), 2.4, 0.9, -0.8), peakConfidence: 0.8, hz: 2.2, baseDepthM: 4.6, dropRate: 0.2 },
+  { trackId: "t_sl_gull1", label: "bird", tStart: 2550, tEnd: 2604, worldPos: at(P(43.63385, -79.40595), -6.0, 3.8, -8.0), peakConfidence: 0.62, hz: 1.6, baseDepthM: 14.0, dropRate: 0.32 },
+  { trackId: "t_sl_gull2", label: "bird", tStart: 2880, tEnd: 2926, worldPos: at(P(43.6335, -79.4034), -4.2, 3.2, -9.6), peakConfidence: 0.6, hz: 1.6, baseDepthM: 15.5, dropRate: 0.34 },
+  { trackId: "t_sl_dog2", label: "dog", tStart: 2952, tEnd: 2988, worldPos: at(P(43.6335, -79.4034), 3.0, 0.4, 1.8), peakConfidence: 0.74, hz: 2, baseDepthM: 5.4, dropRate: 0.24 },
   // After the silos: the race fleet's stragglers, still tacking home.
   { trackId: "t_sl_boat4", label: "boat", tStart: 3620, tEnd: 3680, worldPos: at(P(43.6356, -79.3988), 10.0, 0.8, -24.0), peakConfidence: 0.71, hz: 1.8, baseDepthM: 36.0, dropRate: 0.28 },
   // CityPlace: scooter kids and an off-leash goldendoodle on the Fort York Blvd green.
