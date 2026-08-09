@@ -191,6 +191,24 @@ ink shadows stay pressed on the ground, offset to the south-east and squashed by
 camera pitch. Sprites are pre-rendered gaussian-puff canvases; reduced motion stops the
 wind but keeps the sky.
 
+**The desk globe** (v5.8, `components/atlas/{PocketGlobe,GlobeOverlay,paperGlobe}.tsx`):
+the map carries its own instrument — a brass-ringed pocket globe idling at a slow turn
+in the walk's corner, every walk's origin dotted in clay. Clicking it opens the globe
+plate: the Earth stippled in pine ink on the page (the same fibonacci-sphere,
+distance-to-coast point machinery as the splat stage — coasts press hard, interiors sit
+back like a light stipple; no day/night terminator, ink has no night side), a MILK
+ocean whose fresnel limb shades in ink the way an engraver darkens a plate's edge, a
+brass equator with 24 meridian ticks, and a dotted brass expedition line hopping the
+walks in the order they were walked. Every walk is planted as the map's own
+swallow-tailed specimen banner (DOM, pressed-ink cycle by pin, −2.5° lean, straightens
+when hot) flying the walk's date; the open walk's banner breathes the sonar ring. A
+vellum gazetteer rail on the left is the keyboard interface and a second rendering of
+the pin list. Clicking a banner or row flies the camera (nlerp on direction — never
+through the planet), dives to just above the surface while a paper wash rises, and
+lands in that walk's survey map: the open walk simply closes the plate; any other walk
+navigates to `/walk?trip=<id>` — the walk screen is multi-trip now, georeferenced from
+each trip's own origin.
+
 ## Honesty
 
 Unchanged and non-negotiable — and now a landing feature: the [ DISCARDED ] shelf shows
