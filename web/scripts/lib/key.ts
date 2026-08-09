@@ -131,6 +131,15 @@ export interface Keyed {
   bodyPx: number;
   droppedComponents: number;
   meanEdgeLuma: number;
+  /** Pixels `alphaFloor` sent to zero — the halo's size, when there is one. */
+  floorZeroed: number;
+  /**
+   * Mean width of the silhouette's transparent-to-opaque ramp, in source px,
+   * against a circle-equivalent perimeter. About 1 means the sheet is
+   * hard-edged and will ship jagged unless `feather` is set; the painterly
+   * sheets measure in the tens.
+   */
+  edgeRampPx: number;
 }
 
 export interface KeyOptions {
@@ -139,10 +148,94 @@ export interface KeyOptions {
    * the right call for the walk strip, where every extra component is a firefly.
    * "all" keeps every component of at least `minComponent` px, which is what a
    * pose with a deliberate accessory (the Zzz, the hover glow) needs.
+   * "seeded" keeps exactly the components containing the given `seeds`, which is
+   * how a frame is cut out of a sheet where its NEIGHBOUR's artwork reaches into
+   * the same rectangle — see `seeds`.
    */
-  keep?: "largest" | "all";
+  keep?: "largest" | "all" | "seeded";
   /** Under "all", components smaller than this are treated as noise. */
   minComponent?: number;
+  /**
+   * One point per component to keep, in REGION coordinates. Required by
+   * `keep: "seeded"`.
+   *
+   * The jump sheet's apex flare is near-opaque where it crosses into the next
+   * frame's rectangle, so no rectangle contains exactly one frame. Cutting a
+   * generous region and naming the components that belong to it is the only
+   * split that survives that — and it has to be by POINT, not by box, because
+   * the intruding flare's box overlaps its neighbour's body.
+   */
+  seeds?: ReadonlyArray<{ x: number; y: number }>;
+  /**
+   * Alpha at or below this is background; above it the remainder is rescaled,
+   * `a' = (a - floor) / (1 - floor)`.
+   *
+   * For the sheet that draws every pose on a soft dark halo. The halo solves to
+   * a flat plateau just under alpha 0.06 — low enough to look like nothing, high
+   * enough to survive as a visible disc, and CONNECTED to the character so no
+   * component rule can drop it.
+   *
+   * Applied BEFORE the border flood, the labelling and the trim, so all three
+   * agree about what is background. Applying it later is exactly how the halo
+   * re-enters through connectivity.
+   */
+  alphaFloor?: number;
+  /**
+   * Gaussian sigma, in source pixels, applied to the alpha channel only.
+   *
+   * The painterly sheets carry a ~40 px feather and need none of this. The
+   * flat-shaded sheet steps from transparent to opaque in about one pixel, and
+   * downscaling a hard edge that has no ramp to resample ships a jagged
+   * silhouette.
+   *
+   * Applied AFTER the interior repaint, so it can only ever soften the outline —
+   * by then the interior is a flat 1.0 and the eyes cannot be blurred.
+   */
+  feather?: number;
+}
+
+/**
+ * Solve alpha for one pixel of a known composite over a flat field.
+ *
+ * Shared so the whole-sheet pass that finds frames and the per-region pass that
+ * cuts them can never disagree about what a pixel's alpha is.
+ */
+export const solveAlpha = (y: number, bgY: number, bodyY: number, floor = 0): number => {
+  const a = Math.min(1, Math.max(0, (y - bgY) / Math.max(1, bodyY - bgY)));
+  return floor <= 0 ? a : a <= floor ? 0 : (a - floor) / (1 - floor);
+};
+
+/** In-place separable Gaussian blur of an alpha plane. */
+function blurAlpha(alpha: Float32Array, w: number, h: number, sigma: number): void {
+  const radius = Math.max(1, Math.ceil(sigma * 3));
+  const kernel = new Float32Array(radius * 2 + 1);
+  let sum = 0;
+  for (let i = -radius; i <= radius; i++) {
+    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+    kernel[i + radius] = v;
+    sum += v;
+  }
+  for (let i = 0; i < kernel.length; i++) kernel[i] /= sum;
+
+  const tmp = new Float32Array(alpha.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let k = -radius; k <= radius; k++) {
+        acc += alpha[y * w + Math.min(w - 1, Math.max(0, x + k))] * kernel[k + radius];
+      }
+      tmp[y * w + x] = acc;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let k = -radius; k <= radius; k++) {
+        acc += tmp[Math.min(h - 1, Math.max(0, y + k)) * w + x] * kernel[k + radius];
+      }
+      alpha[y * w + x] = acc;
+    }
+  }
 }
 
 /**
@@ -164,11 +257,11 @@ export function keyRegion(
   bodyY: number,
   opts: KeyOptions = {},
 ): Keyed {
-  const { keep: keepMode = "largest", minComponent = 40 } = opts;
+  const { keep: keepMode = "largest", minComponent = 40, seeds, alphaFloor = 0, feather = 0 } = opts;
   const n = rw * rh;
   const alpha = new Float32Array(n);
   const rgb = new Uint8ClampedArray(n * 3);
-  const span = Math.max(1, bodyY - bg.y);
+  let floorZeroed = 0;
 
   for (let y = 0; y < rh; y++) {
     for (let x = 0; x < rw; x++) {
@@ -176,13 +269,16 @@ export function keyRegion(
       const R = img.data[si];
       const G = img.data[si + 1];
       const B = img.data[si + 2];
-      const a = Math.min(1, Math.max(0, (luma(R, G, B) - bg.y) / span));
+      const raw = solveAlpha(luma(R, G, B), bg.y, bodyY);
+      const a = solveAlpha(luma(R, G, B), bg.y, bodyY, alphaFloor);
+      if (raw > 0 && a === 0) floorZeroed++;
       const di = y * rw + x;
       alpha[di] = a;
 
-      // Un-premultiply: F = (C - (1-a)B) / a. The guard keeps the division sane
-      // where alpha is near zero; those pixels contribute nothing once composited.
-      const as = Math.max(a, 0.06);
+      // Un-premultiply: F = (C - (1-a)B) / a, against the RAW alpha — that is the
+      // one the pixel was actually composited with. Using the floored alpha here
+      // would over-brighten the feather it just thinned.
+      const as = Math.max(raw, 0.06);
       rgb[di * 3] = (R - (1 - as) * bg.rgb[0]) / as;
       rgb[di * 3 + 1] = (G - (1 - as) * bg.rgb[1]) / as;
       rgb[di * 3 + 2] = (B - (1 - as) * bg.rgb[2]) / as;
@@ -280,6 +376,10 @@ export function keyRegion(
     rgb[i * 3 + 2] = img.data[p + 2];
   }
 
+  // Only now, with the interior a flat 1.0, is it safe to soften the outline:
+  // the blur can reach the silhouette and nothing else.
+  if (feather > 0) blurAlpha(alpha, rw, rh, feather);
+
   // ── Label components ───────────────────────────────────────────────────────
   // Connectivity uses VISIBLE, not SOLID. A soft accessory's opaque core and its
   // glow are one object; thresholding at 0.5 would drop the core and leave the
@@ -328,9 +428,40 @@ export function keyRegion(
   const keepIds =
     keepMode === "largest"
       ? order.slice(0, comps.length ? 1 : 0)
-      : order.filter((i) => comps[i].size >= minComponent);
+      : keepMode === "seeded"
+        ? // Named by point, not by box. The neighbouring frame's flare has a box
+          // that overlaps this frame's body, so any rectangle test keeps it.
+          //
+          // The point is searched outward a little: a seed taken from a
+          // whole-sheet pass lands on that object's first pixel in scan order,
+          // which is by definition its faintest corner, and a pixel sitting
+          // exactly on the visibility threshold can fall the other side of it
+          // here. Measured: without this the jump's apex frame keys out empty.
+          [
+            ...new Set(
+              (seeds ?? [])
+                .map((s) => {
+                  const sx = Math.round(s.x);
+                  const sy = Math.round(s.y);
+                  for (let r = 0; r <= 4; r++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                      for (let dx = -r; dx <= r; dx++) {
+                        const x = sx + dx;
+                        const y = sy + dy;
+                        if (x < 0 || y < 0 || x >= rw || y >= rh) continue;
+                        const id = label[y * rw + x];
+                        if (id >= 0) return id;
+                      }
+                    }
+                  }
+                  return -1;
+                })
+                .filter((id) => id >= 0),
+            ),
+          ].sort((a, b) => comps[b].size - comps[a].size)
+        : order.filter((i) => comps[i].size >= minComponent);
   const keep = new Set(keepIds);
-  const mainId = order.length ? order[0] : -1;
+  const mainId = keepIds.length ? keepIds[0] : order.length ? order[0] : -1;
 
   // ── Compose RGBA, measure, and find the content bbox ────────────────────────
   const rgba = Buffer.alloc(n * 4);
@@ -341,6 +472,7 @@ export function keyRegion(
   let covered = 0;
   let edgeSum = 0;
   let edgeCount = 0;
+  let rampPx = 0;
 
   for (let i = 0; i < n; i++) {
     // Anything not kept is background — including pixels BELOW the VISIBLE
@@ -371,6 +503,11 @@ export function keyRegion(
         edgeCount++;
       }
     }
+    // How many pixels the silhouette takes to go from transparent to opaque —
+    // measured ONLY on pixels the border flood reached, i.e. the outside. Counted
+    // over the whole region it is meaningless: interior shading and the eyes sit
+    // below 0.94 and swamp it.
+    if (kept && reached[i] && alpha[i] > 0.06 && alpha[i] < 0.94) rampPx++;
   }
 
   return {
@@ -386,6 +523,10 @@ export function keyRegion(
     bodyPx: covered,
     droppedComponents: comps.length - keep.size,
     meanEdgeLuma: edgeCount ? edgeSum / edgeCount : 0,
+    floorZeroed,
+    // Ramp area over the silhouette's length: how many pixels wide the edge is,
+    // on average. ~1 means a hard-edged sheet that needs `feather`.
+    edgeRampPx: covered > 0 ? rampPx / Math.max(1, Math.round(4 * Math.sqrt(covered))) : 0,
   };
 }
 

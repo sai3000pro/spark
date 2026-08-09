@@ -98,7 +98,23 @@ export function releaseVelocity(samples: readonly Sample[]): { vx: number; vy: n
   return { vx: (last.x - first.x) / dt, vy: (last.y - first.y) / dt };
 }
 
-export type BallisticResult = "flying" | "apex" | "landed";
+export type BallisticResult = "flying" | "apex" | "bounce" | "landed";
+
+/**
+ * How long until it hits the ground, in seconds, ignoring drag.
+ *
+ * This is what lets the character SEE THE GROUND COMING and brace for it. A
+ * clock cannot: the flight's length depends on how hard it was thrown, so the
+ * moment of impact is not known until it nearly happens. Drag is left out on
+ * purpose — this is a ~130 ms lookahead, and over that span it changes the
+ * answer by less than a frame.
+ */
+export function timeToGround(m: Motion, env: Env): number {
+  if (m.y >= 0) return 0;
+  const g = GRAVITY * env.unit;
+  const drop = -m.y;
+  return (-m.vy + Math.sqrt(m.vy * m.vy + 2 * g * drop)) / g;
+}
 
 /**
  * Advance one frame of free flight. Mutates `m` — this runs inside rAF and
@@ -137,10 +153,12 @@ export function stepBallistic(m: Motion, dt: number, env: Env): BallisticResult 
   if (m.y >= 0) {
     m.y = 0;
     if (m.vy > SETTLE_VY * env.unit) {
-      // A real bounce.
+      // A real bounce, and it says so: the caller re-enters the arc's frames on
+      // each hop. Reporting it as ordinary flight — which this did — made every
+      // bounce after the first invisible to the animation.
       m.vy = -m.vy * RESTITUTION;
       m.vx *= GROUND_FRICTION;
-      return "flying";
+      return "bounce";
     }
     // Coming down slowly, or thrown flat along the ground in the first place.
     // Settling here on vertical speed alone would stop a hard sideways fling

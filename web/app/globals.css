@@ -1482,11 +1482,10 @@ button[aria-expanded="true"] .note-ring path {
   --blob-lift: -6px;
 }
 
-/* Touchdown. The origin is the feet, so it squashes onto the path rather than
-   shrinking toward its own middle. */
-.hero-blob[data-phase="landing"] {
-  scale: 1.06 0.92;
-}
+/* Touchdown used to be a CSS squash on the crouch drawing, because there was no
+   drawing of a landing. There is one now — the jump clip ends on a splash of
+   light — so squashing it again would deform artwork that already reads as
+   impact. */
 
 .hero-blob:focus-visible {
   outline: none;

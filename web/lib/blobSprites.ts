@@ -1,86 +1,167 @@
 /**
  * GENERATED FILE — do not edit. Run `npm run build:sprites` to regenerate.
  *
- * The blob's poses, cut from "Blob SpriteSheet No fireflies.png" and keyed
- * off its navy field. Every pose ships facing both ways. The sheet itself mixes
- * facings, so which file is the artwork and which is its flop varies by pose —
- * `paintedFacing` below records which, and nothing else needs to care.
+ * The blob's frames, cut from four art sheets and registered onto one character
+ * height and one foot line. Every frame ships facing both ways; the sheets mix
+ * facings, so `paintedFacing` records which file is the artwork and which is
+ * its flop, and nothing else needs to care.
  *
- * All poses share ONE cell and one registration point — the body's horizontal
- * centre and its foot line — so swapping pose or facing never moves the
- * character. Draw a sprite at `cellAr` and put `footY` of its height on the
- * ground and it will stand where every other pose stands.
+ * NEVER MIRROR A FRAME IN CSS. Frames marked `glyph` carry painted lettering —
+ * the Zzz, the question mark — and `scale: -1 1` turns them backwards. Both
+ * facings exist as separate files with the lettering composited the right way
+ * round.
+ *
+ * Draw a cell at `cellAr`, put `footY` of its height on the ground, and size it
+ * so that `bodyH` of its height is the character. Every cell agrees about all
+ * three, so swapping cells mid-animation moves nothing.
  */
 
 export type BlobFacing = "left" | "right";
 
-export type BlobPose =
-  | "idle"
+export type BlobFrame =
   | "smile"
+  | "wink"
   | "delight"
   | "surprised"
+  | "idle"
+  | "turn-0"
+  | "turn-1"
+  | "turn-2"
   | "wave"
-  | "sleep"
-  | "stand"
-  | "step"
+  | "doze"
+  | "turn-3"
+  | "turn-4"
+  | "turn-5"
+  | "turn-6"
+  | "turn-7"
+  | "turn-8"
+  | "walk-0"
   | "walk-1"
   | "walk-2"
   | "walk-3"
   | "walk-4"
-  | "crouch"
-  | "hop"
-  | "hover"
-  | "question";
+  | "walk-5"
+  | "walk-6"
+  | "walk-7"
+  | "sleep-0"
+  | "sleep-1"
+  | "sleep-2"
+  | "sleep-3"
+  | "sleep-4"
+  | "wake-0"
+  | "wake-1"
+  | "wake-2"
+  | "wake-3"
+  | "jump-0"
+  | "jump-1"
+  | "jump-2"
+  | "jump-3"
+  | "jump-4";
 
-/** Geometry shared by every sprite in the set. */
-export const BLOB_SPRITE = {
-  dir: "/sprites/blob",
-  width: 360,
-  height: 504,
-  cellAr: 0.714,
-  /** Fraction of the cell's height at which the feet touch the ground. */
-  footY: 0.768,
-  /**
-   * The standing character's own height, as a fraction of the cell's — foot
-   * line to the top of `idle`'s head. The rest of the cell is headroom for the
-   * Zzz and the "?" above, and room for the hover glow below the feet.
-   *
-   * Draw the CELL at `someHeight / bodyH` and the CHARACTER comes out
-   * `someHeight` tall, which is the number a layout actually has an opinion
-   * about.
-   */
-  bodyH: 0.6131,
-  /** Its width, as a fraction of the cell's. Symmetric about the centre. */
-  bodyW: 0.7556,
+export type BlobCellName = "base" | "jump";
+
+/** Geometry per cell. The character is 300 px tall in all of them. */
+export const BLOB_CELLS = {
+  base: { width: 380, height: 413, cellAr: 0.920, footY: 0.908, bodyH: 0.7264, bodyW: 0.7560 },
+  jump: { width: 738, height: 651, cellAr: 1.134, footY: 0.891, bodyH: 0.4608, bodyW: 0.4214 },
+} as const;
+
+/** The base cell under its old name, so existing call sites keep working. */
+export const BLOB_SPRITE = { dir: "/sprites/blob", ...BLOB_CELLS.base } as const;
+
+/** Which cell a frame is drawn in, and the facts that must not be guessed. */
+export const BLOB_FRAMES = {
+  "smile": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 0 },
+  "wink": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 1 },
+  "delight": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 2 },
+  "surprised": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 3 },
+  "idle": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 4 },
+  "turn-0": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 5 },
+  "turn-1": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 6 },
+  "turn-2": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 7 },
+  "wave": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 8 },
+  "doze": { cell: "base", paintedFacing: "right", glyph: true, source: "MoreAnimationsSprites.png", sheetIndex: 9 },
+  "turn-3": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 10 },
+  "turn-4": { cell: "base", paintedFacing: "left", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 11 },
+  "turn-5": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 12 },
+  "turn-6": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 13 },
+  "turn-7": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 14 },
+  "turn-8": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 15 },
+  "walk-0": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 16 },
+  "walk-1": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 17 },
+  "walk-2": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 18 },
+  "walk-3": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 19 },
+  "walk-4": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 20 },
+  "walk-5": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 21 },
+  "walk-6": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 22 },
+  "walk-7": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 23 },
+  "sleep-0": { cell: "base", paintedFacing: "right", glyph: false, source: "Blob sleep-cycle strip.png", sheetIndex: 0 },
+  "sleep-1": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 1 },
+  "sleep-2": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 2 },
+  "sleep-3": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 3 },
+  "sleep-4": { cell: "base", paintedFacing: "right", glyph: false, source: "Blob sleep-cycle strip.png", sheetIndex: 4 },
+  "wake-0": { cell: "base", paintedFacing: "right", glyph: true, source: "Asking question.png", sheetIndex: 0 },
+  "wake-1": { cell: "base", paintedFacing: "right", glyph: false, source: "Asking question.png", sheetIndex: 1 },
+  "wake-2": { cell: "base", paintedFacing: "right", glyph: true, source: "Asking question.png", sheetIndex: 2 },
+  "wake-3": { cell: "base", paintedFacing: "right", glyph: true, source: "Asking question.png", sheetIndex: 3 },
+  "jump-0": { cell: "jump", paintedFacing: "right", glyph: true, source: "Blob jumping.png", sheetIndex: 0 },
+  "jump-1": { cell: "jump", paintedFacing: "right", glyph: false, source: "Blob jumping.png", sheetIndex: 1 },
+  "jump-2": { cell: "jump", paintedFacing: "right", glyph: false, source: "Blob jumping.png", sheetIndex: 2 },
+  "jump-3": { cell: "jump", paintedFacing: "left", glyph: false, source: "Blob jumping.png", sheetIndex: 3 },
+  "jump-4": { cell: "jump", paintedFacing: "left", glyph: false, source: "Blob jumping.png", sheetIndex: 4 },
 } as const;
 
 /**
- * What each pose is, and where it came from.
+ * Named frame sequences.
  *
- * `sheetIndex` is the pose's position in the source sheet's reading order.
- * `glyph` marks a pose carrying lettering (the Zzz, the question mark) — that
- * lettering is composited after the flop, so it reads the right way round in
- * both facings and must never be mirrored by CSS.
+ * `fps`, `loop` and `rest` are DECLARED — frame timing is not in the artwork.
+ * `lift` is MEASURED: how far above the clip's ground line the artist drew each
+ * frame's feet, in body heights. That is what makes the jump actually rise.
  */
-export const BLOB_POSES = {
-  "idle": { note: "eyes open, at rest", sheetIndex: 0, paintedFacing: "left", glyph: false },
-  "smile": { note: "half-lidded smile", sheetIndex: 1, paintedFacing: "left", glyph: false },
-  "delight": { note: "eyes closed, open smile", sheetIndex: 2, paintedFacing: "left", glyph: false },
-  "surprised": { note: "wide eyes, round mouth", sheetIndex: 3, paintedFacing: "left", glyph: false },
-  "wave": { note: "near arm raised", sheetIndex: 4, paintedFacing: "left", glyph: false },
-  "sleep": { note: "eyes closed, painted Zzz", sheetIndex: 5, paintedFacing: "right", glyph: true },
-  "stand": { note: "feet together, arms down", sheetIndex: 6, paintedFacing: "left", glyph: false },
-  "step": { note: "one foot forward", sheetIndex: 7, paintedFacing: "left", glyph: false },
-  "walk-1": { note: "near arm swung forward", sheetIndex: 8, paintedFacing: "right", glyph: false },
-  "walk-2": { note: "arm crossing the body", sheetIndex: 9, paintedFacing: "right", glyph: false },
-  "walk-3": { note: "arms tucked, stride open", sheetIndex: 10, paintedFacing: "right", glyph: false },
-  "walk-4": { note: "stride at its widest", sheetIndex: 11, paintedFacing: "right", glyph: false },
-  "crouch": { note: "low, both arms down", sheetIndex: 12, paintedFacing: "left", glyph: false },
-  "hop": { note: "mid-stride over a lit glow", sheetIndex: 13, paintedFacing: "right", glyph: false },
-  "hover": { note: "floating, glow beneath", sheetIndex: 14, paintedFacing: "right", glyph: false },
-  "question": { note: "asking — question mark decal over the surprised pose", sheetIndex: 3, paintedFacing: "left", glyph: true },
+export const BLOB_CLIPS = {
+  sleep: {
+    note: "the Zzz gather and clear",
+    cell: "base",
+    frames: ["sleep-0", "sleep-1", "sleep-2", "sleep-3", "sleep-4"],
+    fps: 1.1,
+    loop: true,
+    rest: 3,
+    lift: [0.000, 0.000, 0.000, 0.000, 0.000],
+  },
+  wake: {
+    note: "asleep, drowsy, awake, asking",
+    cell: "base",
+    frames: ["wake-0", "wake-1", "wake-2", "wake-3"],
+    fps: 6,
+    loop: false,
+    rest: 3,
+    lift: [0.000, 0.002, 0.002, -0.016],
+  },
+  jump: {
+    note: "curious, crouch, lift-off, apex, landing",
+    cell: "jump",
+    frames: ["jump-0", "jump-1", "jump-2", "jump-3", "jump-4"],
+    fps: 12,
+    loop: false,
+    rest: 0,
+    lift: [0.000, -0.020, 0.381, 0.432, -0.014],
+  },
+  walk: {
+    note: "one full gait cycle, two footfalls",
+    cell: "base",
+    frames: ["walk-0", "walk-1", "walk-2", "walk-3", "walk-4", "walk-5", "walk-6", "walk-7"],
+    fps: 10,
+    loop: true,
+    rest: 0,
+    lift: [0.000, -0.004, -0.015, -0.015, -0.078, -0.078, -0.078, -0.075],
+  },
 } as const;
 
-/** The URL of one pose. Poses face left unless asked otherwise. */
-export const blobSprite = (pose: BlobPose, facing: BlobFacing = "left") =>
-  `/sprites/blob/${pose}-${facing}.webp`;
+export type BlobClipName = keyof typeof BLOB_CLIPS;
+
+/** The URL of one frame. */
+export const blobSprite = (frame: BlobFrame, facing: BlobFacing = "left") =>
+  `/sprites/blob/${frame}-${facing}.webp`;
+
+/** The cell a frame needs, for the four CSS custom properties. */
+export const blobCell = (frame: BlobFrame) => BLOB_CELLS[BLOB_FRAMES[frame].cell];

@@ -49,10 +49,12 @@ import { useRouter } from "next/navigation";
 import { useLiveTrip } from "@/components/shell/LiveTripProvider";
 import { elapsedLabel } from "@/lib/useActiveTrip";
 import {
-  BLOB_SPRITE,
+  BLOB_CLIPS,
+  blobCell,
   blobSprite,
+  type BlobClipName,
   type BlobFacing,
-  type BlobPose,
+  type BlobFrame,
 } from "@/lib/blobSprites";
 import {
   airFraction,
@@ -94,10 +96,14 @@ const REST_FACING: BlobFacing = "left";
 
 /** How long the blob keeps the invitation open after your cursor leaves. */
 const SLEEP_AFTER_MS = 6000;
-/** It stirs first, then asks — the prompt lands after the reaction reads. */
-const WAKE_TO_PROMPT_MS = 450;
-/** Anticipation before the leap. Short: any longer and it reads as hesitation. */
-const CROUCH_MS = 140;
+/*
+ * There is no wake-to-prompt constant any more. The offer arrives when the WAKE
+ * CLIP ENDS — its last drawing IS the asking one — so the label can no longer
+ * land before the character has finished stirring, which two independent clocks
+ * that merely happened to be about the same length allowed.
+ */
+/** Anticipation before the leap: the jump clip's first two drawings. */
+const CROUCH_MS = (2 / BLOB_CLIPS.jump.fps) * 1000;
 /** The squash on touchdown. */
 const LAND_MS = 220;
 /** If the server never answers, come back down rather than hang in the air. */
@@ -117,26 +123,117 @@ const MAX_FLING_PXS = 2600;
 const LEAP_V = 5;
 /** How far it may be thrown, as fractions of the plate box. */
 const ROAM = { left: 0.18, right: 0.3, ceiling: 0.55 };
-/** One walk frame per this much ground covered, in character-heights. */
-const WALK_STRIDE = 0.28;
+/**
+ * Ground covered by one full gait cycle, in character-heights.
+ *
+ * The stride is DERIVED from this and the clip's own length, so adding frames to
+ * the artwork makes the walk smoother without changing how far a step carries
+ * you. The constant this replaces hardcoded four frames and, at walking speed,
+ * ran the cycle at 3.2 fps — four near-identical drawings that slowly is what
+ * "there's no walk animation" meant.
+ */
+const WALK_CYCLE_UNITS = 1;
+/** A skid is a shorter, faster scrabble than a walk. */
+const SKID_CYCLE_UNITS = 0.8;
+/** Vertical speed below which the arc reads as weightless, in heights/s. */
+const APEX_VY = 1.2;
+/*
+ * There is no brace lookahead any more. It anticipated the ground with the
+ * jump sheet's landing drawing, which is a LEAP's drawing — on a throw it read
+ * as the blob deciding to land rather than being dropped. The touchdown beat
+ * still uses it, from its own phase and its own cell; the descent is just a
+ * shocked face. `timeToGround` stays in lib/blobPhysics.ts for it.
+ */
 
-const WALK_CYCLE = [
-  "walk-1",
-  "walk-2",
-  "walk-3",
-  "walk-4",
-] as const satisfies readonly BlobPose[];
+/** Frames fetched when it first stirs — the wake beat covers the round trip. */
+const WARM_WAKE: BlobFrame[] = [...BLOB_CLIPS.wake.frames];
+/** Frames fetched on first touch — the long press and the drag cover these. */
+const WARM_PLAY: BlobFrame[] = [...BLOB_CLIPS.jump.frames, "surprised", "idle"];
+/** Frames fetched once a drag is really under way — the flight covers these. */
+const WARM_WALK: BlobFrame[] = [...BLOB_CLIPS.walk.frames];
 
-/** Poses fetched when it first stirs — the wake beat covers the round trip. */
-const WARM_WAKE: BlobPose[] = ["stand", "question"];
-/** Poses fetched on first touch — the long press and the drag cover these. */
-const WARM_PLAY: BlobPose[] = [
-  "surprised",
-  "crouch",
-  "hop",
-  "hover",
-  ...WALK_CYCLE,
-];
+/**
+ * WHAT THE CHARACTER IS DOING, AS A FRAME SEQUENCE.
+ *
+ * Two kinds, and the difference is the whole design:
+ *
+ *   TIMED    a clock advances the frame — sleeping, waking, crouching, landing.
+ *            One shared timer, cleared with the rest.
+ *   PHYSICS  no clock at all. The frame is chosen inside the rAF that is already
+ *            running, from velocity or distance covered. That is why a fall that
+ *            lasts 250 ms and one that bounces for 1.5 s are both right, and why
+ *            frames can never advance while the character is standing still.
+ *
+ * A one-shot is NEVER cancelled by a hover-out, only by a gesture or unmount —
+ * a character whose reaction snaps backwards when your cursor twitches reads as
+ * broken in a way a still image never does.
+ */
+interface Sequence {
+  frames: readonly BlobFrame[];
+  /** ms per frame. Absent means the physics loop picks the frame. */
+  frameMs?: number;
+  loop?: boolean;
+  /** Start here rather than at 0. */
+  from?: number;
+  /** Play the frames backwards — the nod-off is the wake, reversed. */
+  reverse?: boolean;
+  /** Where a one-shot goes when it finishes. Data, so the driver's deps stay primitive. */
+  then?: Phase;
+}
+
+const clipMs = (c: BlobClipName) => 1000 / BLOB_CLIPS[c].fps;
+
+const SEQUENCES = {
+  /**
+   * z, zz, zzz, then nothing.
+   *
+   * The strip's first and last drawings are BOTH empty-headed, so looping all
+   * five shows nothing twice in a row and the Zzz look like they stall. Dropping
+   * the leading one makes the cycle read as it was drawn: the z's gather, then
+   * clear. Starting at the empty frame means the loop opens on the same drawing
+   * the server painted.
+   */
+  sleep: {
+    frames: BLOB_CLIPS.sleep.frames.slice(1),
+    frameMs: clipMs("sleep"),
+    loop: true,
+    from: BLOB_CLIPS.sleep.frames.length - 2,
+  },
+  "nod-off": {
+    frames: BLOB_CLIPS.wake.frames,
+    frameMs: 220,
+    reverse: true,
+    then: "asleep",
+  },
+  wake: { frames: BLOB_CLIPS.wake.frames, frameMs: clipMs("wake"), then: "asking" },
+  // The wake clip's LAST drawing is the asking one, so this holds the same file
+  // the clip ended on: no swap, no flicker, no second fetch.
+  ask: { frames: [BLOB_CLIPS.wake.frames[BLOB_CLIPS.wake.frames.length - 1]] },
+  held: { frames: ["surprised"] },
+  crouch: { frames: BLOB_CLIPS.jump.frames.slice(0, 2), frameMs: clipMs("jump") },
+  /**
+   * LEAPING. The drawn jump — lift-off, apex flare — for the launch only, which
+   * is the thing it was drawn for.
+   */
+  air: { frames: BLOB_CLIPS.jump.frames },
+  /**
+   * THROWN. One shocked face for the whole arc, bounces included.
+   *
+   * Not the jump drawings: a blob you hurled across the scene is not leaping,
+   * and lighting the apex flare every time it bounces reads as the character
+   * doing it on purpose. The landing is still the drawn touchdown — that beat
+   * has its own phase and its own cell.
+   */
+  tossed: { frames: ["surprised"] },
+  /** Scrabbling along the ground after a flat fling. */
+  skid: { frames: BLOB_CLIPS.walk.frames },
+  walk: { frames: BLOB_CLIPS.walk.frames },
+  wait: { frames: [BLOB_CLIPS.jump.frames[2]] },
+  working: { frames: ["smile"] },
+  oops: { frames: ["surprised"] },
+} as const satisfies Record<string, Sequence>;
+
+type SequenceName = keyof typeof SEQUENCES;
 
 interface Grab {
   id: number;
@@ -156,19 +253,30 @@ export function HeroBlobButton() {
 
   const [phase, setPhase] = useState<Phase>("asleep");
   const [facing, setFacing] = useState<BlobFacing>(REST_FACING);
-  const [walkFrame, setWalkFrame] = useState(0);
   /**
-   * Why it is in the air, which is not the same question as whether it is.
+   * Why it is in the air, which decides WHICH DRAWINGS the arc is made of.
    *
-   * A LEAP is the blob launching itself off the lit path, and `hop` — which is
-   * drawn with the path's glow under its feet — is exactly that picture. A THROW
-   * is the blob being hurled through the sky by you, where that same painted
-   * glow follows it up into the air and reads as a light with nothing to shine
-   * on. Thrown, it is simply startled.
+   * A LEAP is the character launching itself, and the jump sheet was drawn for
+   * exactly that — crouch, lift-off, flare. A THROW is you hurling it across the
+   * scene, where those same drawings read as the blob doing it deliberately; it
+   * just looks shocked instead. They are also drawn in different CELLS, so this
+   * is not a cosmetic choice: mixing them mid-arc resizes the character.
    */
   const [flight, setFlight] = useState<"leap" | "throw">("throw");
 
   const rootRef = useRef<HTMLButtonElement | null>(null);
+  /**
+   * Lives on the <img> itself, not on the root, so it survives the
+   * <button>-to-<a> swap when a trip goes live.
+   */
+  const spriteRef = useRef<HTMLImageElement | null>(null);
+  /** Last URL written imperatively, so an unchanged frame costs nothing. */
+  const lastSrc = useRef("");
+  /** Cursor into the running sequence. */
+  const cursor = useRef(0);
+  const clipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Gates the nod-off, so a cold load does not play a reverse-wake on hydration. */
+  const wasAwake = useRef(false);
   const motion = useRef<Motion>({ x: 0, y: 0, vx: 0, vy: 0, hold: false });
   const grab = useRef<Grab | null>(null);
   const samples = useRef<Sample[]>([]);
@@ -177,13 +285,13 @@ export function HeroBlobButton() {
   /** What kind of pointer last touched it — a hybrid laptop has both. */
   const pointerKind = useRef<string>("mouse");
 
-  const promptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sleepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const warmedWake = useRef(false);
   const warmedPlay = useRef(false);
+  const warmedWalk = useRef(false);
   const prefetched = useRef(false);
 
   const state: BlobState = pending
@@ -214,11 +322,86 @@ export function HeroBlobButton() {
     shownPhase === "launched";
   const isLive = (state === "recording" || state === "processing") && !airborne;
 
+  /**
+   * Nodding off rather than simply asleep — the wake clip in reverse. Only after
+   * it was actually awake: without the guard every cold load plays a
+   * reverse-wake at hydration, which is worse than the hard cut it replaces.
+   */
+  const [nodding, setNodding] = useState(false);
+  /**
+   * Scrabbling along the ground rather than falling through the air.
+   *
+   * It is its own state and not just a branch inside the physics loop because
+   * the two are drawn in DIFFERENT CELLS — the airborne frames come from the
+   * jump sheet, the scrabble borrows the walk cycle — and the cell is a React
+   * prop. Swapping the image without swapping the cell stretches the drawing to
+   * fill a box built for the apex flare, which is what "it got really big as it
+   * was dropping" was.
+   */
+  const [skidding, setSkidding] = useState(false);
+  const skidRef = useRef(false);
+
   /** On its feet at home — so the offsets should be back at zero. */
   const grounded =
     shownPhase === "asleep" ||
     shownPhase === "waking" ||
     shownPhase === "asking";
+
+  /**
+   * WHICH SEQUENCE, as a pure function of the trip and the phase.
+   *
+   * React decides this; the driver decides which frame within it. That split is
+   * the whole re-render defence — see the poster below.
+   */
+  const seqName: SequenceName =
+    shownPhase === "grabbed"
+      ? "held"
+      : shownPhase === "crouching"
+        ? "crouch"
+        : shownPhase === "flying"
+          ? skidding
+            ? "skid"
+            : flight === "leap"
+              ? "air"
+              : "tossed"
+          : shownPhase === "landing"
+            ? "air"
+          : shownPhase === "launched"
+            ? "wait"
+            : shownPhase === "walking"
+              ? "walk"
+              : state === "pending" || state === "recording"
+                ? "wait"
+                : state === "processing"
+                  ? "working"
+                  : state === "error"
+                    ? "oops"
+                    : shownPhase === "asking"
+                      ? "ask"
+                      : shownPhase === "waking"
+                        ? "wake"
+                        : nodding
+                          ? "nod-off"
+                          : "sleep";
+
+  const seq: Sequence = SEQUENCES[seqName];
+  /**
+   * THE POSTER — the only frame React ever writes.
+   *
+   * While a sequence runs this prop is CONSTANT, so React emits no `src` write
+   * and the driver's imperative frames survive every re-render. Which matters
+   * more than it sounds: a live trip re-renders this component once a second as
+   * `elapsedSec` ticks, and with `src` derived from a frame index every clip
+   * would restart on every tick.
+   *
+   * The landing beat posters on the touchdown drawing rather than the clip's
+   * first frame, because it is a single held frame out of the middle of a clip.
+   */
+  const poster: BlobFrame =
+    shownPhase === "landing"
+      ? seq.frames[seq.frames.length - 1]
+      : seq.frames[seq.from ?? (seq.reverse ? seq.frames.length - 1 : 0)];
+  const cell = blobCell(poster);
 
   const clearTimer = (
     t: React.RefObject<ReturnType<typeof setTimeout> | null>,
@@ -266,8 +449,12 @@ export function HeroBlobButton() {
     if (!el || !box) return null;
     const plate = box.getBoundingClientRect();
     return {
-      // The CELL is taller than the character; the physics wants the character.
-      unit: el.getBoundingClientRect().height * BLOB_SPRITE.bodyH,
+      // The CELL is taller than the character and the two cells are taller by
+      // different amounts, so the fraction is read back off the element rather
+      // than assumed — during a jump this element is the big cell.
+      unit:
+        el.getBoundingClientRect().height *
+        (parseFloat(getComputedStyle(el).getPropertyValue("--sprite-body-h")) || 1),
       minX: -ROAM.left * plate.width,
       maxX: ROAM.right * plate.width,
       ceiling: -ROAM.ceiling * plate.height,
@@ -301,20 +488,21 @@ export function HeroBlobButton() {
     // Only a sleeping blob can be woken. Anything else — mid-throw, walking
     // home, already asking — is left to finish what it is doing.
     if (phase !== "asleep") return;
+    setNodding(false);
+    wasAwake.current = true;
+    // No timer: the wake clip ENDS in `asking`, so the offer arrives exactly
+    // when the character has finished stirring rather than on a second clock
+    // that merely happened to be about the same length.
     setPhase("waking");
-    promptTimer.current = setTimeout(
-      () => setPhase("asking"),
-      WAKE_TO_PROMPT_MS,
-    );
   }, [phase, warmWake]);
 
   const settle = useCallback(() => {
     clearTimer(sleepTimer);
     sleepTimer.current = setTimeout(() => {
-      clearTimer(promptTimer);
       // Six seconds later, so the phase is read HERE rather than captured when
       // your cursor left. An updater, not a read of state, because that is the
       // only way to see the phase as of the moment the nap actually lands.
+      setNodding(wasAwake.current);
       setPhase((p) => (p === "waking" || p === "asking" ? "asleep" : p));
     }, SLEEP_AFTER_MS);
   }, []);
@@ -325,7 +513,6 @@ export function HeroBlobButton() {
   // trip started would leave the ground glow stranded off to one side forever.
   useEffect(
     () => () => {
-      clearTimer(promptTimer);
       clearTimer(sleepTimer);
       clearTimer(phaseTimer);
       clearTimer(pressTimer);
@@ -339,18 +526,74 @@ export function HeroBlobButton() {
     [],
   );
 
+  // ── Writing one frame ──────────────────────────────────────────────────────
+  // Imperative, like `paint`. React owns which SEQUENCE is running; the driver
+  // owns which frame within it. See the poster `src` below for why that split is
+  // what keeps a live trip's 1 Hz clock from restarting every clip.
+  const showFrame = useCallback(
+    (frame: BlobFrame, face: BlobFacing) => {
+      const url = blobSprite(frame, face);
+      if (url === lastSrc.current) return;
+      lastSrc.current = url;
+      if (spriteRef.current) spriteRef.current.src = url;
+    },
+    [],
+  );
+
+  // ── The clip driver ────────────────────────────────────────────────────────
+  // Timed sequences only. Physics sequences arm no timer at all — their frames
+  // come from the rAF below — which is what makes "frames advancing while the
+  // character is standing still" impossible rather than merely unlikely.
+  //
+  // Deps are primitive strings, and SEQUENCES is frozen at module level, so
+  // nothing here is reconstructed per render and no clip restarts on one.
+  useEffect(() => {
+    const s = SEQUENCES[seqName] as Sequence;
+    const n = s.frames.length;
+    const at = (i: number) => s.frames[s.reverse ? n - 1 - i : i];
+    cursor.current = s.from ?? 0;
+    showFrame(at(cursor.current), facing);
+
+    // Reduced motion keeps every POSE — a drawing is not a translation across
+    // the screen — but stops the ambient loop. `sleep` holds the frame the
+    // server already painted, so there is no swap at all.
+    if (!s.frameMs || (reduced && s.loop)) return;
+
+    const tick = () => {
+      cursor.current++;
+      if (cursor.current >= n) {
+        if (s.loop) cursor.current = 0;
+        else {
+          // A one-shot hands over and stops. Clearing `nodding` here is what
+          // lets the nod-off give way to the sleep LOOP: its `then` is "asleep",
+          // which is the phase it is already in, so the phase alone would never
+          // change and the character would hold its last frame for ever.
+          setNodding(false);
+          if (s.then) setPhase(s.then);
+          return;
+        }
+      }
+      showFrame(at(cursor.current), facing);
+      clipTimer.current = setTimeout(tick, s.frameMs);
+    };
+    clipTimer.current = setTimeout(tick, s.frameMs);
+    return () => clearTimer(clipTimer);
+  }, [seqName, facing, reduced, showFrame]);
+
   // ── The physics loop ───────────────────────────────────────────────────────
   // One rAF, owned by the phase that needs it, mutating refs and writing the DOM
-  // directly. It calls setState only at transitions and at ≤12 Hz for the walk
-  // frame — never per frame.
+  // directly. It calls setState only at transitions — never per frame.
   useEffect(() => {
     if (phase !== "flying" && phase !== "walking") return;
     const env = bounds();
     if (!env) return;
 
+    const air = SEQUENCES.air.frames;
+    const skid = SEQUENCES.skid.frames;
+    const walk = SEQUENCES.walk.frames;
     let raf = 0;
     let last = performance.now();
-    let stride = 0;
+    let travelled = 0;
 
     const frame = (now: number) => {
       // Clamped: a backgrounded tab hands back a dt of several seconds, which
@@ -362,32 +605,76 @@ export function HeroBlobButton() {
       if (phase === "flying") {
         const result = stepBallistic(m, dt, env);
         paint(m.x, m.y, airFraction(m, env), tumble(m, env));
+
+        // THE FRAME COMES FROM THE MOTION. A clock cannot do this: the flight is
+        // as long as the throw was hard, and the moment of impact is not known
+        // until it is nearly here — which is exactly when the character needs to
+        // start bracing for it.
+        const v = m.vy / env.unit;
+        const onGround = m.y >= 0 && Math.abs(m.vx) > 0;
+        if (onGround !== skidRef.current) {
+          skidRef.current = onGround;
+          setSkidding(onGround); // once per transition — the cell has to follow
+        }
+        if (onGround) {
+          // Scrabbling along the ground: the walk cycle, driven by ground
+          // covered. This is the beat the old version showed one static drawing
+          // for, while the blob slid several hundred pixels.
+          travelled += Math.abs(m.vx) * dt;
+          const step = (SKID_CYCLE_UNITS * env.unit) / skid.length;
+          if (travelled >= step) travelled -= step;
+          showFrame(skid[Math.floor(travelled / step) % skid.length], facing);
+        } else if (flight === "throw") {
+          // Thrown: one shocked face for the whole arc, bounces and all. It must
+          // also be the frame the SEQUENCE posters, or the cell underneath does
+          // not match the drawing on top of it and the character resizes in
+          // mid-air.
+          showFrame("surprised", facing);
+        } else if (v < -APEX_VY) {
+          showFrame(air[2], facing); // leaping, on the way up
+        } else if (Math.abs(v) <= APEX_VY) {
+          showFrame(air[3], facing); // weightless at the top, flare and all
+        } else {
+          showFrame(air[2], facing);
+        }
+
         if (result === "apex") {
           setPhase("launched");
           return;
         }
         if (result === "landed") {
           paint(m.x, 0, 0, 0);
+          skidRef.current = false;
+          setSkidding(false);
           setPhase("landing");
           return;
         }
       } else {
-        setFacing(m.x > 0 ? "left" : "right");
         const { moved, arrived } = stepWalk(m, dt, env);
-        stride += moved;
-        if (stride >= WALK_STRIDE * env.unit) {
-          stride -= WALK_STRIDE * env.unit;
-          setWalkFrame((f) => (f + 1) % WALK_CYCLE.length);
-        }
+        // Cadence locked to DISTANCE, not to time: that is what stops it
+        // moon-walking when the last step home is shorter than the others.
+        travelled += moved;
+        const step = (WALK_CYCLE_UNITS * env.unit) / walk.length;
+        showFrame(walk[Math.floor(travelled / step) % walk.length], facing);
         paint(m.x, 0, 0, 0);
         if (arrived) {
           snapHome();
+          showFrame(walk[0], REST_FACING); // both feet planted, not mid-stride
           setFacing(REST_FACING);
-          // If you are still hovering it when it gets back, it picks the
-          // conversation up where it left off rather than falling asleep in
-          // front of you.
           const over = rootRef.current?.matches(":hover") ?? false;
-          setPhase(over ? "asking" : "asleep");
+          if (over) {
+            // Still under your cursor when it gets back — it picks the
+            // conversation up rather than settling down in front of you.
+            setPhase("asking");
+          } else {
+            // IT SITS DOWN. The walk is drawn standing and the resting art is
+            // drawn seated, so arriving straight into the sleep loop would snap
+            // the character from its feet to the ground in one frame. The wake
+            // clip played backwards IS that transition — alert, drowsy, down —
+            // and then the sleep loop takes over.
+            setNodding(true);
+            setPhase("asleep");
+          }
           return;
         }
       }
@@ -396,12 +683,18 @@ export function HeroBlobButton() {
 
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [phase, bounds, paint, snapHome]);
+  }, [phase, facing, flight, bounds, paint, snapHome, showFrame]);
 
-  // Touchdown: a beat of squash, then it picks itself up and walks back.
+  // Touchdown: a beat on the drawn landing, then it picks itself up and walks.
   useEffect(() => {
     if (phase !== "landing") return;
-    phaseTimer.current = setTimeout(() => setPhase("walking"), LAND_MS);
+    phaseTimer.current = setTimeout(() => {
+      // Face the way it is about to travel. `stepWalk` always moves toward home
+      // and never overshoots, so this is fixed for the whole walk and needs no
+      // per-frame state — the old version set it 60 times a second.
+      setFacing(motion.current.x > 0 ? "left" : "right");
+      setPhase("walking");
+    }, LAND_MS);
     return () => clearTimer(phaseTimer);
   }, [phase]);
 
@@ -456,8 +749,16 @@ export function HeroBlobButton() {
     if (!g || g.engaged) return;
     g.engaged = true;
     dragged.current = true;
+    // The facing it walks home in is not known until it is released, which is far
+    // too late to fetch. A drag has a whole flight of cover, so warm both.
+    if (!warmedWalk.current) {
+      warmedWalk.current = true;
+      for (const f of WARM_WALK) {
+        preload(blobSprite(f, "left"), { as: "image" });
+        preload(blobSprite(f, "right"), { as: "image" });
+      }
+    }
     clearTimer(pressTimer);
-    clearTimer(promptTimer);
     clearTimer(sleepTimer);
     setPhase("grabbed");
   }, []);
@@ -564,7 +865,6 @@ export function HeroBlobButton() {
   };
 
   const launch = () => {
-    clearTimer(promptTimer);
     clearTimer(sleepTimer);
     // The network call goes out NOW, in parallel with the anticipation — the
     // animation is cover for the round trip, not a thing that delays it.
@@ -605,34 +905,6 @@ export function HeroBlobButton() {
     }
     launch();
   };
-
-  /** The drawing to show. A pure function of the trip, the phase and the frame. */
-  const pose: BlobPose =
-    shownPhase === "grabbed"
-      ? "surprised"
-      : shownPhase === "crouching" || shownPhase === "landing"
-        ? "crouch"
-        : shownPhase === "flying"
-          ? flight === "leap"
-            ? "hop"
-            : "surprised"
-          : shownPhase === "launched"
-            ? "hover"
-            : shownPhase === "walking"
-              ? WALK_CYCLE[walkFrame]
-              : state === "pending"
-                ? "hover"
-                : state === "recording"
-                  ? "hover"
-                  : state === "processing"
-                    ? "smile"
-                    : state === "error"
-                      ? "surprised"
-                      : shownPhase === "asking"
-                        ? "question"
-                        : shownPhase === "waking"
-                          ? "stand"
-                          : "sleep";
 
   const label =
     state === "pending"
@@ -680,13 +952,14 @@ export function HeroBlobButton() {
           resolution, and the character would be a hole in the scene until then. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={spriteRef}
         className="hero-blob__sprite"
-        src={blobSprite(pose, facing)}
+        src={blobSprite(poster, facing)}
         alt=""
         aria-hidden
         draggable={false}
-        width={BLOB_SPRITE.width}
-        height={BLOB_SPRITE.height}
+        width={cell.width}
+        height={cell.height}
         decoding="sync"
         fetchPriority="high"
       />
@@ -701,11 +974,15 @@ export function HeroBlobButton() {
   // the cell is taller than the blob (headroom for the Zzz and the "?", room for
   // the hover glow), so the CSS has to inflate the box by exactly the fraction
   // of it that is character.
+  // Written from the CELL THE CURRENT FRAME IS DRAWN IN. The jump needs a bigger
+  // box than everything else — its apex flare is 2.8x the body's half-width — and
+  // these four fractions are what make swapping to it invisible: the character
+  // stays the same height and its feet stay on the same line.
   const style = {
-    "--sprite-cell-ar": BLOB_SPRITE.cellAr,
-    "--sprite-foot-y": BLOB_SPRITE.footY,
-    "--sprite-body-h": BLOB_SPRITE.bodyH,
-    "--sprite-body-w": BLOB_SPRITE.bodyW,
+    "--sprite-cell-ar": cell.cellAr,
+    "--sprite-foot-y": cell.footY,
+    "--sprite-body-h": cell.bodyH,
+    "--sprite-body-w": cell.bodyW,
   } as React.CSSProperties;
 
   if (isLive) {
