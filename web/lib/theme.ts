@@ -85,3 +85,35 @@ export const inkForMoment = (index: number): MomentInk =>
 
 /** Background for the 3D splat stage — the journal's dark pine plate. */
 export const CANVAS_BG = PINE;
+
+/* ── AURORA NIGHT — the original landing at `/` ──────────────────────────────
+ *
+ * The second palette, mirroring the @theme block of the same name in
+ * globals.css. Same contract as everything above: change one, change both.
+ *
+ * Only what is drawn OUTSIDE the DOM needs literals, which here is the brand
+ * glyph — SparkMark is an <svg> and cannot take a Tailwind class on a `fill`.
+ * Everything else in the aurora landing goes through utilities.
+ */
+export const BRAND = {
+  300: "#ffc45c",
+  400: "#f5a623",
+  500: "#d98613",
+  600: "#a8620a",
+} as const;
+
+export const MACHINE = {
+  300: "#7ff0e2",
+  400: "#2dd4bf",
+  500: "#14b8a6",
+  600: "#0d9488",
+} as const;
+
+/** ready · reconstructing · stand-in data · failed. */
+export const STATE = {
+  signal: "#34d399",
+  signalDim: "#10b981",
+  compute: "#a78bfa",
+  warn: "#facc15",
+  fail: "#fb7185",
+} as const;

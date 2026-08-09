@@ -77,6 +77,67 @@
   /* Exactly two curves — registered in GSAP CustomEase under the same names. */
   --ease-signature: cubic-bezier(0.785, 0.135, 0.15, 0.86);
   --ease-reveal: cubic-bezier(0.5, 0, 0, 1);
+
+  /* ── AURORA NIGHT — the original landing at `/` ───────────────────────────
+     A SECOND, self-contained palette living beside FIELD NOTES, not merged
+     into it. The two designs are both shipped: `/` is the aurora scene with
+     the blob companion, `/landing-page` is the journal.
+
+     It is additive by construction. Every name here is one FIELD NOTES does
+     not use — note `--color-ink-950` and FIELD NOTES' `--color-ink` are
+     different Tailwind utilities (`bg-ink-950` vs `bg-ink`), so nothing is
+     shadowed. The three tokens the two systems WOULD have fought over —
+     --font-display, --font-sans, --font-mono — are deliberately absent; the
+     aurora components inherit the journal's faces for those and only the
+     headline face is restored, as --font-hero.
+
+     Delete this block and the aurora landing loses its entire palette: Tailwind
+     v4 generates utilities FROM @theme, so `bg-ink-850` and `text-fog-100`
+     would stop existing rather than fall back to something. */
+
+  /* The ink ramp moves as a unit — L* deltas preserved, hue locked to 284°.
+     950↔900 is 1.057, 900↔850 is 1.042. Lifting one alone flattens every card. */
+  --color-ink-950: #0b0f1e;
+  --color-ink-900: #111624;
+  --color-ink-850: #151a2a;
+  --color-ink-800: #191e30;
+  --color-ink-700: #1b2133;
+  --color-ink-600: #23293e;
+  --color-ink-500: #353c55;
+
+  --color-fog-400: #6b6880;
+  --color-fog-300: #a8a3c2;
+  --color-fog-200: #c8c4dc;
+  --color-fog-100: #e8e6f0;
+
+  /* Brand — interactive chrome ONLY, never a category. */
+  --color-brand-300: #ffc45c;
+  --color-brand-400: #f5a623;
+  --color-brand-500: #d98613;
+  --color-brand-600: #a8620a;
+
+  --color-machine-300: #7ff0e2;
+  --color-machine-400: #2dd4bf;
+  --color-machine-500: #14b8a6;
+  --color-machine-600: #0d9488;
+
+  --color-memory-300: #fdba74;
+  --color-memory-400: #f59e0b;
+  --color-memory-500: #d97706;
+  --color-memory-600: #b45309;
+
+  --color-signal-400: #34d399;
+  --color-signal-500: #10b981;
+  --color-compute-400: #a78bfa;
+  --color-compute-500: #8b5cf6;
+  --color-warn-400: #facc15;
+  --color-fail-400: #fb7185;
+
+  /* The landing hero's face. Falls back through the journal's grotesk, so a
+     font failure degrades to Schibsted rather than to Times. */
+  --font-hero: var(--font-poppins), var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
@@ -114,6 +175,45 @@ body {
   background: var(--color-paper);
 }
 
+/*
+  ── The aurora-night ground ────────────────────────────────────────────────
+
+  `/` is the aurora landing and `/landing-page` is the journal, so the document
+  cannot commit to one ground. `.aurora-app` (set by app/(app)/layout.tsx) is
+  the switch: it carries the tokens the aurora components read directly rather
+  than through Tailwind, and `body:has()` follows it so overscroll behind the
+  dark page shows navy instead of a band of cream paper.
+
+  Scoped to the class, never to :root — the journal owns :root and both designs
+  ship at once.
+*/
+.aurora-app {
+  color-scheme: dark;
+  min-height: 100vh;
+  background: var(--color-ink-950);
+  color: var(--color-fog-100);
+
+  --bg: var(--color-ink-950);
+  --surface: var(--color-ink-900);
+  --surface-raised: var(--color-ink-850);
+  /* A white wash rather than a flat grey, which is what keeps panels feeling
+     lit from within instead of outlined. */
+  --border: rgb(255 255 255 / 0.07);
+  --border-strong: rgb(255 255 255 / 0.12);
+  --radius: 12px;
+
+  /* The app bar's DECLARED height. AppBar sets its box from this and the hero
+     subtracts it to fill exactly one viewport, so it cannot be emergent. */
+  --appbar-h: 60px;
+  /* Zero in a browser; DeviceFrame's phone preview overrides it to the notch
+     safe-area so the hero still ends exactly at the preview's fold. */
+  --frame-inset: 0px;
+}
+
+body:has(.aurora-app) {
+  background: var(--color-ink-950);
+}
+
 body {
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -149,6 +249,75 @@ h3 {
 }
 
 @layer utilities {
+  /* ════ AURORA NIGHT utilities — the original landing at `/` ═══════════
+     These went missing when the two designs were merged: the journal replaced
+     this layer wholesale, and the aurora components kept referencing classes
+     that no longer existed. `.h-hero` was the loud one — without it
+     .hero-stage measured 0 tall, so `100cqh` resolved to zero, the plate box
+     sized itself from width alone, and the scene collapsed to nothing between
+     the app bar and the library. */
+
+  .surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .surface-raised {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+  }
+  /* Panels floating over the map or the 3D stage. The blur is what makes what
+     is behind read as a layer underneath rather than a background image. */
+  .glass {
+    background: color-mix(in srgb, var(--color-ink-950) 88%, transparent);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+  .glass-raised {
+    background: color-mix(in srgb, var(--color-ink-900) 92%, transparent);
+    border: 1px solid var(--border-strong);
+    backdrop-filter: blur(16px);
+  }
+  /* Mono uppercase micro-label — every section eyebrow in the aurora design. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-fog-400);
+  }
+  /* Faint grid behind the map and timeline — robot coordinate space. */
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /*
+    Exactly one viewport, with the app bar floating OVER it.
+
+    The negative margin pulls the scene up underneath the sticky bar, so the
+    artwork is genuinely full-bleed and the bar reads as chrome laid on top of
+    it rather than a band above it.
+
+    svh, not dvh or vh. dvh re-resolves as mobile browser chrome collapses — and
+    it collapses WHILE you are scrolling out of the hero, so the page would jump
+    under your finger.
+
+    `height`, NOT `min-height`, and that is load-bearing rather than stylistic:
+    .hero-stage is a `container-type: size` query container, which requires a
+    DEFINITE size in both axes. Nothing inside the hero is in flow, so a definite
+    height costs nothing.
+
+    The calc() has to live HERE rather than in a variable: var() would substitute
+    --frame-inset against the element that declares it, so DeviceFrame's override
+    on a descendant would never re-resolve.
+  */
+  .h-hero {
+    height: calc(100svh - var(--frame-inset));
+    margin-top: calc(-1 * var(--appbar-h));
+  }
+
   /* ════ FIELD NOTES utilities (landing + brand surfaces) ═══════════════ */
 
   /* Paper tooth — dark flecks, multiply-blended. Give the host position. */
@@ -394,6 +563,48 @@ h3 {
     background: var(--color-ink);
     color: var(--color-paper);
     border-radius: 0;
+  }
+
+  /*
+    ── The device toggle ────────────────────────────────────────────────────
+
+    Demo chrome, not product chrome. It is pinned to the corner of every page in
+    both designs, so it is deliberately the quietest thing on screen: near-black
+    plate, 9px type, and 55% opacity until you actually go looking for it.
+
+    Black rather than either design's own surface, for the same reason it is
+    small — a neutral dark chip reads as "not part of the app" over navy AND over
+    cream, where a vellum plate looked like a journal component and a navy one
+    looked like an aurora component.
+  */
+  .device-toggle {
+    background: rgb(0 0 0 / 0.62);
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(8px);
+    opacity: 0.55;
+    transition: opacity 0.3s var(--ease-signature);
+  }
+  .device-toggle:hover,
+  .device-toggle:focus-within {
+    opacity: 1;
+  }
+
+  /*
+    The selected state — the ONE green both designs share.
+
+    `machine-400` is the aurora design's green (the active Albums|Globe pill,
+    every focus ring) and it sits a whisker off the journal's own
+    `--color-aurora`, so one value serves both grounds.
+
+    Green TEXT on a faint tint rather than a solid green block: a solid fill is
+    what the primary action uses, and this control is the opposite of primary.
+    On the near-black plate it still measures 8.9:1.
+  */
+  .selected-live {
+    background: color-mix(in srgb, var(--color-machine-400) 16%, transparent);
+    color: var(--color-machine-400);
+    border-radius: calc(var(--radius-sm) - 2px);
   }
 
   .scrollbar-thin {
@@ -773,17 +984,39 @@ button[aria-expanded="true"] .note-ring path {
 
 .hero-aurora {
   position: absolute;
-  /* Wider than the box so a drifting ribbon never reveals its own edge. */
+  /*
+    Wider than the box so a travelling curtain never reveals its own edge.
+
+    WIDTH, not `right`. This is an <svg> with a viewBox, which makes it a
+    REPLACED element with an intrinsic aspect ratio (1000/340), and an absolutely
+    positioned replaced element with `width: auto` resolves its width from that
+    ratio and its height — over-constrained, so `right` is dropped silently. The
+    element came out 1197px instead of 2132px and the aurora ended in a hard
+    vertical seam two thirds of the way across the sky.
+  */
   left: -18%;
-  right: -18%;
+  width: 136%;
   pointer-events: none;
   /* `screen` is additive, which is how light works and why the measured colour
      is a delta. Over the navy sky it glows; over the black treeline it does
      almost nothing, which is exactly right. */
   mix-blend-mode: screen;
-  /* Fade in at the top of the band and out well before the horizon, so the
-     curtains never sit on top of the trees. */
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 58%, transparent 100%);
+  /*
+    ONE mask, vertical only: the aurora runs the full width of the frame.
+
+    There used to be a horizontal falloff here as well, fading the light out
+    across the right third to protect the tall firs on that side — `screen` does
+    nothing over black, but the plate's trees are dark NAVY and bright curtains
+    lifted the whole right-hand canopy into a teal haze. Confining the light to
+    the open left-of-centre sky solved that and created a worse problem: an
+    aurora that stopped halfway across the sky, which no aurora does. Full width
+    is the right call; the band below keeps the curtains high enough that what
+    lands on the canopy reads as the forest being lit rather than washed out.
+
+    Percentages are of this element, which overhangs the plate box by 18% on each
+    side, so the horizontal edges are off-frame and need no fade at all.
+  */
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 5%, #000 66%, transparent 94%);
   /*
     NO `contain: paint` here, deliberately.
 
@@ -795,21 +1028,66 @@ button[aria-expanded="true"] .note-ring path {
   */
 }
 
-.hero-aurora__ribbon {
-  position: absolute;
-  left: 0;
-  right: 0;
-  /* One soft band of light. The double core stop either side of the glow is
-     what gives a curtain its bright spine instead of a flat wash. */
-  background: linear-gradient(
-    var(--angle),
-    transparent 26%,
-    var(--au-core) 42%,
-    var(--au-glow) 50%,
-    var(--au-core) 58%,
-    transparent 76%
-  );
-  filter: blur(var(--blur));
+/*
+  Portrait hangs the curtains LOWER.
+
+  The tall composition puts the copy at the top of the frame — that is the whole
+  point of it, statement first and character beneath. The measured band, though,
+  is measured off the wide plate, and in portrait it lands at y 121-318 with the
+  lede sitting at 145-250: the paragraph would read over the brightest part of
+  the aurora at about 2:1.
+
+  Moving the band into the open sky BELOW the copy fixes the contrast without
+  dimming anything, which a scrim behind the text would not.
+*/
+@media (max-aspect-ratio: 4/5) {
+  .hero-aurora {
+    mask-image: linear-gradient(to bottom, transparent 30%, #000 46%, #000 74%, transparent 88%);
+  }
+}
+
+/*
+  A curtain travels by exactly one wavelength per cycle.
+
+  --len is the wavelength of the sine the path is built from AND the distance it
+  moves, which is what makes an infinite loop with no seam: after one cycle the
+  ribbon is byte-identical to where it started, one crest along. The path already
+  runs a full wavelength past both edges of the viewBox, so nothing pops in.
+
+  Inside an <svg>, a px in a CSS transform is a USER UNIT, not a screen pixel —
+  which is exactly what is wanted here, because the viewBox is stretched to the
+  band and the wave has to stretch with it.
+
+  `linear`, not an easing: a curtain that accelerated and decelerated once per
+  cycle would announce the loop it is otherwise hiding.
+*/
+.hero-aurora__travel {
+  will-change: transform;
+}
+
+/* The second motion, on its own near-coprime period: the curtain rises, falls
+   and brightens as it goes. Two periods that never coincide are what separate
+   "weather" from "a loop". */
+.hero-aurora__sway {
+  will-change: transform, opacity;
+}
+
+@keyframes aurora-travel {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--len)));
+  }
+}
+
+@keyframes aurora-sway {
+  from {
+    transform: translateY(-9px) scaleY(0.94);
+  }
+  to {
+    transform: translateY(9px) scaleY(1.06);
+  }
 }
 
 .hero-flies {
@@ -835,14 +1113,6 @@ button[aria-expanded="true"] .note-ring path {
   opacity: 0.75;
 }
 
-@keyframes aurora-drift {
-  from {
-    transform: translate3d(-5%, 0, 0) scaleY(1);
-  }
-  to {
-    transform: translate3d(5%, 0, 0) scaleY(1.12);
-  }
-}
 
 @keyframes fly-drift {
   from {
@@ -894,33 +1164,118 @@ button[aria-expanded="true"] .note-ring path {
   }
 }
 
+/*
+  Sized for the sentence it actually holds.
+
+  The headline used to be three words and could afford 6.5rem. "You enjoy the
+  journey. / Spark captures the magic." is twenty-five characters on its longest
+  line, and at 6.5rem that line alone is about 1080px — it would have run
+  straight through the cap into four wrapped lines of display type. 4rem keeps the
+  longer line inside the dark left half of the frame, which is what the cap
+  exists to protect.
+*/
 .hero-title {
   font-family: var(--font-hero);
   font-weight: 700;
-  font-size: clamp(2.25rem, 6.4vw, 6.5rem);
-  line-height: 0.98;
+  /*
+    DERIVED from the width cap below, not tuned against it.
+
+    The longest line, "Spark captures the magic.", measures 12.72em in Poppins
+    bold at this tracking. The cap gives it 58% of the copy block, which is
+    58vw - 46.4px once the 2.5rem side padding is out. So the largest font that
+    cannot wrap is (58vw - 46.4px) / 12.72 = 4.56vw - 3.6px, and 4.4vw - 4px
+    sits just inside that with a margin for font-loading jitter.
+
+    The pair used to be two independently hand-picked numbers, 3.9vw and 58%, and
+    they agreed at 1440 and disagreed at 772: there the clamp FLOOR won, held the
+    font at 2rem while the cap kept shrinking, and the headline wrapped to four
+    lines. Bottom-anchored, those two extra lines came off the TOP of the frame,
+    so the first line and a half slid under the app bar and off screen. Anything
+    that changes one of these numbers has to re-derive the other.
+
+    The floor is 1.5rem rather than 2rem for the same reason: a floor that
+    outruns the cap re-creates the bug.
+  */
+  font-size: clamp(1.5rem, calc(4.4vw - 4px), 4rem);
+  line-height: 1.02;
   letter-spacing: -0.035em;
   color: var(--color-fog-100);
   /* Capped so the measure stays clear of the bright spot the plate carries at
-     x 0.52-0.58, which measures 2.4:1 even for display type. Two huge lines is
-     better typography than one enormous one anyway. */
-  max-width: 52%;
+     x 0.52-0.58, which measures 2.4:1 even for display type. */
+  max-width: 58%;
 }
 
+/* Blocks, so each sentence owns a line. `text-wrap: balance` then only has to
+   deal with the overflow case on narrow viewports. */
+.hero-title__line {
+  display: block;
+  text-wrap: balance;
+}
+
+/*
+  Small, and kept inside the left of the frame.
+
+  The width cap is the load-bearing part. The plate is 1.771:1, so on a window
+  WIDER than that it is fitted to the width and the paragraph sits over the dark
+  left third — p95 backdrop luminance 28.6, i.e. 10:1 for fog-200. On a NARROWER
+  window the plate is fitted to the height and overflows sideways, which slides
+  the lit path and its reflection left, straight under the paragraph. At 769x447
+  a 48ch line reached plate x 0.56 and measured p95 133.9, worst 168.6: 1.5:1,
+  and 1.02:1 at the brightest pixel. Invisible text.
+
+  Sweeping the right edge across that window gives the number rather than taste —
+  p95 contrast for fog-200 against where the paragraph ends:
+
+      plate x   0.36   0.40   0.44   0.46   0.50
+      fog-200   9.6:1  9.0:1  6.8:1  6.1:1  4.6:1
+
+  There is no cliff, because it is the lake's REFLECTION of the path that reaches
+  left, not the path itself. 40% puts the right edge at plate 0.42 on that window
+  and holds 7.6:1, while on a wide one the 44ch measure binds first and it never
+  gets near the water. A scrim was the other way to do this and it was reverted:
+  darkening the illustration to make room for type is the one thing mirroring the
+  plate exists to avoid.
+*/
 .hero-lede {
-  margin-top: 1.25rem;
-  max-width: 46ch;
-  font-size: clamp(0.9375rem, 1.15vw, 1.125rem);
-  line-height: 1.6;
-  color: var(--color-fog-300);
+  margin-top: 1rem;
+  max-width: min(44ch, 40%);
+  font-size: clamp(0.75rem, 0.85vw, 0.9375rem);
+  line-height: 1.55;
+  /* One step up from fog-300. The paragraph is the only body copy on the page
+     that sits on a photograph rather than on the app background, and at this
+     size it earns the extra step. */
+  color: var(--color-fog-200);
 }
 
-.hero-stat {
-  margin-top: 1.5rem;
-  color: var(--color-fog-400);
-  /* Shrink-to-fit so this line does not stretch across the scene and back over
-     the blob — see the pointer-events note on .hero-copy. */
-  max-width: max-content;
+/*
+  NO SCRIM. There was one here briefly and it was the wrong trade: it fixed the
+  contrast by dimming the illustration, which is the one thing the mirrored plate
+  exists to avoid. Keeping the paragraph inside the dark half — see the width cap
+  above — costs the scene nothing.
+*/
+
+/*
+  Short landscape windows — a laptop with the window half-height, or a browser
+  with three toolbars open.
+
+  The copy is bottom-anchored, so every pixel it gains in height it takes off the
+  TOP of the frame. Past a point the headline slides under the app bar and out of
+  the window entirely. The block gives room back rather than the hero growing a
+  scrollbar: the bottom padding only exists to clear the scroll cue (~64px), so
+  4.5rem is the floor rather than an arbitrary smaller number.
+
+  Portrait is excluded because it anchors the copy to the TOP instead, where none
+  of this applies.
+*/
+@media (min-aspect-ratio: 4/5) and (max-height: 640px) {
+  .hero-copy {
+    padding-bottom: 4.5rem;
+  }
+  /* Size and width already come from the base rule; only the rhythm tightens. */
+  .hero-lede {
+    margin-top: 0.625rem;
+    line-height: 1.5;
+  }
 }
 
 /*
@@ -940,22 +1295,23 @@ button[aria-expanded="true"] .note-ring path {
     bottom: auto;
     padding: 0 1rem;
   }
-  /* One step brighter than the desktop stat line: in portrait it sits over the
-     aurora rather than over the dark lake, and fog-400 measures ~2.3:1 there. */
-  .hero-stat {
-    color: var(--color-fog-300);
-  }
   .hero-title {
-    /* No bright spot to dodge in the tall crop, and 52% of 362px is unusable. */
+    /* No bright spot to dodge in the tall crop, and 54% of 362px is unusable. */
     max-width: 100%;
-    font-size: clamp(2rem, 9.5vw, 3rem);
+    /* Smaller than the old three-word headline could afford, and tuned to a
+       specific number: at 7.4vw the longer sentence measures 317px against the
+       330px the 362px frame leaves, so it wrapped to a third line and pushed the
+       lede down into the aurora. 6.6vw gives it 283px and two clean lines. */
+    font-size: clamp(1.5rem, 6.6vw, 2.5rem);
   }
   .hero-lede {
-    margin-top: 0.875rem;
-    font-size: 0.9375rem;
-  }
-  .hero-stat {
-    margin-top: 1rem;
+    margin-top: 0.75rem;
+    /* The width cap is a landscape rule: it exists to dodge the lit path, and
+       the tall crop has no lit path beside the copy — it has the blob underneath
+       instead. 40% of 330px would be 132px of measure. */
+    max-width: 100%;
+    font-size: 0.8125rem;
+    line-height: 1.5;
   }
 }
 
@@ -1079,7 +1435,9 @@ button[aria-expanded="true"] .note-ring path {
   pointer-events: none;
   background: radial-gradient(circle, var(--color-warn-400) 0%, transparent 70%);
   opacity: 0.85;
-  transition: translate 420ms var(--ease-out-soft);
+  transition:
+    translate 420ms var(--ease-out-soft),
+    opacity 420ms var(--ease-out-soft);
 }
 .hero-blob__fly--a {
   left: -14%;
@@ -1104,6 +1462,43 @@ button[aria-expanded="true"] .note-ring path {
 .hero-blob:hover .hero-blob__fly--c,
 .hero-blob:focus-visible .hero-blob__fly--c {
   translate: -70% -34%;
+}
+
+/*
+  ── ASLEEP ──────────────────────────────────────────────────────────────────
+
+  The sprite sheet is a walk cycle; there is no drawing of a sleeping blob. So
+  sleep is carried by the LIGHT rather than by the artwork — the character dims
+  and desaturates toward the night around it, its fireflies go quiet, and the
+  pool of light it casts on the path fades down. Waking restores all three over
+  420ms, slow enough to read as something stirring rather than as a hover state
+  switching on.
+
+  Without this, resting and awake differed only by whether the label was on
+  screen, so a blob that was meant to be asleep looked exactly as alert as one
+  that had just noticed you. The breathe is slower and deeper too — see
+  blob-doze in the reduced-motion block.
+*/
+.hero-blob__sprite {
+  transition: filter 420ms var(--ease-out-soft);
+}
+
+.hero-blob[data-wake="resting"] .hero-blob__sprite {
+  filter: brightness(0.6) saturate(0.6);
+}
+
+.hero-blob[data-wake="resting"] .hero-blob__fly {
+  opacity: 0.2;
+}
+
+.hero-glow {
+  transition: opacity 420ms var(--ease-out-soft);
+}
+
+/* The ground glow is a SIBLING of the button, not a child, so it cannot be
+   reached by descending from [data-wake]. */
+.hero-plate-box:has(.hero-blob[data-wake="resting"]) .hero-glow {
+  opacity: 0.38;
 }
 
 /*
@@ -1219,6 +1614,18 @@ button[aria-expanded="true"] .note-ring path {
   }
 }
 
+/* Sleeping breath: slower, deeper, and it settles a fraction toward the ground
+   on the exhale. The transform-origin is the feet, so the sprite never lifts off
+   the path while it does this. */
+@keyframes blob-doze {
+  from {
+    transform: scale(1) translateY(0);
+  }
+  to {
+    transform: scale(1.028) translateY(1.5%);
+  }
+}
+
 /*
   Everything that moves lives in here. See the trap note at the top of this
   block: the global reduced-motion override would break scroll timelines and
@@ -1228,8 +1635,11 @@ button[aria-expanded="true"] .note-ring path {
   /* The aurora and the fireflies stay VISIBLE under reduced motion — they are
      part of the scene, and removing them would change the composition rather
      than calm it. Only their movement is gated. */
-  .hero-aurora__ribbon {
-    animation: aurora-drift var(--dur) ease-in-out var(--delay) infinite alternate;
+  .hero-aurora__travel {
+    animation: aurora-travel var(--dur) linear infinite;
+  }
+  .hero-aurora__sway {
+    animation: aurora-sway var(--sway) ease-in-out var(--delay) infinite alternate;
   }
   .hero-fly {
     animation:
@@ -1244,6 +1654,11 @@ button[aria-expanded="true"] .note-ring path {
   .hero-blob__sprite {
     animation: blob-breathe 3.6s ease-in-out infinite alternate;
     transform-origin: 50% 100%;
+  }
+
+  /* Asleep on arrival, and asleep again six seconds after you leave. */
+  .hero-blob[data-wake="resting"] .hero-blob__sprite {
+    animation: blob-doze 5.4s ease-in-out infinite alternate;
   }
 
   /* 8-12 fps is the stylised-character band. 24 fps on a six-frame cycle reads

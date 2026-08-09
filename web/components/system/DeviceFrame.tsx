@@ -91,7 +91,7 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
       )}
 
       <div
-        className="plate-vellum fixed bottom-4 right-4 z-50 flex items-center gap-1 p-1"
+        className="device-toggle fixed bottom-3 right-3 z-50 flex items-center gap-0.5 p-0.5"
         role="group"
         aria-label="Preview device"
       >
@@ -101,8 +101,8 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setMode(m)}
             aria-pressed={mode === m}
-            className={`fnote px-2.5 py-1 text-[10px] transition-colors duration-300 ease-(--ease-signature) ${
-              mode === m ? "selected-block" : "text-ink-faint hover:text-ink"
+            className={`fnote px-1.5 py-0.5 text-[9px] transition-colors duration-300 ease-(--ease-signature) ${
+              mode === m ? "selected-live" : "text-white/45 hover:text-white/80"
             }`}
           >
             {m === "phone" ? "Phone" : "Web"}

@@ -6,7 +6,7 @@
  * cross the RSC boundary to get here.
  */
 import { haversineM } from "./globe/geo";
-import { listTrips, type TripThumb } from "./tripData";
+import { listAllTrips, type TripThumb } from "./tripData";
 import type { GeoPoint } from "./types";
 
 export interface GlobeAlbum {
@@ -47,7 +47,13 @@ export interface GlobeView {
 const CLUSTER_RADIUS_KM = 220;
 
 export function getGlobeView(): GlobeView {
-  const albums: GlobeAlbum[] = listTrips().map((trip) => ({
+  // listAllTrips, not listTrips. `/globe` belongs to the aurora landing's route
+  // group and its whole point is EVERY journey placed on the Earth — the New
+  // York cluster above needs two trips to exist at all. The journal's
+  // single-trip listTrips() would put one pin on the globe and never exercise
+  // the clustering. Nothing in the journal reads getGlobeView, so this is the
+  // aurora side choosing its own source.
+  const albums: GlobeAlbum[] = listAllTrips().map((trip) => ({
     id: trip.id,
     title: trip.title,
     placeLabel: trip.placeLabel,

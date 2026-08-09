@@ -11,17 +11,10 @@
  *   3. The blob's position on the plate has to be MEASURED, not guessed, or the
  *      sprite drifts off the painted path at other viewport sizes.
  *
- * WHY THE KEY IS A LINEAR SOLVE AND NOT A THRESHOLD.
- * The source is a known opaque composite: C = a*F + (1-a)*B, with B measured
- * from the corners. A luminance threshold would cut through the middle of the
- * blob's 14-20px edge feather and leave a navy rim on every sprite. Instead:
- *
- *     a = (Y(C) - Y_B) / (Y_F - Y_B)
- *     F = (C - (1-a)*B) / a            <- THIS is the step that removes the halo
- *
- * Without the un-premultiply the feather stays navy-contaminated and the sprite
- * gets a dark outline. The report prints the mean recovered edge luminance so a
- * regression here is visible rather than subtle.
+ * The key itself — the linear alpha solve that replaces a luminance threshold —
+ * lives in lib/key.ts, which build-blob-sprites.ts shares. The report below
+ * prints its mean recovered edge luminance so a regression there is visible
+ * rather than subtle.
  *
  * This script is NOT part of the Next build graph. Nothing under app/ or lib/
  * imports scripts/, and every output is COMMITTED — so `next build` never runs
@@ -34,6 +27,18 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+import {
+  alphaMap,
+  fnv1a,
+  hex,
+  keyRegion,
+  luma,
+  measureBackground,
+  measureBodyLuma,
+  readRaw,
+  type Keyed,
+  type Raw,
+} from "./lib/key";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DESIGN = join(HERE, "..", "..", "design");
@@ -69,72 +74,8 @@ const EXPECTED: Record<string, { bytes: number; w: number; h: number }> = {
 const WALK_FRAMES = 6;
 /** Output cell width in px. The blob renders ~166-266 px; 400 covers 1.5-2.4x. */
 const CELL_W = 400;
-/** Alpha at or above this counts as body when measuring coverage. */
-const SOLID = 0.5;
-/** Alpha at or above this counts as "part of some object" for connectivity. */
-const VISIBLE = 0.06;
 
 const err = (s: string) => process.stderr.write(s + "\n");
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Raw image helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface Raw {
-  data: Buffer;
-  w: number;
-  h: number;
-  c: number;
-}
-
-async function readRaw(file: string): Promise<Raw> {
-  const { data, info } = await sharp(join(DESIGN, file)).raw().toBuffer({ resolveWithObject: true });
-  return { data, w: info.width, h: info.height, c: info.channels };
-}
-
-const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
-
-function fnv1a(buf: Buffer): string {
-  let h = 0x811c9dc5;
-  for (const byte of buf) h = Math.imul(h ^ byte, 0x01000193) >>> 0;
-  return "0x" + h.toString(16).padStart(8, "0");
-}
-
-/** Median background colour, sampled from all four corners. */
-function measureBackground(img: Raw, pad = 16): { rgb: [number, number, number]; y: number } {
-  const samples: Array<[number, number, number]> = [];
-  const corners: Array<[number, number]> = [
-    [0, 0],
-    [img.w - pad, 0],
-    [0, img.h - pad],
-    [img.w - pad, img.h - pad],
-  ];
-  for (const [ox, oy] of corners) {
-    for (let y = oy; y < oy + pad; y++) {
-      for (let x = ox; x < ox + pad; x++) {
-        const i = (y * img.w + x) * img.c;
-        samples.push([img.data[i], img.data[i + 1], img.data[i + 2]]);
-      }
-    }
-  }
-  const med = (k: number) => {
-    const v = samples.map((s) => s[k]).sort((a, b) => a - b);
-    return v[v.length >> 1];
-  };
-  const rgb: [number, number, number] = [med(0), med(1), med(2)];
-  return { rgb, y: luma(rgb[0], rgb[1], rgb[2]) };
-}
-
-/** Median luminance of the bright body, so the alpha solve has a real F. */
-function measureBodyLuma(img: Raw, floor = 150): number {
-  const vals: number[] = [];
-  for (let i = 0; i < img.data.length; i += img.c * 7) {
-    const y = luma(img.data[i], img.data[i + 1], img.data[i + 2]);
-    if (y > floor) vals.push(y);
-  }
-  vals.sort((a, b) => a - b);
-  return vals.length ? vals[vals.length >> 1] : 220;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Measuring the painted sky
@@ -143,9 +84,6 @@ function measureBodyLuma(img: Raw, floor = 150): number {
 // the artist actually painted so the live versions reproduce it rather than
 // approximating it with hand-picked teals and random scatter.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const hex = (r: number, g: number, b: number) =>
-  "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
 
 /**
  * The aurora's real colour — measured as the light it ADDS, not as it appears.
@@ -290,228 +228,6 @@ function measureFireflies(painted: Raw, plate: Raw, auroraBottom: number): Firef
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The key
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface Keyed {
-  rgba: Buffer;
-  w: number;
-  h: number;
-  bbox: { x0: number; y0: number; x1: number; y1: number };
-  coverage: number;
-  holesFilled: number;
-  bodyPx: number;
-  droppedComponents: number;
-  meanEdgeLuma: number;
-}
-
-/**
- * Key one region out of its background and recover its true colour.
- *
- * Order matters: solve alpha, fill interior holes (the eyes and mouth are dark
- * and would otherwise key out transparent), drop stray components (fireflies),
- * then trim. Doing this at FULL resolution and downscaling once afterwards means
- * the 14-20px feather becomes sub-pixel and the resampler produces the
- * anti-aliasing for free.
- */
-function keyRegion(
-  img: Raw,
-  rx: number,
-  ry: number,
-  rw: number,
-  rh: number,
-  bg: { rgb: [number, number, number]; y: number },
-  bodyY: number,
-): Keyed {
-  const n = rw * rh;
-  const alpha = new Float32Array(n);
-  const rgb = new Uint8ClampedArray(n * 3);
-  const span = Math.max(1, bodyY - bg.y);
-
-  for (let y = 0; y < rh; y++) {
-    for (let x = 0; x < rw; x++) {
-      const si = ((ry + y) * img.w + (rx + x)) * img.c;
-      const R = img.data[si];
-      const G = img.data[si + 1];
-      const B = img.data[si + 2];
-      const a = Math.min(1, Math.max(0, (luma(R, G, B) - bg.y) / span));
-      const di = y * rw + x;
-      alpha[di] = a;
-
-      // Un-premultiply: F = (C - (1-a)B) / a. The guard keeps the division sane
-      // where alpha is near zero; those pixels contribute nothing once composited.
-      const as = Math.max(a, 0.06);
-      rgb[di * 3] = (R - (1 - as) * bg.rgb[0]) / as;
-      rgb[di * 3 + 1] = (G - (1 - as) * bg.rgb[1]) / as;
-      rgb[di * 3 + 2] = (B - (1 - as) * bg.rgb[2]) / as;
-    }
-  }
-
-  // ── Fill interior holes ──────────────────────────────────────────────────
-  // Flood from the border through transparent pixels; anything transparent that
-  // the flood never reaches is enclosed by the body and is therefore a feature,
-  // not background. Set it opaque and keep its ORIGINAL composited colour, which
-  // for an enclosed pixel is already the true colour.
-  const reached = new Uint8Array(n);
-  const stack: number[] = [];
-  const pushIf = (i: number) => {
-    if (!reached[i] && alpha[i] < SOLID) {
-      reached[i] = 1;
-      stack.push(i);
-    }
-  };
-  for (let x = 0; x < rw; x++) {
-    pushIf(x);
-    pushIf((rh - 1) * rw + x);
-  }
-  for (let y = 0; y < rh; y++) {
-    pushIf(y * rw);
-    pushIf(y * rw + rw - 1);
-  }
-  while (stack.length) {
-    const i = stack.pop()!;
-    const x = i % rw;
-    const y = (i - x) / rw;
-    if (x > 0) pushIf(i - 1);
-    if (x < rw - 1) pushIf(i + 1);
-    if (y > 0) pushIf(i - rw);
-    if (y < rh - 1) pushIf(i + rw);
-  }
-
-  let holesFilled = 0;
-  for (let i = 0; i < n; i++) {
-    if (alpha[i] < SOLID && !reached[i]) {
-      alpha[i] = 1;
-      const si = (ry + ((i - (i % rw)) / rw)) * img.w + (rx + (i % rw));
-      const p = si * img.c;
-      rgb[i * 3] = img.data[p];
-      rgb[i * 3 + 1] = img.data[p + 1];
-      rgb[i * 3 + 2] = img.data[p + 2];
-      holesFilled++;
-    }
-  }
-
-  // ── Drop stray components (fireflies) ────────────────────────────────────
-  // Connectivity uses VISIBLE, not SOLID. A firefly's opaque core and its soft
-  // glow are one object; thresholding at 0.5 would drop the core and leave the
-  // glow behind as a smudge that still inflates the trim bbox.
-  const label = new Int32Array(n).fill(-1);
-  const sizes: number[] = [];
-  for (let seed = 0; seed < n; seed++) {
-    if (alpha[seed] < VISIBLE || label[seed] >= 0) continue;
-    const id = sizes.length;
-    let count = 0;
-    const q = [seed];
-    label[seed] = id;
-    while (q.length) {
-      const i = q.pop()!;
-      count++;
-      const x = i % rw;
-      const y = (i - x) / rw;
-      const tryPush = (j: number) => {
-        if (alpha[j] >= VISIBLE && label[j] < 0) {
-          label[j] = id;
-          q.push(j);
-        }
-      };
-      if (x > 0) tryPush(i - 1);
-      if (x < rw - 1) tryPush(i + 1);
-      if (y > 0) tryPush(i - rw);
-      if (y < rh - 1) tryPush(i + rw);
-    }
-    sizes.push(count);
-  }
-  // Keep ONLY the largest component. Each frame contains exactly one blob, and
-  // every other component is a firefly — including its soft glow, which at the
-  // VISIBLE threshold can run to several thousand pixels and survives any
-  // percentage-of-largest rule. Anything that splits the blob itself shows up
-  // immediately as a coverage-gate failure, so this is safe as well as decisive.
-  const biggest = sizes.length ? Math.max(...sizes) : 0;
-  const keepId = sizes.indexOf(biggest);
-  const keep = new Set(biggest > 0 ? [keepId] : []);
-  const droppedComponents = Math.max(0, sizes.length - 1);
-
-  // ── Compose RGBA, measure, and find the content bbox ─────────────────────
-  const rgba = Buffer.alloc(n * 4);
-  let x0 = rw;
-  let y0 = rh;
-  let x1 = -1;
-  let y1 = -1;
-  let covered = 0;
-  let edgeSum = 0;
-  let edgeCount = 0;
-
-  for (let i = 0; i < n; i++) {
-    // Anything not connected to the kept blob is background — including pixels
-    // BELOW the VISIBLE threshold, which never get a component label at all. A
-    // dropped firefly's outermost glow lives at alpha 0.01-0.05 and would
-    // otherwise survive as a faint ghost rectangle beside the sprite. The blob's
-    // own sub-0.06 feather goes with it, which is imperceptible and is already
-    // outside the trim bbox.
-    const a = keep.has(label[i]) ? alpha[i] : 0;
-    rgba[i * 4] = rgb[i * 3];
-    rgba[i * 4 + 1] = rgb[i * 3 + 1];
-    rgba[i * 4 + 2] = rgb[i * 3 + 2];
-    rgba[i * 4 + 3] = Math.round(a * 255);
-
-    if (a > 0.06) {
-      const x = i % rw;
-      const y = (i - x) / rw;
-      if (x < x0) x0 = x;
-      if (x > x1) x1 = x;
-      if (y < y0) y0 = y;
-      if (y > y1) y1 = y;
-      if (a >= SOLID) covered++;
-      // The feather ring is where a halo would show. Sample it.
-      if (a > 0.15 && a < 0.75) {
-        edgeSum += luma(rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]);
-        edgeCount++;
-      }
-    }
-  }
-
-  return {
-    rgba,
-    w: rw,
-    h: rh,
-    bbox: { x0, y0, x1, y1 },
-    coverage: covered / n,
-    holesFilled,
-    bodyPx: covered,
-    droppedComponents,
-    meanEdgeLuma: edgeCount ? edgeSum / edgeCount : 0,
-  };
-}
-
-/** A compact ASCII alpha map — the analogue of build-landmask's ASCII Earth. */
-function alphaMap(k: Keyed, cols = 54, rows = 20): string {
-  const bw = k.bbox.x1 - k.bbox.x0 + 1;
-  const bh = k.bbox.y1 - k.bbox.y0 + 1;
-  const lines: string[] = [];
-  for (let ry = 0; ry < rows; ry++) {
-    let line = "  ";
-    for (let rx = 0; rx < cols; rx++) {
-      let sum = 0;
-      let count = 0;
-      const yA = k.bbox.y0 + Math.floor((ry * bh) / rows);
-      const yB = k.bbox.y0 + Math.floor(((ry + 1) * bh) / rows);
-      const xA = k.bbox.x0 + Math.floor((rx * bw) / cols);
-      const xB = k.bbox.x0 + Math.floor(((rx + 1) * bw) / cols);
-      for (let y = yA; y < yB; y++) {
-        for (let x = xA; x < xB; x++) {
-          sum += k.rgba[(y * k.w + x) * 4 + 3] / 255;
-          count++;
-        }
-      }
-      const a = count ? sum / count : 0;
-      line += a > 0.9 ? "@" : a > 0.5 ? "+" : a > 0.05 ? "." : " ";
-    }
-    lines.push(line);
-  }
-  return lines.join("\n");
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 const failures: string[] = [];
 const fail = (msg: string) => failures.push(msg);
@@ -533,7 +249,7 @@ async function main() {
   err("─".repeat(72));
 
   // ── Blob frames ──────────────────────────────────────────────────────────
-  const walk = await readRaw(SRC.walk);
+  const walk = await readRaw(join(DESIGN, SRC.walk));
   const walkBg = measureBackground(walk);
   const walkBody = measureBodyLuma(walk);
   err(

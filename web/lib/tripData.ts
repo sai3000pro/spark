@@ -7,9 +7,16 @@
  * shapes. Tomorrow these read from Postgres instead of lib/mock — the view model
  * types are what the UI depends on, not the storage.
  */
+import { cache } from "react";
 import { familyOf } from "./mock/labels";
+// Two builders, deliberately. The no-arg one is Waterloo Park, which is what the
+// journal reads; buildTrip(spec) builds any of the seven and is what the aurora
+// landing's library reads. Aliased so the two can never be confused at a call
+// site — see the additive accessors at the bottom of this file.
+import { buildTrip as buildSpecTrip } from "./mock/buildTrip";
 import { buildTrip, TRIP_ID } from "./mock/trip-waterloo-park";
-import { buildObjectIndex } from "./objectIndex";
+import { TRIP_SPECS } from "./mock/trips";
+import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
 import type {
   GeoPoint,
@@ -218,6 +225,63 @@ export function listTrips(): TripListItem[] {
 }
 
 export { TRIP_ID };
+
+/* ── The aurora landing's multi-trip accessors ────────────────────────────────
+ *
+ * ADDITIVE, on purpose. Everything above this line is the journal's single-trip
+ * view — `listTrips()` returns Waterloo Park alone and `getObjectIndexView()`
+ * indexes it — and the journal at `/landing-page`, `/walk` and `/trip/*` reads
+ * exactly that. Nothing here changes any of it.
+ *
+ * The aurora landing at `/` shows a LIBRARY: seven albums on a grid, seven pins
+ * on the globe, and a ⌘K palette that searches across all of them. The seven
+ * specs never went away (lib/mock/trips/), and buildTrip(spec) still builds any
+ * of them — only the accessors that reached for all seven did. These are those
+ * accessors, restored under names of their own so the two designs can disagree
+ * about how many trips exist without either one breaking the other.
+ */
+export function listAllTrips(): TripListItem[] {
+  return TRIP_SPECS.map((spec) => {
+    const { trip, distanceM } = buildSpecTrip(spec);
+    return {
+      id: trip.id,
+      title: trip.title,
+      placeLabel: trip.place.label,
+      region: trip.place.region,
+      country: trip.place.country,
+      origin: trip.place.origin,
+      startedAt: trip.startedAt,
+      stats: computeTripStats(trip, distanceM),
+      momentThumbs: trip.moments.slice(0, 4).map((m) => ({
+        seed: m.keyframes[0].placeholderSeed,
+        hue: m.keyframes[0].hue,
+        url: m.keyframes[0].url,
+      })),
+    };
+  });
+}
+
+/**
+ * Every trip's index, merged — what the ⌘K palette searches.
+ *
+ * Global rather than trip-scoped on purpose. The product claim is that the robot
+ * remembers where you left things; scoping that to whichever trip happens to be
+ * open would make the feature worse the more you used the product.
+ *
+ * React.cache keeps it to one computation per request. `durationSec: 0` and
+ * `tripId: null` are honest: trip-relative seconds are not comparable across
+ * trips, so anything rendering a merged result scales its timecode from the
+ * sighting's own tripId.
+ */
+export const getGlobalObjectIndex = cache(
+  (): Omit<ObjectIndexView, "tripId"> & { tripId: string | null } => {
+    const indexes = TRIP_SPECS.map((spec) => {
+      const { trip } = buildSpecTrip(spec);
+      return buildObjectIndex(trip.moments, trip.path, trip);
+    });
+    return { entries: mergeObjectIndexes(indexes), durationSec: 0, tripId: null };
+  },
+);
 
 const thin = <T,>(arr: T[], every: number): T[] =>
   every <= 1 ? arr : arr.filter((_, i) => i % every === 0 || i === arr.length - 1);

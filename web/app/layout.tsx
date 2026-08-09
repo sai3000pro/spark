@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Schibsted_Grotesk, Fragment_Mono } from "next/font/google";
+import { Schibsted_Grotesk, Fragment_Mono, Poppins } from "next/font/google";
 import { Suspense } from "react";
 import { DeviceFrame } from "@/components/system/DeviceFrame";
 import "./globals.css";
@@ -20,6 +20,16 @@ const typewriter = Fragment_Mono({
   weight: "400",
   display: "swap",
 });
+// The aurora landing's headline face (--font-hero). Loaded here because only
+// the document can register a font, but it is referenced by exactly one design:
+// the journal never resolves --font-hero, so this costs `/landing-page` nothing
+// beyond the link tag. Two weights, which is all the hero and its label use.
+const poppins = Poppins({
+  variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Spark — a day, remembered in light",
@@ -29,8 +39,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${grotesk.variable} ${typewriter.variable} antialiased`}>
-      {/* One register everywhere now — the whole product is the journal. */}
+    <html
+      lang="en"
+      className={`${grotesk.variable} ${typewriter.variable} ${poppins.variable} antialiased`}
+    >
+      {/* The journal is the default register; the aurora landing at `/` re-grounds
+          its own subtree via .aurora-app in app/(app)/layout.tsx. */}
       <body className="field-site">
         {/* DeviceFrame reads ?chrome=off via useSearchParams, which needs a
             Suspense boundary; the fallback renders the app unwrapped so there is
