@@ -554,6 +554,31 @@ async function main() {
       `foot line at ${(cellBaseline / cellH).toFixed(3)} of height`,
   );
 
+  // ── The body inside the cell ───────────────────────────────────────────────
+  // The cell is deliberately bigger than the character: `up` is maxed against
+  // the question mark's reach and `down` against the hover glow. A consumer that
+  // sized the cell and hoped for the best would draw the blob too small and hang
+  // its feet above the ground by whatever the glow happens to need. It does not
+  // have to guess — the two fractions below say how much of the cell is blob.
+  //
+  // Measured on `idle` rather than across every pose: a union would be set by
+  // `hop`, which is drawn mid-air, and by `wave`, whose raised arm is not the
+  // standing silhouette anything should be scaled against.
+  const ref = shipped.find((p) => p.spec.name === "idle");
+  if (!ref) fail("`idle` is the reference pose for the body geometry and is not in the sheet");
+  const bodyH = ref ? (ref.baseline - ref.body.y0) / cellH : 0;
+  const bodyW = ref ? (2 * Math.max(ref.cx - ref.body.x0, ref.body.x1 - ref.cx)) / cellW : 0;
+  err(
+    `body    ${(bodyH * 100).toFixed(1)}% of the cell's height, ${(bodyW * 100).toFixed(1)}% of its width` +
+      `   (from \`idle\`)`,
+  );
+  if (ref && (bodyH < 0.3 || bodyH > 0.95)) {
+    fail(`the body is ${(bodyH * 100).toFixed(1)}% of the cell's height — implausible`);
+  }
+  if (ref && (bodyW < 0.3 || bodyW > 1.0)) {
+    fail(`the body is ${(bodyW * 100).toFixed(1)}% of the cell's width — implausible`);
+  }
+
   if (failures.length) {
     err("\nFAILED — nothing written:");
     for (const f of failures) err(`  · ${f}`);
@@ -734,6 +759,18 @@ export const BLOB_SPRITE = {
   cellAr: ${(cellW / cellH).toFixed(3)},
   /** Fraction of the cell's height at which the feet touch the ground. */
   footY: ${(cellBaseline / cellH).toFixed(3)},
+  /**
+   * The standing character's own height, as a fraction of the cell's — foot
+   * line to the top of \`idle\`'s head. The rest of the cell is headroom for the
+   * Zzz and the "?" above, and room for the hover glow below the feet.
+   *
+   * Draw the CELL at \`someHeight / bodyH\` and the CHARACTER comes out
+   * \`someHeight\` tall, which is the number a layout actually has an opinion
+   * about.
+   */
+  bodyH: ${bodyH.toFixed(4)},
+  /** Its width, as a fraction of the cell's. Symmetric about the centre. */
+  bodyW: ${bodyW.toFixed(4)},
 } as const;
 
 /**

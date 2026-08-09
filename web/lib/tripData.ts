@@ -13,11 +13,12 @@ import { familyOf } from "./mock/labels";
 // journal reads; buildTrip(spec) builds any of the seven and is what the aurora
 // landing's library reads. Aliased so the two can never be confused at a call
 // site — see the additive accessors at the bottom of this file.
-import { buildTrip as buildSpecTrip } from "./mock/buildTrip";
+import { buildTrip as buildSpecTrip, type BuiltTrip } from "./mock/buildTrip";
 import { buildTrip, TRIP_ID } from "./mock/trip-waterloo-park";
-import { TRIP_SPECS } from "./mock/trips";
+import { DEFAULT_TRIP_ID, getTripSpec, TRIP_SPECS } from "./mock/trips";
 import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
+import type { GeoRef } from "./geo";
 import type {
   GeoPoint,
   MomentCandidate,
@@ -282,6 +283,135 @@ export const getGlobalObjectIndex = cache(
     return { entries: mergeObjectIndexes(indexes), durationSec: 0, tripId: null };
   },
 );
+
+/* ── The atlas screen's trip-scoped accessors ─────────────────────────────────
+ *
+ * ADDITIVE too. Everything above stays exactly as it was; these exist because
+ * the walk screen used to be able to render precisely one trip, so `/trip/<id>`
+ * redirected to it and every album opened Waterloo Park. These are the same view
+ * models, resolved by id.
+ *
+ * The boundary rule from the top of this file still holds and is the reason
+ * AtlasView lists what it lists: TripView (already binned), full Moments for the
+ * takeover, and the object index. `trip.detections` — ~10,000 rows — is read to
+ * build the bins and then dropped here on the server.
+ */
+
+/**
+ * The one fork between the journal's builder and the library's.
+ *
+ * Waterloo Park has two: lib/mock/trip-waterloo-park.ts (the journal's, pinned
+ * RNG seeds, what /walk has always rendered) and lib/mock/trips/waterloo-park.ts
+ * (the spec, what the gallery and globe read). They agree on everything except
+ * `place.origin`. Routing Waterloo to the legacy builder here means `/walk` and
+ * `/walk?trip=trip_waterloo_park` are not merely equivalent — they are the same
+ * memoized object.
+ */
+function builtTripFor(tripId: string): BuiltTrip | null {
+  if (tripId === TRIP_ID) return buildTrip();
+  const spec = getTripSpec(tripId);
+  return spec ? buildSpecTrip(spec) : null;
+}
+
+/** Validates a `?trip=` param. Unknown or absent → the demo's default trip. */
+export function resolveTripId(raw: string | string[] | undefined): string {
+  const id = Array.isArray(raw) ? raw[0] : raw;
+  return id && getTripSpec(id) ? id : DEFAULT_TRIP_ID;
+}
+
+function viewOf(built: BuiltTrip): TripView {
+  const { trip, distanceM } = built;
+  const durationSec =
+    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
+
+  return {
+    id: trip.id,
+    title: trip.title,
+    startedAt: trip.startedAt,
+    endedAt: trip.endedAt,
+    placeLabel: trip.place.label,
+    region: trip.place.region,
+    stats: computeTripStats(trip, distanceM),
+    path: thin(trip.path, 2),
+    moments: trip.moments.map(toSummary),
+    candidates: trip.candidates,
+    detectionBins: binDetections(trip.detections, durationSec, 240, familyOf),
+    durationSec,
+  };
+}
+
+export function getTripViewFor(tripId: string): TripView | null {
+  const built = builtTripFor(tripId);
+  return built ? viewOf(built) : null;
+}
+
+export function getObjectIndexViewFor(tripId: string): ObjectIndexView | null {
+  const built = builtTripFor(tripId);
+  if (!built) return null;
+  const { trip } = built;
+  return {
+    entries: buildObjectIndex(trip.moments, trip.path, trip),
+    durationSec:
+      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
+    tripId: trip.id,
+  };
+}
+
+/**
+ * A trip's map calibration, read off the SPEC rather than the built trip —
+ * both Waterloo builders answer to the same id, so the lookup stays uniform
+ * whichever one produced the trip. `mapOrigin` falls back to the globe pin and
+ * the bearing to due east; see authoring rule 8 in lib/mock/buildTrip.ts.
+ */
+export function getGeoRefFor(tripId: string): GeoRef {
+  const place = getTripSpec(tripId)?.place;
+  const origin = place?.mapOrigin ?? place?.origin ?? { lat: 0, lng: 0 };
+  return { origin, bearingDeg: place?.bearingDeg ?? 0 };
+}
+
+/** Nav targets keyed moment → track. Built here because both atlas routes need it. */
+export interface NavTargetMap {
+  [momentId: string]: { [trackId: string]: { pos: Vec2; heading: number } };
+}
+
+/** Everything the atlas screen renders, composed once on the server. */
+export interface AtlasView {
+  trip: TripView;
+  /** Full moments — transcript, objects, keyframes, splat refs — for the takeover. */
+  moments: Moment[];
+  entries: ObjectIndexEntry[];
+  navTargets: NavTargetMap;
+  geo: GeoRef;
+}
+
+export const getAtlasView = cache((tripId: string): AtlasView | null => {
+  const built = builtTripFor(tripId);
+  if (!built) return null;
+  const { trip } = built;
+
+  const entries = buildObjectIndex(trip.moments, trip.path, trip);
+
+  // Keyed moment → track so the takeover can say "the robot can drive back to
+  // this" without shipping the whole index again.
+  const navTargets: NavTargetMap = {};
+  for (const entry of entries) {
+    if (!entry.navTarget) continue;
+    for (const s of entry.sightings) {
+      (navTargets[s.momentId] ??= {})[s.trackId] = {
+        pos: entry.navTarget.pos,
+        heading: entry.navTarget.heading,
+      };
+    }
+  }
+
+  return {
+    trip: viewOf(built),
+    moments: trip.moments,
+    entries,
+    navTargets,
+    geo: getGeoRefFor(tripId),
+  };
+});
 
 const thin = <T,>(arr: T[], every: number): T[] =>
   every <= 1 ? arr : arr.filter((_, i) => i % every === 0 || i === arr.length - 1);

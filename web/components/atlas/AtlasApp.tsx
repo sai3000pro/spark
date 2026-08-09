@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The walk screen is one surface: the real park, printed on the journal's page.
+ * The walk screen is one surface: the real place, printed on the journal's page.
  *
  * Owns every piece of cross-cutting state — which pin is hot, where the
  * replay playhead is, which moment is expanded into its splat, and the ⌘K find
@@ -17,23 +17,15 @@ import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { distance, duration, tripDate } from "@/lib/format";
-import { localToLngLat } from "@/lib/geo";
-import type { TripView } from "@/lib/tripData";
-import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
+import { makeGeo } from "@/lib/geo";
+import { formatGeo } from "@/lib/globe/geo";
+import type { AtlasView, TripView } from "@/lib/tripData";
+import type { Vec2 } from "@/lib/types";
 
 /** A 95-minute walk replays in ~48 seconds. */
 const REPLAY_SPEED = 120;
 
-export interface NavTargetMap {
-  [momentId: string]: { [trackId: string]: { pos: Vec2; heading: number } };
-}
-
-interface Props {
-  trip: TripView;
-  /** Full moments — transcript, objects, keyframes, splat refs. */
-  moments: Moment[];
-  entries: ObjectIndexEntry[];
-  navTargets: NavTargetMap;
+interface Props extends AtlasView {
   initialMomentId?: string | null;
   initialAnchor?: string | null;
 }
@@ -43,6 +35,7 @@ export function AtlasApp({
   moments,
   entries,
   navTargets,
+  geo,
   initialMomentId,
   initialAnchor,
 }: Props) {
@@ -122,6 +115,7 @@ export function AtlasApp({
       <FieldMap
         path={trip.path}
         moments={trip.moments}
+        geo={geo}
         activeId={activeId}
         reachedT={playhead}
         robotPos={robotPos}
@@ -147,8 +141,11 @@ export function AtlasApp({
           </p>
           <p className="fnote mt-2 text-[8.5px] text-ink-faint">
             {(() => {
-              const [lng, lat] = localToLngLat(trip.path[0].pos);
-              return `[ ${Math.abs(lat).toFixed(4)}° N · ${Math.abs(lng).toFixed(4)}° W ]`;
+              // formatGeo carries the hemisphere. The old inline template said
+              // N/W unconditionally, which was fine while the only trip was in
+              // Ontario and wrong for Cape Town and Kyoto.
+              const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);
+              return `[ ${formatGeo({ lat, lng })} ]`;
             })()}
           </p>
         </div>

@@ -243,10 +243,18 @@ export function HeroSky() {
                 "--fr": f.r,
                 // Drift and twinkle run on different periods per fly, so no two
                 // pulse together and neither loop lines up with the other.
-                "--drift": `${7 + ((i * 5) % 7)}s`,
+                //
+                // The swing is the radius of the wandering circuit in
+                // globals.css, and it is 14-30px rather than the 6-16px it
+                // started at: at the small end a firefly moved less than its own
+                // width over ten seconds, which reads as a static dot with a
+                // flicker rather than as something alive. The drift periods
+                // stretched to match, because the same speed over twice the
+                // distance would have turned an amble into a commute.
+                "--drift": `${11 + ((i * 7) % 9)}s`,
                 "--twinkle": `${4.5 + ((i * 3) % 5)}s`,
                 "--delay": `${-(i * 1.7).toFixed(1)}s`,
-                "--swing": `${6 + ((i * 4) % 11)}px`,
+                "--swing": `${14 + ((i * 5) % 17)}px`,
               } as React.CSSProperties
             }
           />

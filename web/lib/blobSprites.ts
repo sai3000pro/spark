@@ -40,6 +40,18 @@ export const BLOB_SPRITE = {
   cellAr: 0.714,
   /** Fraction of the cell's height at which the feet touch the ground. */
   footY: 0.768,
+  /**
+   * The standing character's own height, as a fraction of the cell's — foot
+   * line to the top of `idle`'s head. The rest of the cell is headroom for the
+   * Zzz and the "?" above, and room for the hover glow below the feet.
+   *
+   * Draw the CELL at `someHeight / bodyH` and the CHARACTER comes out
+   * `someHeight` tall, which is the number a layout actually has an opinion
+   * about.
+   */
+  bodyH: 0.6131,
+  /** Its width, as a fraction of the cell's. Symmetric about the centre. */
+  bodyW: 0.7556,
 } as const;
 
 /**

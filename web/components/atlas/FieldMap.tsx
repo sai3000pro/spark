@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * The walk on the REAL park, printed on the journal's paper.
+ * The walk on the REAL place, printed on the journal's paper.
  *
- * MapLibre renders actual Waterloo Park vector tiles restyled into a cream
- * survey map (public/map/night-walk.json's sibling, field-notes.json —
- * generated, never hand-edited), and the robot's odometry is georeferenced
- * onto it (lib/geo.ts). Everything drawn ON the map speaks the landing's
- * route-plate language:
+ * MapLibre renders the trip's actual vector tiles restyled into a cream survey
+ * map (public/map/night-walk.json's sibling, field-notes.json — generated,
+ * never hand-edited), and the robot's odometry is georeferenced onto them
+ * through the trip's own calibration (`geo`, built in lib/geo.ts). The style's
+ * tile source is planet-wide, so wherever the walk happened, it draws.
+ * Everything ON the map speaks the landing's route-plate language:
  *
  *   · the walk is a dotted clay pen line over a soft brass highlighter bleed
  *   · kept moments are surveyor's markers — ink stem, ringed head, numbered
@@ -34,7 +35,7 @@ if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
 import { CloudLayer } from "@/components/atlas/CloudLayer";
-import { localToLngLat, tripBounds } from "@/lib/geo";
+import { makeGeo, type GeoRef } from "@/lib/geo";
 import { BRASS, CLAY, PAPER, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
 import type { TrackPoint, Vec2 } from "@/lib/types";
@@ -42,6 +43,8 @@ import type { TrackPoint, Vec2 } from "@/lib/types";
 interface Props {
   path: TrackPoint[];
   moments: MomentSummary[];
+  /** This trip's map calibration — where its local metres land on Earth. */
+  geo: GeoRef;
   activeId: string | null;
   /** Playhead time — markers after it haven't "happened yet" during a replay. */
   reachedT: number | null;
@@ -57,13 +60,17 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ path, moments, geo, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
-  const routeCoords = useMemo(() => path.map((p) => localToLngLat(p.pos)), [path]);
+  // Precomputed once per trip — the path is 350+ points and re-projects on every
+  // replay frame. makeGeo memoizes by value, so an equal ref returns the same one.
+  const g = useMemo(() => makeGeo(geo), [geo]);
+
+  const routeCoords = useMemo(() => path.map((p) => g.localToLngLat(p.pos)), [g, path]);
   const bounds = useMemo(
-    () => tripBounds([...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
-    [path, moments],
+    () => g.tripBounds([...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
+    [g, path, moments],
   );
 
   /** The replayed portion — the route the pen has re-drawn so far. */
@@ -144,7 +151,7 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
 
         {/* The kept moments — surveyor's markers flagging the kept minutes. */}
         {moments.map((m, i) => {
-          const [lng, lat] = localToLngLat(m.placePos);
+          const [lng, lat] = g.localToLngLat(m.placePos);
           return (
             <Marker key={m.id} longitude={lng} latitude={lat} anchor="bottom" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
               <SurveyMarker
@@ -161,12 +168,8 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
           );
         })}
 
-        {/* The robot, re-walking its odometry. */}
-        {robotPos && (
-          <Marker longitude={localToLngLat(robotPos)[0]} latitude={localToLngLat(robotPos)[1]} anchor="center" style={{ zIndex: 4 }}>
-            <RobotDot />
-          </Marker>
-        )}
+        {/* The robot, re-walking its odometry. Projected once per frame, not twice. */}
+        {robotPos && <RobotMarker at={g.localToLngLat(robotPos)} />}
 
         <ScaleControl position="bottom-left" maxWidth={110} unit="metric" />
 
@@ -331,6 +334,14 @@ function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: s
           [ {label} ]
         </span>
       </span>
+    </Marker>
+  );
+}
+
+function RobotMarker({ at }: { at: [number, number] }) {
+  return (
+    <Marker longitude={at[0]} latitude={at[1]} anchor="center" style={{ zIndex: 4 }}>
+      <RobotDot />
     </Marker>
   );
 }

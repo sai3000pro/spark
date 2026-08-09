@@ -1114,21 +1114,47 @@ button[aria-expanded="true"] .note-ring path {
 }
 
 
+/*
+  A wandering circuit, not a slide.
+
+  This used to be a two-keyframe `alternate` between the start point and one
+  diagonal offset, which is a firefly sliding up-right and then reversing down
+  the exact same line — the give-away that it is one element on one axis. Four
+  waypoints make an irregular loop instead, and because 100% returns to the start
+  it runs `infinite` rather than `alternate`, so the insect never retraces its
+  own path.
+
+  The waypoints are deliberately lopsided (right-and-up, then further up but
+  drifting back, then left-and-down): an even circle reads as an orbit.
+*/
 @keyframes fly-drift {
-  from {
+  0% {
     translate: -50% -50%;
   }
-  to {
-    translate: calc(-50% + var(--swing)) calc(-50% - var(--swing));
+  25% {
+    translate: calc(-50% + var(--swing)) calc(-50% - var(--swing) * 0.65);
+  }
+  50% {
+    translate: calc(-50% + var(--swing) * 0.3) calc(-50% - var(--swing) * 1.5);
+  }
+  75% {
+    translate: calc(-50% - var(--swing) * 0.75) calc(-50% - var(--swing) * 0.45);
+  }
+  100% {
+    translate: -50% -50%;
   }
 }
 
+/* Brightness AND size together, which is what a moving point of light does as it
+   turns — the scale is small enough to read as glow rather than as a balloon. */
 @keyframes fly-twinkle {
   from {
-    opacity: 0.32;
+    opacity: 0.26;
+    scale: 0.82;
   }
   to {
-    opacity: 0.95;
+    opacity: 1;
+    scale: 1.14;
   }
 }
 
@@ -1356,23 +1382,90 @@ button[aria-expanded="true"] .note-ring path {
 
 /* ── The blob ──────────────────────────────────────────────────────────── */
 
+/*
+  WHERE THE BLOB CAN BE THROWN TO.
+
+  The offsets are declared on the PLATE BOX and inherited, rather than being set
+  on the blob itself, so the ground glow — a SIBLING of the button — travels with
+  the character instead of staying pinned to the anchor while it sails away.
+  components/hero/HeroBlobButton.tsx writes them from its rAF loop.
+*/
+.hero-plate-box {
+  --blob-dx: 0px;
+  --blob-dy: 0px;
+  /* 0 on the ground, 1 at the top of its reach. */
+  --blob-air: 0;
+}
+
 .hero-blob {
   position: absolute;
   left: calc(var(--blob-cx) * 100%);
-  bottom: calc((1 - var(--blob-feet-y)) * 100%);
-  translate: -50% 0;
   z-index: 2;
-  /* Height comes from the measured anchor; width from the sprite's cell aspect,
-     so the sprite can never be stretched. */
-  height: calc(var(--blob-h) * 100%);
-  aspect-ratio: var(--cell-ar);
-  transform-origin: 50% 100%;
+
+  /*
+    THE ELEMENT IS THE CELL; --blob-h IS THE CHARACTER.
+
+    Every pose is drawn into one shared cell that is deliberately bigger than the
+    blob: there is headroom above its head for the sleeping Zzz and the question
+    mark, and room below its feet for the hover glow. So sizing the element to
+    --blob-h directly would draw the character too small and hang its feet in the
+    air by whatever the glow happens to need.
+
+    --sprite-body-h is the fraction of the cell that is actually blob, MEASURED by
+    scripts/build-blob-sprites.ts rather than guessed here. Inflating by it makes
+    the character exactly --blob-h tall, which is what the plate was measured
+    for, so the anchor and .hero-glow keep working untouched.
+  */
+  --blob-cell-h: calc(var(--blob-h) / var(--sprite-body-h));
+  height: calc(var(--blob-cell-h) * 100%);
+  aspect-ratio: var(--sprite-cell-ar);
+
+  /* The FOOT LINE goes on the path, not the element's bottom edge — the cell
+     hangs (1 - footY) of its height below the feet. */
+  bottom: calc(
+    (1 - var(--blob-feet-y)) * 100% - (1 - var(--sprite-foot-y)) * var(--blob-cell-h) * 100%
+  );
+
+  /* Anything that squashes or breathes pivots on the FEET, which are no longer
+     at the bottom of the box. */
+  transform-origin: 50% calc(var(--sprite-foot-y) * 100%);
+
+  /*
+    ONE `translate` DECLARATION, COMPOSED FROM PARTS.
+
+    `transform` is spoken for — the scroll timeline parallaxes the hero out with
+    it — so the drag rides on `translate` instead, which also carries the -50%
+    centring and the hover lift. They have to be one declaration or the last one
+    wins and the blob jumps to the middle of the plate the moment you grab it.
+    `rotate` and `scale` are left free for the tumble and the landing squash;
+    the four compose in a fixed order with no arbitration needed.
+  */
+  translate: calc(-50% + var(--blob-dx)) calc(var(--blob-dy) + var(--blob-lift, 0px));
+
   border: 0;
   background: none;
   padding: 0;
   border-radius: 28px;
   cursor: pointer;
-  transition: translate 160ms var(--ease-out-soft);
+  /* Kills the 300ms tap delay and double-tap zoom without taking scrolling away:
+     a swipe that starts on the blob still scrolls the page unless a long press
+     has picked the character up. See the touchmove listener in the component. */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    translate 160ms var(--ease-out-soft),
+    scale 160ms var(--ease-out-soft);
+}
+
+/* While the physics owns the position, a transition would make the character lag
+   the finger and overshoot every bounce. */
+.hero-blob[data-phase="grabbed"],
+.hero-blob[data-phase="flying"],
+.hero-blob[data-phase="walking"],
+.hero-blob[data-phase="launched"] {
+  transition: none;
 }
 
 .hero-blob:disabled {
@@ -1380,13 +1473,45 @@ button[aria-expanded="true"] .note-ring path {
   opacity: 0.85;
 }
 
+.hero-blob[data-phase="grabbed"] {
+  cursor: grabbing;
+}
+
 .hero-blob:hover,
 .hero-blob:focus-visible {
-  translate: -50% -6px;
+  --blob-lift: -6px;
+}
+
+/* Touchdown. The origin is the feet, so it squashes onto the path rather than
+   shrinking toward its own middle. */
+.hero-blob[data-phase="landing"] {
+  scale: 1.06 0.92;
 }
 
 .hero-blob:focus-visible {
   outline: none;
+}
+
+/*
+  The focus ring traces the CHARACTER, not the cell.
+
+  The cell is about 60% taller than the blob and wider than it too, so a ring on
+  the element itself would float a large empty box above its head — which is
+  exactly the "ring floats oddly around an irregular sprite" problem this already
+  had, made worse. --sprite-body-w/h are measured for this.
+*/
+.hero-blob::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 28px;
+  top: calc((var(--sprite-foot-y) - var(--sprite-body-h)) * 100%);
+  bottom: calc((1 - var(--sprite-foot-y)) * 100%);
+  left: calc((1 - var(--sprite-body-w)) / 2 * 100%);
+  right: calc((1 - var(--sprite-body-w)) / 2 * 100%);
+}
+
+.hero-blob:focus-visible::after {
   /* A plain ring floats oddly around an irregular sprite, and Tailwind's
      ring-offset needs an opaque backdrop it does not have over the plate. The
      second, darker ring is that backdrop. */
@@ -1395,16 +1520,24 @@ button[aria-expanded="true"] .note-ring path {
     0 0 0 6px color-mix(in srgb, var(--color-ink-950) 70%, transparent);
 }
 
+/*
+  One drawing per pose, swapped by src.
+
+  This used to be a packed sprite sheet stepped through with background-position,
+  which was free but could only ever show the six frames of a walk cycle. The
+  character now has sixteen poses in two facings as separate files, and the one
+  that matters most — asleep, with painted Zzz — could not exist in a walk sheet
+  at all. See the header of HeroBlobButton.tsx for why they are never mirrored.
+*/
 .hero-blob__sprite {
   position: absolute;
   inset: 0;
-  background-image: var(--walk-src);
-  background-repeat: no-repeat;
-  /* Six cells across: the sheet is 600% of one cell, so frame k sits at
-     background-position-x: k * (100 / 5)%. */
-  background-size: calc(var(--walk-frames) * 100%) 100%;
-  background-position-x: calc(var(--idle-frame) * var(--walk-step));
-  background-position-y: center;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* The blob's own light on the ground. One gradient, tinted with the brand token
@@ -1413,7 +1546,9 @@ button[aria-expanded="true"] .note-ring path {
   position: absolute;
   left: calc(var(--blob-cx) * 100%);
   bottom: calc((1 - var(--blob-feet-y)) * 100% - 2%);
-  translate: -50% 0;
+  /* Slides with the character but never leaves the ground: the light is cast ON
+     the path, so it tracks x only. */
+  translate: calc(-50% + var(--blob-dx)) 0;
   width: calc(var(--blob-h) * 100% * 2.2);
   height: calc(var(--blob-h) * 100% * 0.42);
   pointer-events: none;
@@ -1467,27 +1602,26 @@ button[aria-expanded="true"] .note-ring path {
 /*
   ── ASLEEP ──────────────────────────────────────────────────────────────────
 
-  The sprite sheet is a walk cycle; there is no drawing of a sleeping blob. So
-  sleep is carried by the LIGHT rather than by the artwork — the character dims
-  and desaturates toward the night around it, its fireflies go quiet, and the
-  pool of light it casts on the path fades down. Waking restores all three over
-  420ms, slow enough to read as something stirring rather than as a hover state
-  switching on.
+  Sleep is now DRAWN — eyes closed, painted Zzz — where it used to be faked by
+  dimming a walking blob to 60% brightness because the sheet had no sleeping
+  frame. So the light does much less work here than it did: a slight dip toward
+  the night around it, quiet fireflies, and the pool of light on the path turned
+  down. Reinforcement for the pose, not a substitute for one.
 
-  Without this, resting and awake differed only by whether the label was on
-  screen, so a blob that was meant to be asleep looked exactly as alert as one
-  that had just noticed you. The breathe is slower and deeper too — see
-  blob-doze in the reduced-motion block.
+  Keep it slight. At the old strength it fought the artwork — the Zzz went grey
+  and the character read as switched-off rather than asleep. Waking restores it
+  over 420ms, slow enough to read as something stirring rather than as a hover
+  state switching on.
 */
 .hero-blob__sprite {
   transition: filter 420ms var(--ease-out-soft);
 }
 
-.hero-blob[data-wake="resting"] .hero-blob__sprite {
-  filter: brightness(0.6) saturate(0.6);
+.hero-blob[data-phase="asleep"] .hero-blob__sprite {
+  filter: brightness(0.86);
 }
 
-.hero-blob[data-wake="resting"] .hero-blob__fly {
+.hero-blob[data-phase="asleep"] .hero-blob__fly {
   opacity: 0.2;
 }
 
@@ -1496,9 +1630,16 @@ button[aria-expanded="true"] .note-ring path {
 }
 
 /* The ground glow is a SIBLING of the button, not a child, so it cannot be
-   reached by descending from [data-wake]. */
-.hero-plate-box:has(.hero-blob[data-wake="resting"]) .hero-glow {
+   reached by descending from [data-phase]. */
+.hero-plate-box:has(.hero-blob[data-phase="asleep"]) .hero-glow {
   opacity: 0.38;
+}
+
+/* Thrown into the air, the light it casts on the path falls away beneath it. */
+.hero-plate-box:has(.hero-blob[data-phase="flying"]) .hero-glow,
+.hero-plate-box:has(.hero-blob[data-phase="launched"]) .hero-glow {
+  opacity: calc(1 - 0.8 * var(--blob-air));
+  transition: none;
 }
 
 /*
@@ -1524,13 +1665,11 @@ button[aria-expanded="true"] .note-ring path {
   transition-delay: 0s;
 }
 
-/* No hover on a touch screen, so the blob can never be roused. Show the offer. */
-@media (hover: none) {
-  .hero-blob__label {
-    opacity: 1;
-    visibility: visible;
-  }
-}
+/* There used to be a `@media (hover: none)` block here forcing the label on,
+   because a touch screen had no way to rouse the blob. It has one now: the first
+   tap wakes it and lets it ask, the second sends it out. Forcing the offer open
+   would spend it before the character got to make it, and would leave a phantom
+   hitbox over the scene on every phone. */
 
 .hero-blob__label {
   position: absolute;
@@ -1594,16 +1733,10 @@ button[aria-expanded="true"] .note-ring path {
   background: var(--color-compute-400);
 }
 
-@keyframes blob-walk {
-  from {
-    background-position-x: 0%;
-  }
-  to {
-    /* frames/(frames-1) * 100% — one step past the last cell, so steps() lands
-       evenly on all six. */
-    background-position-x: 120%;
-  }
-}
+/* `blob-walk` used to live here — a steps() animation over the packed walk
+   sheet. The walk is a sequence of separate drawings now, advanced by the
+   component on DISTANCE COVERED rather than on a timer, which is what stops it
+   moon-walking when the last step home is shorter than the others. */
 
 @keyframes blob-breathe {
   from {
@@ -1641,9 +1774,12 @@ button[aria-expanded="true"] .note-ring path {
   .hero-aurora__sway {
     animation: aurora-sway var(--sway) ease-in-out var(--delay) infinite alternate;
   }
+  /* `normal` on the drift, not `alternate` — the circuit already returns to its
+     own start, and alternating it would run the loop backwards every other pass.
+     The twinkle still alternates; it is a fade, not a path. */
   .hero-fly {
     animation:
-      fly-drift var(--drift) ease-in-out var(--delay) infinite alternate,
+      fly-drift var(--drift) ease-in-out var(--delay) infinite normal,
       fly-twinkle var(--twinkle) ease-in-out var(--delay) infinite alternate;
   }
 
@@ -1651,30 +1787,29 @@ button[aria-expanded="true"] .note-ring path {
     animation: cue-nudge 2.4s var(--ease-out-soft) infinite;
   }
 
+  /* The pivot is the FEET, which sit at footY of the cell and not at its bottom
+     edge — breathing around the box's centre would lift the character off the
+     path every exhale. */
   .hero-blob__sprite {
     animation: blob-breathe 3.6s ease-in-out infinite alternate;
-    transform-origin: 50% 100%;
+    transform-origin: 50% calc(var(--sprite-foot-y) * 100%);
   }
 
   /* Asleep on arrival, and asleep again six seconds after you leave. */
-  .hero-blob[data-wake="resting"] .hero-blob__sprite {
+  .hero-blob[data-phase="asleep"] .hero-blob__sprite {
     animation: blob-doze 5.4s ease-in-out infinite alternate;
   }
 
-  /* 8-12 fps is the stylised-character band. 24 fps on a six-frame cycle reads
-     as a glitch rather than as walking.
-
-     It walks only while WAKING. Once awake it settles back to the idle frame and
-     breathes while the offer stands — a character that keeps marching on the spot
-     the whole time it is asking you something reads as a loading spinner. */
-  .hero-blob[data-wake="waking"] .hero-blob__sprite {
-    animation: blob-walk 0.72s steps(var(--walk-frames)) infinite;
-  }
-  .hero-blob[data-state="pending"] .hero-blob__sprite {
-    animation: blob-walk 0.52s steps(var(--walk-frames)) infinite;
-  }
-  .hero-blob[data-state="recording"] .hero-blob__sprite {
-    animation: blob-walk 0.62s steps(var(--walk-frames)) infinite;
+  /* Held, thrown or walking, the character is being posed frame by frame from
+     JS. An idle breath on top of that fights it — the blob would inflate and
+     deflate while it was tumbling through the air. */
+  .hero-blob[data-phase="grabbed"] .hero-blob__sprite,
+  .hero-blob[data-phase="flying"] .hero-blob__sprite,
+  .hero-blob[data-phase="landing"] .hero-blob__sprite,
+  .hero-blob[data-phase="walking"] .hero-blob__sprite,
+  .hero-blob[data-phase="crouching"] .hero-blob__sprite,
+  .hero-blob[data-phase="launched"] .hero-blob__sprite {
+    animation: none;
   }
 
   /* Parallax from the three real DOM layers we already have. No JS, so no
