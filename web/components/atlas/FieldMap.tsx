@@ -10,8 +10,9 @@
  * route-plate language:
  *
  *   · the walk is a dotted clay pen line over a soft brass highlighter bleed
- *   · kept moments are surveyor's markers — ink stem, ringed head, numbered
- *     in typewriter — that breathe a sonar ring while hot
+ *   · kept moments are specimen banners — an ink stem planted at the spot with
+ *     a small swallow-tailed flag flying its wall clock in typewriter, pressed
+ *     in the journal's own ink — that breathe a sonar ring while hot
  *   · trailheads are benchmark rings, the scale bar speaks fnote
  *   · fair-weather clouds drift over the whole thing (CloudLayer), above you
  *     when you zoom out, shadow-only when you zoom in
@@ -35,13 +36,15 @@ if (typeof window !== "undefined") {
 }
 import { CloudLayer } from "@/components/atlas/CloudLayer";
 import { localToLngLat, tripBounds } from "@/lib/geo";
-import { BRASS, CLAY, PAPER, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
+import { BRASS, CLAY, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
 import type { TrackPoint, Vec2 } from "@/lib/types";
 
 interface Props {
   path: TrackPoint[];
   moments: MomentSummary[];
+  /** Wall-clock labels ("19:42"), aligned with `moments` — the banners fly them. */
+  clocks: string[];
   activeId: string | null;
   /** Playhead time — markers after it haven't "happened yet" during a replay. */
   reachedT: number | null;
@@ -57,7 +60,7 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
   const routeCoords = useMemo(() => path.map((p) => localToLngLat(p.pos)), [path]);
@@ -142,7 +145,7 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
         <TrailheadMarker at={routeCoords[0]} label="Start" />
         <TrailheadMarker at={routeCoords[routeCoords.length - 1]} label="End" hollow />
 
-        {/* The kept moments — surveyor's markers flagging the kept minutes. */}
+        {/* The kept moments — specimen banners planted where the minutes were kept. */}
         {moments.map((m, i) => {
           const [lng, lat] = localToLngLat(m.placePos);
           return (
@@ -150,6 +153,7 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
               <SurveyMarker
                 index={i}
                 ink={inkForMoment(i)}
+                clock={clocks[i] ?? ""}
                 title={m.title}
                 hasMusic={m.hasMusic}
                 active={activeId === m.id}
@@ -194,15 +198,20 @@ export function FieldMap({ path, moments, activeId, reachedT, robotPos, onHover,
 // Marks
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The swallow-tail cut on the banner's fly end. */
+const BANNER_CLIP = "polygon(0 0, 100% 0, calc(100% - 5px) 50%, 100% 100%, 0 100%)";
+
 /**
- * A surveyor's marker — the landing's route-plate flag, planted on the real
- * park: contact shadow on the ground, a fine ink stem, and a ringed head
- * numbered in typewriter. Hot markers breathe a sonar ring; markers the
- * replay hasn't reached yet print hollow — not happened yet.
+ * A specimen banner — the naturalist's flag planted where a minute was kept:
+ * contact shadow on the ground, a fine ink stem, and a small swallow-tailed
+ * banner flying the moment's wall clock in typewriter, pressed in the
+ * journal's own ink. Hot banners straighten, lift and breathe a sonar ring;
+ * banners the replay hasn't reached yet print hollow — not happened yet.
  */
 function SurveyMarker({
   index,
   ink,
+  clock,
   title,
   hasMusic,
   active,
@@ -212,6 +221,7 @@ function SurveyMarker({
 }: {
   index: number;
   ink: MomentInk;
+  clock: string;
   title: string;
   hasMusic: boolean;
   active: boolean;
@@ -222,15 +232,15 @@ function SurveyMarker({
   return (
     <button
       type="button"
-      aria-label={`Moment ${index + 1}: ${title}. Open the splat.`}
+      aria-label={`Moment ${index + 1}, ${clock}: ${title}. Open the splat.`}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       onFocus={() => onHover(true)}
       onBlur={() => onHover(false)}
       onClick={onOpen}
-      className="relative block cursor-pointer"
+      className="relative block h-[40px] w-[3px] cursor-pointer"
       style={{
-        transform: active ? "scale(1.14)" : "scale(1)",
+        transform: active ? "translateY(-3px)" : "translateY(0)",
         transformOrigin: "bottom center",
         transition: "transform 0.3s var(--ease-signature)",
       }}
@@ -239,48 +249,57 @@ function SurveyMarker({
       <span
         aria-hidden
         className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rounded-full"
-        style={{ width: 15, height: 5, background: "rgb(27 27 24 / 0.3)", filter: "blur(1.6px)" }}
+        style={{ width: 14, height: 5, background: "rgb(27 27 24 / 0.28)", filter: "blur(1.6px)" }}
       />
 
-      <span className="flex flex-col items-center">
-        {/* The ringed head. */}
+      {/* The stem, planted at the anchor. */}
+      <span
+        aria-hidden
+        className="absolute bottom-0 left-1/2 w-[1.5px] -translate-x-1/2"
+        style={{ height: 40, background: unreached ? `${ink.deep}8c` : ink.deep }}
+      />
+
+      {/* The banner, hoisted at the top of the stem. A wisp of a lean at rest;
+          it straightens when hot, the way a flag catches wind. */}
+      <span
+        aria-hidden
+        className="absolute left-[0.5px] top-0 block"
+        style={{
+          transform: active ? "rotate(0deg)" : "rotate(-2.5deg)",
+          transformOrigin: "0% 50%",
+          transition: "transform 0.3s var(--ease-signature)",
+          filter: unreached ? "none" : "drop-shadow(0 1.5px 2px rgb(27 27 24 / 0.28))",
+        }}
+      >
         <span
-          className="relative grid place-items-center rounded-full"
-          style={{
-            width: 25,
-            height: 25,
-            background: unreached ? "rgb(255 251 240 / 0.94)" : ink.deep,
-            boxShadow: unreached
-              ? `inset 0 0 0 1.5px ${ink.deep}, 0 1px 3px rgb(27 27 24 / 0.22)`
-              : `0 0 0 2px rgb(255 251 240 / 0.95), 0 2px 5px rgb(27 27 24 / 0.28)`,
-          }}
+          className="relative flex h-[17px] items-center pl-[7px] pr-[11px]"
+          style={{ background: ink.deep, clipPath: BANNER_CLIP }}
         >
-          {active && (
+          {/* Hollow print for not-yet-reached banners: a vellum inlay. */}
+          {unreached && (
             <span
               aria-hidden
-              className="sonar absolute inset-0 rounded-full"
-              style={{ boxShadow: `0 0 0 1.5px ${ink.deep}` }}
+              className="absolute inset-[1.4px]"
+              style={{ background: "var(--color-vellum)", clipPath: BANNER_CLIP }}
             />
           )}
           <span
-            className="fnote relative text-[10px] leading-none"
-            style={{ color: unreached ? ink.deep : PAPER, letterSpacing: "0.02em" }}
+            className="fnote relative text-[8.5px] leading-none"
+            style={{ color: unreached ? ink.deep : "var(--color-milk)", letterSpacing: "0.08em" }}
           >
-            {index + 1}
+            {clock}
           </span>
         </span>
-        {/* The stem, planted at the anchor. */}
+      </span>
+
+      {/* The sonar breath, rippling from the hoist while hot. */}
+      {active && (
         <span
           aria-hidden
-          className="block"
-          style={{
-            width: 1.5,
-            height: 13,
-            background: ink.deep,
-            opacity: unreached ? 0.55 : 0.9,
-          }}
+          className="sonar absolute left-1/2 top-[2px] rounded-full"
+          style={{ width: 13, height: 13, marginLeft: -6.5, boxShadow: `0 0 0 1.5px ${ink.deep}` }}
         />
-      </span>
+      )}
 
       {/* Hover label — a vellum slip pinned over the park. */}
       {active && (
@@ -293,7 +312,7 @@ function SurveyMarker({
           }}
         >
           <span className="fnote text-[9px]" style={{ color: ink.deep }}>
-            [ {String(index + 1).padStart(3, "0")} ]
+            [ {clock} ]
           </span>
           <span className="text-[12px] font-semibold text-ink">{title}</span>
           <span className="fnote text-[8.5px] text-ink-faint">

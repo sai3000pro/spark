@@ -1,7 +1,7 @@
 ---
-version: 5.3
+version: 5.4
 name: Spark-field-notes
-description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned deck of taped-down photographs leafed through one flick at a time, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned deck of taped-down photographs leafed through one flick at a time, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate. v5.4: typographic choreography and honest pins — the hero's lines rise out of per-line masks and the last line rolls through its mask every 3.4s, section h2s split and rise line-by-line (SplitText, blur + fade), the map's numbered circle pins became specimen banners flying each moment's wall clock in its pressed ink (the pressed ink faces are now the journal's own six-ink cycle), the day bar plants wordless miniature pennants with vellum hover slips, NumberChip is a typewriter number circled by the hand-drawn pen ring, and the survey map's greens and water turned up from tinted paper to living moss and wet lagoon."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -37,8 +37,12 @@ FIELD NOTES (landing + brand surfaces):
 NIGHT WALK — retired from product surfaces in v5.3. The indigo tokens stay in the
 theme for the generated twilight map's revert path and the landing's own plates. The six
 moment inks live on with two faces: `base` (luminous — dark plates, the splat stage) and
-`deep` (pressed — pins, chips, meters on paper). Categorical label-family colors mirror
-this with `FAMILY_COLOR` / `FAMILY_COLOR_DEEP` in `lib/mock/labels.ts`.
+`deep` (pressed — pins, chips, meters on paper). v5.4: the pressed faces are no longer
+darkened twilight pigments — they ARE the journal's six-ink cycle (clay #c14f24 · lagoon
+#476d73 · spruce #2c4347 · brass #8a6d2f · moss #7d7730 · ink #1b1b18, the landing's
+PAPER_INKS), so everything stamped on paper speaks the journal's own palette.
+Categorical label-family colors mirror the two-face scheme with `FAMILY_COLOR` /
+`FAMILY_COLOR_DEEP` in `lib/mock/labels.ts`.
 
 ## Typography
 
@@ -102,7 +106,13 @@ choreography, in order:
    changes overhead ("It noticed N things." → "It weighed 15 of its minutes." → "It kept
    six."), and six words get circled in their moment's ink with its clock. No-JS and
    reduced-motion land directly on the final crossed-out page.
-2. **Hero cycle** — the headline's last line blurs out/in every 3.4s (wet ink).
+2. **Hero lines** — the headline's two lines rise out of per-line overflow masks on
+   arrival (the masks carry 0.12em of padding pulled back with margin so descenders
+   never clip). The last line then rolls all evening: every 3.4s it slides up and out
+   through its mask with a 5px wet-ink blur while the next slides in from below.
+   Section h2s share the grammar via `[data-lines]`: SplitText (after
+   `document.fonts.ready`) splits them into lines that rise staggered with blur +
+   fade — no masks, so tight leading keeps its descenders.
 3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
    copies wear `.smear` (blur 7px) for the smeared-ink read.
 4. **The gallery deck** — "Six moments, kept." pins on desktop as a pile of
@@ -114,8 +124,8 @@ choreography, in order:
    same mounted prints.
 5. **The plates draw themselves** on arrival, then idle: detection dots ripple out and
    the hot ones twinkle; score bars grow against the clay keep-line whose dashes then
-   march while the kept bars glow; six surveyor's markers drop onto the dotted route,
-   breathe sonar rings, and a brass dot — the robot — laps the evening.
+   march while the kept bars glow; six pennant flags in the luminous inks drop onto
+   the dotted route, breathe sonar rings, and a brass dot — the robot — laps the evening.
 6. **The statement** — three stacked lines that each FIT the page ("Not every minute /
    is worth keeping. / Six were."), drifting a few percent in opposite directions as
    the section passes — always readable, never driven off the edge. "Six were." wears
@@ -137,17 +147,24 @@ crossed-out page, marquees still, numbers already true.
 ## The map
 
 Real OpenFreeMap Liberty tiles restyled by script into the journal's own survey map:
-cream ground a half-step under the page, moss washes for greens, a lagoon wash for water,
-vellum roads with fine sand casings, ink-soft labels, extrusion light flattened so
-buildings print as pale blocks. The walk draws as the journal marks a keeper — a DOTTED
-clay pen line over a soft brass highlighter bleed — replayed at 120× while the full route
-waits as a pencil trace. Kept moments are the landing's surveyor's markers planted on the
-park: contact shadow, ink stem, ringed head numbered in typewriter, a sonar ring breathing
-while hot (hollow until the replay reaches them). Trailheads are benchmark rings; the
-scale bar speaks fnote; papergrain and a soft ink vignette sit over the tiles so the map
-reads as a page. The day bar is the same instrument in miniature: a pen-line rail with
-quarter-hour ticks, a brass fill to the playhead with a clay nib riding its edge, and the
-moments planted on the rail at their true time of day.
+cream ground a half-step under the page, LIVING moss greens (#d3dd9a, wood #bcd08f) and
+a real wet lagoon (#a4d0c6, edge #6fa89c) — v5.4 turned both up from tinted-paper washes
+so the park reads alive — vellum roads with fine sand casings, ink-soft labels, extrusion
+light flattened so buildings print as pale blocks. The walk draws as the journal marks a
+keeper — a DOTTED clay pen line over a soft brass highlighter bleed — replayed at 120×
+while the full route waits as a pencil trace. Kept moments are specimen banners planted
+where the minute was kept: contact shadow, fine ink stem, and a small swallow-tailed
+banner (clip-path, −2.5° lean at rest) flying the moment's wall clock in milk typewriter
+on its pressed ink; hot banners straighten, lift and breathe a sonar ring at the hoist,
+and banners the replay hasn't reached print hollow (vellum inlay, ink text). Numbered
+circle heads are retired — the clock IS the label, and `NumberChip` everywhere is now a
+typewriter number circled by the landing's hand-drawn pen ring (clay, or the moment's
+pressed ink). Trailheads are benchmark rings; the scale bar speaks fnote; papergrain and
+a soft ink vignette sit over the tiles so the map reads as a page. The day bar is the
+same instrument in miniature: a pen-line rail with quarter-hour ticks, a brass fill to
+the playhead with a clay nib riding its edge (breathing while the replay runs), and the
+moments planted on the rail as wordless miniature pennants at their true time of day —
+hovering one lifts a vellum slip with its clock and title.
 
 **The weather** (`components/atlas/CloudLayer.tsx`): a dozen-odd cumulus drift over the
 map on one pointer-transparent canvas, anchored to the WORLD — re-projected through the

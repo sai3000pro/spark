@@ -36,10 +36,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { CustomEase } from "gsap/CustomEase";
+import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from "lucide-react";
 import { KeyframeImg } from "@/components/system/ui";
-import { BRASS, CLAY, PINE } from "@/lib/theme";
+import { BRASS, CLAY, MOMENT_INKS } from "@/lib/theme";
 
 export interface LandingMoment {
   id: string;
@@ -81,7 +82,7 @@ export interface LandingProps {
   discards: LandingDiscard[];
 }
 
-gsap.registerPlugin(ScrollTrigger, CustomEase);
+gsap.registerPlugin(ScrollTrigger, CustomEase, SplitText);
 
 /* Deterministic PRNG — generated layouts must agree between the server and
    client renders. */
@@ -308,7 +309,18 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         sieve.kill();
       });
 
-      // Hero last line cycles with a wet-ink blur.
+      // The hero's two lines rise out of their masks on arrival.
+      const heroIn = gsap.from("[data-hero-line]", {
+        yPercent: 110,
+        duration: 1.1,
+        ease: "reveal",
+        stagger: 0.12,
+        delay: 0.1,
+      });
+      killers.push(() => heroIn.kill());
+
+      // The last line rolls all evening: up and out through the mask, the
+      // next one in from below with the ink still wet.
       let wi = 0;
       const cycle = () => {
         const node = heroWord.current;
@@ -316,16 +328,20 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         gsap
           .timeline()
           .to(node, {
-            filter: "blur(10px)",
-            opacity: 0,
-            duration: 0.45,
+            yPercent: -112,
+            filter: "blur(5px)",
+            duration: 0.5,
             ease: "signature",
             onComplete: () => {
               wi = (wi + 1) % HERO_CYCLE.length;
               node.textContent = HERO_CYCLE[wi];
             },
           })
-          .to(node, { filter: "blur(0px)", opacity: 1, duration: 0.5, ease: "signature" });
+          .fromTo(
+            node,
+            { yPercent: 115, filter: "blur(5px)" },
+            { yPercent: 0, filter: "blur(0px)", duration: 0.65, ease: "reveal" },
+          );
       };
       const cycleIv = window.setInterval(cycle, 3400);
       killers.push(() => window.clearInterval(cycleIv));
@@ -480,6 +496,43 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         });
       }
 
+      // Line reveals — section headings rise line-by-line with the ink still
+      // wet (translate + blur + fade; no clipping masks, so tight leading
+      // keeps its descenders). Split only after the fonts settle so the line
+      // breaks are the real ones; disposed through the same killers.
+      {
+        const lineTargets = Array.from(el.querySelectorAll<HTMLElement>("[data-lines]"));
+        let cancelled = false;
+        const disposers: Array<() => void> = [];
+        if (lineTargets.length) {
+          document.fonts.ready.then(() => {
+            if (cancelled) return;
+            lineTargets.forEach((node) => {
+              const split = SplitText.create(node, { type: "lines" });
+              const tween = gsap.from(split.lines, {
+                yPercent: 55,
+                opacity: 0,
+                filter: "blur(6px)",
+                duration: 0.9,
+                ease: "reveal",
+                stagger: 0.1,
+                scrollTrigger: { trigger: node, start: "top 85%", once: true },
+              });
+              disposers.push(() => {
+                tween.scrollTrigger?.kill();
+                tween.kill();
+                split.revert();
+              });
+            });
+            ScrollTrigger.refresh();
+          });
+        }
+        killers.push(() => {
+          cancelled = true;
+          disposers.forEach((d) => d());
+        });
+      }
+
       // One-shot reveals.
       const io = new IntersectionObserver(
         (entries) => {
@@ -592,13 +645,13 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       <header className="glass-bar sticky top-0 z-40 flex items-center justify-between px-5 py-3 text-milk sm:px-8">
         <Link href="/" className="flex items-baseline gap-0.5 text-[20px] font-semibold tracking-tight" aria-label="Spark home">
           spark
-          <span aria-hidden className="inline-block h-[7px] w-[7px] rounded-full bg-clay" />
+          <span aria-hidden className="pulse-dot inline-block h-[7px] w-[7px] rounded-full bg-clay" />
         </Link>
         <nav className="flex items-center gap-3 sm:gap-5">
-          <Link href="/walk" className="hidden text-[13.5px] text-milk/85 transition-opacity hover:text-milk sm:block">
+          <Link href="/walk" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
             The walk
           </Link>
-          <Link href="/detect" className="hidden text-[13.5px] text-milk/85 transition-opacity hover:text-milk sm:block">
+          <Link href="/detect" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
             Detector bench
           </Link>
           <button
@@ -630,15 +683,22 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           <p className="fnote text-[11.5px] text-mist" data-reveal>
             [ {dateLabel} · {placeLabel} ]
           </p>
-          <h1
-            data-reveal
-            style={{ "--reveal-delay": "80ms" } as React.CSSProperties}
-            className="mt-6 text-[clamp(2.9rem,7vw,6rem)] leading-[1.02] text-milk"
-          >
-            A day, remembered
-            <br />
-            <span ref={heroWord} className="inline-block text-brass" style={{ willChange: "filter, opacity" }}>
-              {HERO_CYCLE[0]}
+          {/* Each line rises out of its own mask — the fold of the page. The
+              last line keeps rolling all evening: up and out, in from below.
+              The masks get a hair of padding (pulled back with margin) so
+              descenders never clip against the fold. */}
+          <h1 className="mt-6 text-[clamp(2.9rem,7vw,6rem)] leading-[1.04] text-milk">
+            <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
+              <span data-hero-line className="block">
+                A day, remembered
+              </span>
+            </span>
+            <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
+              <span data-hero-line className="block text-brass">
+                <span ref={heroWord} className="inline-block" style={{ willChange: "transform, filter" }}>
+                  {HERO_CYCLE[0]}
+                </span>
+              </span>
             </span>
           </h1>
           <p
@@ -654,11 +714,11 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
             style={{ "--reveal-delay": "240ms" } as React.CSSProperties}
             className="mt-9 flex flex-wrap items-center justify-center gap-3"
           >
-            <Link href="/walk" className="pill-brass px-5 py-2.5 text-[14px]">
+            <Link href="/walk" className="pill-brass px-6 py-3 text-[15px]">
               <Plus size={15} strokeWidth={2} aria-hidden />
               Step into the walk
             </Link>
-            <a href="#decides" className="pill-ghost px-5 py-2.5 text-[14px] text-milk">
+            <a href="#decides" className="pill-ghost px-6 py-3 text-[15px] text-milk">
               How it decides
             </a>
           </div>
@@ -882,7 +942,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         <div className="deck-when-armed relative hidden h-svh min-h-[640px]">
           <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10">
             <div className="mx-auto flex w-full max-w-6xl flex-wrap items-end justify-between gap-4 px-8">
-              <h2 className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">Six moments, kept.</h2>
+              <h2 data-lines className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">Six moments, kept.</h2>
               <p className="fnote pb-2 text-[11px] text-ink-faint">[ SCROLL — LEAF THROUGH THE PRINTS ]</p>
             </div>
           </div>
@@ -949,7 +1009,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         <div className="strip-when-armed py-20">
           <div className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-8">
             <div className="flex flex-wrap items-end justify-between gap-4">
-              <h2 data-reveal className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">
+              <h2 data-lines className="text-[clamp(2.4rem,5vw,4rem)] leading-[1.04] text-spruce">
                 Six moments, kept.
               </h2>
               <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
@@ -998,7 +1058,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       <section data-ledger className="papergrain gridfield relative bg-paper" aria-label="The discarded candidates">
         <div className="relative mx-auto max-w-6xl px-5 py-24 sm:px-8 sm:py-28">
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <h2 data-reveal className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
+            <h2 data-lines className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
               The crossed-out pages.
             </h2>
             <p data-reveal className="max-w-[46ch] text-[14.5px] leading-relaxed text-ink-soft">
@@ -1013,12 +1073,12 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
                 key={d.id}
                 data-reveal
                 style={{ "--reveal-delay": `${i * 60}ms` } as React.CSSProperties}
-                className="grid gap-2 py-5 sm:grid-cols-[110px_1fr_auto] sm:items-baseline sm:gap-6"
+                className="group/row grid gap-2 py-5 transition-colors duration-300 hover:bg-ink/[0.03] sm:grid-cols-[110px_1fr_auto] sm:items-baseline sm:gap-6"
               >
                 <p className="fnote text-[11px] text-ink-faint">
                   {d.clock} · {d.length}
                 </p>
-                <div>
+                <div className="transition-transform duration-300 ease-(--ease-signature) group-hover/row:translate-x-1">
                   <p className="text-[15px] text-ink">{d.trigger}</p>
                   <p className="mt-1 text-[13px] italic text-ink-soft">{d.reason}</p>
                 </div>
@@ -1026,11 +1086,13 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
                   <span aria-hidden className="h-1 w-24 overflow-hidden rounded-full bg-ink/10">
                     <span
                       data-score-bar
-                      className="block h-full rounded-full bg-clay/70"
+                      className="block h-full rounded-full bg-clay/70 transition-colors duration-300 group-hover/row:bg-clay"
                       style={{ width: `${Math.round((d.score / maxScore) * 100)}%` }}
                     />
                   </span>
-                  <span className="fnote text-[10px] tracking-[0.2em] text-clay">[ DISCARDED ]</span>
+                  <span className="fnote inline-block text-[10px] tracking-[0.2em] text-clay transition-transform duration-300 ease-(--ease-signature) group-hover/row:-rotate-3 group-hover/row:scale-105">
+                    [ DISCARDED ]
+                  </span>
                 </div>
               </li>
             ))}
@@ -1038,6 +1100,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           <p data-reveal className="fnote mt-6 text-[11px] text-ink-faint">
             [ Full audit trail on the detector bench ]
           </p>
+
         </div>
       </section>
 
@@ -1094,7 +1157,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       <section className="papergrain gridfield relative bg-paper py-20 sm:py-24" aria-label="Field notes">
         <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 data-reveal className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
+            <h2 data-lines className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
               Field notes
             </h2>
             <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
@@ -1189,12 +1252,12 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
       <section className="dotfield starfield relative overflow-hidden bg-pine pb-10 sm:pb-14" aria-label="Enter the app">
         <div className="relative z-10 mx-auto max-w-6xl px-5 pt-24 sm:px-8 sm:pt-32">
           <div className="flex flex-wrap items-end justify-between gap-8">
-            <h2 data-reveal className="text-[clamp(2.6rem,5.6vw,4.6rem)] leading-[1.05] text-milk">
+            <h2 data-lines className="text-[clamp(2.6rem,5.6vw,4.6rem)] leading-[1.05] text-milk">
               The walk is over…
               <br />
               <span className="text-brass">The memory isn{"'"}t.</span>
             </h2>
-            <Link href="/walk" data-reveal className="pill-brass mb-2 px-5 py-2.5 text-[14px]">
+            <Link href="/walk" data-reveal className="pill-brass mb-2 px-6 py-3 text-[15px]">
               <Plus size={15} strokeWidth={2} aria-hidden />
               Step into the walk
             </Link>
@@ -1229,10 +1292,10 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           <footer className="relative z-10 mx-4 mt-10 sm:mx-10 lg:absolute lg:left-1/2 lg:top-1/2 lg:mx-0 lg:mt-0 lg:w-full lg:max-w-5xl lg:-translate-x-1/2 lg:-translate-y-1/2">
             <div className="glass-bar flex flex-col items-center gap-5 rounded-2xl px-6 py-5 text-milk sm:flex-row sm:justify-between">
               <nav className="fnote flex gap-5 text-[10.5px]">
-                <Link href="/walk" className="opacity-80 transition-opacity hover:opacity-100">
+                <Link href="/walk" className="link-pen opacity-80 transition-opacity hover:opacity-100">
                   The walk
                 </Link>
-                <Link href="/detect" className="opacity-80 transition-opacity hover:opacity-100">
+                <Link href="/detect" className="link-pen opacity-80 transition-opacity hover:opacity-100">
                   Detector bench
                 </Link>
               </nav>
@@ -1253,7 +1316,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
             className="pointer-events-none mx-auto mt-6 w-fit whitespace-nowrap text-center text-[clamp(8rem,27vw,23rem)] font-semibold leading-[0.92] tracking-[-0.05em] text-ink lg:mt-0"
           >
             spark
-            <span className="ml-[0.02em] inline-block h-[0.13em] w-[0.13em] rounded-full bg-clay align-baseline" />
+            <span className="pulse-dot ml-[0.02em] inline-block h-[0.13em] w-[0.13em] rounded-full bg-clay align-baseline" />
           </p>
         </div>
       </section>
@@ -1375,11 +1438,11 @@ function ScoreBars({ candidates, kept }: { candidates: number; kept: number }) {
   );
 }
 
-/** [ 003 ] — the walk as a dotted route: six surveyor's markers flag the kept
-    minutes, each breathing a sonar ring, while a brass dot — the robot —
-    quietly laps the evening. */
+/** [ 003 ] — the walk as a dotted route: six pennant flags mark the kept
+    minutes, each flying its moment's luminous ink and breathing a sonar ring,
+    while a brass dot — the robot — quietly laps the evening. */
 function PinRow() {
-  const inks = [BRASS, CLAY, "#7d7730", "#8fb3ad", BRASS, CLAY];
+  const inks = MOMENT_INKS.map((ink) => ink.base);
   return (
     <svg viewBox="0 0 260 140" className="h-full w-auto" aria-hidden>
       <path
@@ -1397,10 +1460,9 @@ function PinRow() {
         return (
           <g key={i} className="pr-pin" transform={`translate(${x} ${y})`}>
             <ellipse cx={0} cy={0} rx={4.5} ry={1.6} fill="rgb(243 239 251 / 0.18)" />
-            <line x1={0} y1={0} x2={0} y2={-14} stroke={ink} strokeWidth={1.5} strokeLinecap="round" />
-            <circle className="pr-halo" cx={0} cy={-21} r={7} fill="none" stroke={ink} strokeWidth={1} opacity={0} />
-            <circle cx={0} cy={-21} r={6} fill={ink} />
-            <circle cx={0} cy={-21} r={2.1} fill={PINE} />
+            <line x1={0} y1={0} x2={0} y2={-22} stroke={ink} strokeWidth={1.5} strokeLinecap="round" />
+            <circle className="pr-halo" cx={0} cy={-18} r={7} fill="none" stroke={ink} strokeWidth={1} opacity={0} />
+            <path d={`M0.75 -22 L13 -18.5 L0.75 -15 Z`} fill={ink} />
           </g>
         );
       })}

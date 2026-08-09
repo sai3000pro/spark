@@ -9,10 +9,18 @@
 import type { CSSProperties, ReactNode } from "react";
 import { placeholderDataUri } from "@/lib/mock/placeholder";
 import { colorForLabel, deepColorForLabel } from "@/lib/mock/labels";
-import { PAPER, PINE, type MomentInk } from "@/lib/theme";
+import { CLAY, PAPER, PINE, type MomentInk } from "@/lib/theme";
 import type { Keyframe as KeyframeModel } from "@/lib/types";
 
-/** The corner chip: `01`, `02`… — the index mark, stamped in pressed ink. */
+/** The same hand-drawn ellipse the landing's pen uses — sieve, statement, index. */
+const RING_PATH =
+  "M8 24 C 8 9, 38 3, 62 4 C 92 5, 114 11, 113 22 C 112 35, 84 41, 56 40 C 28 39, 9 34, 8 25";
+
+/**
+ * The index mark: `01`, `02`… set in typewriter with the journal's pen circle
+ * drawn around it — the same ring the landing's sieve and field-notes index
+ * wear. Clay by default; pass an ink and the pen dips into the moment's own.
+ */
 export function NumberChip({
   n,
   ink,
@@ -20,29 +28,38 @@ export function NumberChip({
   className = "",
 }: {
   n: number;
-  /** Colored variant — the chip is stamped in the moment's pressed ink. */
+  /** Colored variant — the pen circles the number in the moment's pressed ink. */
   ink?: MomentInk;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   const sizes = {
-    sm: "h-6 min-w-6 px-1 text-[11px] rounded-[5px]",
-    md: "h-7 min-w-7 px-1.5 text-[12px] rounded-[6px]",
-    lg: "h-11 min-w-11 px-2 text-[17px] rounded-[8px]",
+    sm: "h-6 min-w-[26px] text-[10.5px]",
+    md: "h-7 min-w-[30px] text-[11.5px]",
+    lg: "h-11 min-w-[46px] text-[16px]",
   };
-  const style: CSSProperties = ink
-    ? {
-        background: ink.deep,
-        color: PAPER,
-        boxShadow: "0 0 0 1.5px rgb(250 244 227 / 0.85), 0 1px 3px rgb(27 27 24 / 0.25)",
-      }
-    : { background: PINE, color: PAPER, boxShadow: "0 1px 3px rgb(27 27 24 / 0.2)" };
+  const style: CSSProperties = { color: ink?.deep ?? CLAY };
   return (
     <span
       style={style}
-      className={`tnum inline-flex items-center justify-center font-semibold ${sizes[size]} ${className}`}
+      className={`fnote relative inline-flex items-center justify-center ${sizes[size]} ${className}`}
     >
-      {n}
+      {String(n).padStart(2, "0")}
+      <svg
+        aria-hidden
+        viewBox="0 0 120 44"
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute -inset-x-[4px] -inset-y-[2px] h-[calc(100%+4px)] w-[calc(100%+8px)] overflow-visible"
+      >
+        <path
+          d={RING_PATH}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
     </span>
   );
 }

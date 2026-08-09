@@ -16,7 +16,7 @@ import { FieldMap } from "@/components/atlas/FieldMap";
 import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
-import { distance, duration, tripDate } from "@/lib/format";
+import { clockShort, distance, duration, tripDate } from "@/lib/format";
 import { localToLngLat } from "@/lib/geo";
 import type { TripView } from "@/lib/tripData";
 import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
@@ -97,6 +97,12 @@ export function AtlasApp({
     [trip.path, playhead],
   );
 
+  // The banners fly each moment's wall clock — computed once, in trip time.
+  const clocks = useMemo(
+    () => trip.moments.map((m) => clockShort(trip.startedAt, m.tStart)),
+    [trip.moments, trip.startedAt],
+  );
+
   // The moment whose window the playhead is inside — the replay's own highlight.
   const replayMoment = useMemo(
     () =>
@@ -122,6 +128,7 @@ export function AtlasApp({
       <FieldMap
         path={trip.path}
         moments={trip.moments}
+        clocks={clocks}
         activeId={activeId}
         reachedT={playhead}
         robotPos={robotPos}
@@ -204,6 +211,7 @@ export function AtlasApp({
             playhead={playhead}
             playing={playing}
             moments={trip.moments}
+            clocks={clocks}
             activeId={activeId}
             replaySpeed={REPLAY_SPEED}
             onPlayToggle={() => {

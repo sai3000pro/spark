@@ -48,7 +48,7 @@ export interface MomentInk {
   name: string;
   /** The luminous ink — markers, lines, accents on dark plates (the splat stage). */
   base: string;
-  /** The pressed ink — the same pigment stamped on paper. Use on cream. */
+  /** The pressed ink — the journal's own six-ink cycle, stamped on paper. Use on cream. */
   deep: string;
   /** 12%-alpha wash of the luminous ink for halos on dark grounds (rgba string). */
   glow: string;
@@ -63,12 +63,17 @@ const withGlow = (name: string, base: string, deep: string): MomentInk => {
   return { name, base, deep, glow: `rgba(${r}, ${g}, ${b}, 0.12)`, wash: `${deep}14` };
 };
 
-export const INK_EMBER = withGlow("ember", EMBER, EMBER_DEEP);
-export const INK_GOLD = withGlow("gold", GOLD, "#a06a14");
-export const INK_AURORA = withGlow("aurora", AURORA, AURORA_DEEP);
-export const INK_ORCHID = withGlow("orchid", "#ee6fae", "#a72d6a");
-export const INK_LILAC = withGlow("lilac", "#9d8bfa", "#5a48c9");
-export const INK_SKY = withGlow("sky", "#6cc5ff", "#1e6ca8");
+/* The pressed faces are NOT darkened copies of the luminous inks — they are
+   the journal's own six pressed pigments (the landing's PAPER_INKS cycle:
+   clay, lagoon, spruce, brass, moss, ink). On paper every pin, chip and meter
+   speaks the journal's palette; only the dark splat stage keeps the luminous
+   twilight pigments. */
+export const INK_EMBER = withGlow("ember", EMBER, "#c14f24");
+export const INK_GOLD = withGlow("gold", GOLD, "#8a6d2f");
+export const INK_AURORA = withGlow("aurora", AURORA, "#476d73");
+export const INK_ORCHID = withGlow("orchid", "#ee6fae", "#7d7730");
+export const INK_LILAC = withGlow("lilac", "#9d8bfa", "#2c4347");
+export const INK_SKY = withGlow("sky", "#6cc5ff", "#1b1b18");
 
 /** Every moment owns one ink, cycled by index — luminous on plates, pressed on paper. */
 export const MOMENT_INKS: MomentInk[] = [

@@ -186,7 +186,7 @@ export function Bench() {
                   setPhase("idle");
                   setRaw(null);
                 }}
-                className="rounded-[10px] p-4 text-left transition-[box-shadow,background-color] duration-300 ease-(--ease-signature) disabled:opacity-50"
+                className="rounded-[10px] p-4 text-left transition-[box-shadow,background-color,transform] duration-300 ease-(--ease-signature) hover:-translate-y-0.5 disabled:opacity-50"
                 style={{
                   background: on ? "var(--color-pine)" : "transparent",
                   boxShadow: on ? "var(--shadow-card)" : "var(--ring-ink)",

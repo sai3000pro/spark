@@ -34,10 +34,10 @@ const base = JSON.parse(readFileSync(join(here, "liberty-base.json"), "utf8"));
 const FIELD_NOTES = {
   name: "Spark Field Notes",
   ground: "#f6efdb",
-  water: "#cfdfda", // lagoon wash
-  waterEdge: "#a3bdb8",
-  green: "#e4e1bd", // parks & grass — a moss wash pressed into the paper
-  wood: "#d6d6b2",
+  water: "#a4d0c6", // a real lagoon — the water reads WET, not tinted paper
+  waterEdge: "#6fa89c",
+  green: "#d3dd9a", // parks & grass — living moss, inked with intent
+  wood: "#bcd08f",
   sand: "#efe3c0",
   roadCasing: "#d9d0b0", // fine sand ink around every road
   roadMinor: "#fffbf0", // vellum
@@ -48,8 +48,8 @@ const FIELD_NOTES = {
   boundary: "#cfc6a6",
   labelText: "#52524a", // ink-soft
   labelHalo: "#faf4e3",
-  parkLabel: "#6f6a2b", // moss, pressed
-  waterLabel: "#3f6167", // lagoon, pressed
+  parkLabel: "#5c611f", // moss, pressed deeper against the livelier green
+  waterLabel: "#2d5b62", // lagoon, pressed deeper against the livelier water
   lightColor: "#fffbf0",
   lightIntensity: 0.05,
   buildingOpacity: 0.75,

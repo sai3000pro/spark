@@ -94,6 +94,12 @@ export function clockTime(isoStart: string, offsetSec = 0): string {
   });
 }
 
+/** "19:42" — the trip's wall clock in 24h, compact enough for a specimen tag. */
+export function clockShort(isoStart: string, offsetSec = 0): string {
+  const d = inTripZone(isoStart, offsetSec);
+  return `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 /** Hour of day, 0–23, in the trip's local time. Drives the album's time sections. */
 export function tripLocalHour(isoStart: string, offsetSec = 0): number {
   return inTripZone(isoStart, offsetSec).getUTCHours();

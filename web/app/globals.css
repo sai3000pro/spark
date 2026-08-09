@@ -376,13 +376,17 @@ h3 {
     font-weight: 550;
     transition:
       background-color 0.3s var(--ease-signature),
-      transform 0.3s var(--ease-signature);
+      transform 0.3s var(--ease-signature),
+      box-shadow 0.3s var(--ease-signature);
   }
   .pill-brass:hover {
     background: #e3c98f;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px -10px rgb(27 27 24 / 0.55);
   }
   .pill-brass:active {
     transform: scale(0.97);
+    box-shadow: none;
   }
   /* Inherits its color — set text-* on the element; ring follows via
      currentColor. (No `color:` here: it would out-cascade text utilities.) */
@@ -449,6 +453,27 @@ h3 {
     background-size: 44px 44px;
     -webkit-mask-image: radial-gradient(140% 120% at 50% 30%, black 40%, transparent 96%);
     mask-image: radial-gradient(140% 120% at 50% 30%, black 40%, transparent 96%);
+  }
+
+  /* A pen-line underline that draws itself on hover — the journal's link. */
+  .link-pen {
+    position: relative;
+  }
+  .link-pen::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -3px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.35s var(--ease-signature);
+  }
+  .link-pen:hover::after,
+  .link-pen:focus-visible::after {
+    transform: scaleX(1);
   }
 
   /* A strip of translucent tape — torn ends, holds prints and cards down. */
@@ -807,6 +832,19 @@ button[aria-expanded="true"] .note-ring path {
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* Quiet live signals, gated behind no-preference (the global reduced-motion
+   override would spin an infinite animation rather than neutralise it). */
+@media (prefers-reduced-motion: no-preference) {
+  /* The wordmark's clay dot, breathing quietly. */
+  .pulse-dot {
+    animation: glow-breathe 3.2s ease-in-out infinite;
+  }
+  /* The day bar's clay nib while the replay runs. */
+  .nib-live {
+    animation: glow-breathe 1.5s ease-in-out infinite;
   }
 }
 

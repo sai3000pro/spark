@@ -6,14 +6,15 @@
  * The timeline is drawn like the journal's own instruments: a pen-line rail
  * with quarter-hour ticks, a brass highlighter fill that grows to the
  * playhead, a clay nib riding its front edge, and the kept moments planted on
- * the rail as miniature surveyor's markers at their true time of day. The
- * range input is still the scrubber — it lies invisible over the rail, so the
- * whole thing stays keyboard-accessible (the rail wears the clay focus ring
- * on its behalf).
+ * the rail as miniature pennant flags at their true time of day — the map's
+ * specimen banners in shorthand (the rail already speaks the clock, so the
+ * pennants stay wordless until hovered). The range input is still the
+ * scrubber — it lies invisible over the rail, so the whole thing stays
+ * keyboard-accessible (the rail wears the clay focus ring on its behalf).
  */
 import { PlayGlyph } from "@/components/system/ui";
 import { timecode } from "@/lib/format";
-import { PAPER, inkForMoment } from "@/lib/theme";
+import { inkForMoment } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
 
 interface Props {
@@ -21,6 +22,8 @@ interface Props {
   playhead: number | null;
   playing: boolean;
   moments: MomentSummary[];
+  /** Wall-clock labels ("19:42"), aligned with `moments` — the slips show them. */
+  clocks: string[];
   activeId: string | null;
   replaySpeed: number;
   onPlayToggle: () => void;
@@ -34,6 +37,7 @@ export function DayBar({
   playhead,
   playing,
   moments,
+  clocks,
   activeId,
   replaySpeed,
   onPlayToggle,
@@ -51,7 +55,8 @@ export function DayBar({
   }
 
   return (
-    <div className="plate-vellum papergrain pointer-events-auto relative flex items-center gap-4 overflow-hidden px-4 py-3 sm:gap-5 sm:px-5">
+    // No overflow clip — the pennants' hover slips float above the plate.
+    <div className="plate-vellum papergrain pointer-events-auto relative flex items-center gap-4 px-4 py-3 sm:gap-5 sm:px-5">
       <button
         type="button"
         onClick={onPlayToggle}
@@ -92,13 +97,13 @@ export function DayBar({
             />
             <span
               aria-hidden
-              className="absolute bottom-[9px] h-[18px] w-[2px] -translate-x-1/2 rounded-full bg-clay"
+              className={`absolute bottom-[9px] h-[18px] w-[2px] -translate-x-1/2 rounded-full bg-clay ${playing ? "nib-live" : ""}`}
               style={{ left: `${pct}%` }}
             />
             <span
               aria-hidden
               className="absolute bottom-[25px] h-[6px] w-[6px] -translate-x-1/2 rounded-full bg-clay"
-              style={{ left: `${pct}%`, boxShadow: `0 0 0 1.5px ${PAPER}` }}
+              style={{ left: `${pct}%`, boxShadow: "0 0 0 1.5px var(--color-paper)" }}
             />
           </>
         )}
@@ -121,8 +126,9 @@ export function DayBar({
           className="pointer-events-none absolute -inset-x-2 inset-y-0 rounded-[8px] outline-2 outline-offset-2 outline-clay [outline-style:none] peer-focus-visible:[outline-style:solid]"
         />
 
-        {/* The kept moments — miniature surveyor's markers planted on the rail
-            at their true time of day. */}
+        {/* The kept moments — miniature pennant flags planted on the rail at
+            their true time of day. The rail speaks the clock, so the flags
+            stay wordless; hovering one lifts a vellum slip with the details. */}
         {moments.map((m, i) => {
           const p = (m.tStart / durationSec) * 100;
           const ink = inkForMoment(i);
@@ -136,41 +142,55 @@ export function DayBar({
               onMouseEnter={() => onHover(m.id)}
               onMouseLeave={() => onHover(null)}
               onClick={() => onOpen(m.id)}
-              aria-label={`Open moment ${i + 1}: ${m.title}`}
-              className="absolute bottom-[17px] z-[2] flex -translate-x-1/2 flex-col items-center transition-transform duration-300 ease-(--ease-signature)"
-              style={{ left: `${p}%`, transform: `translateX(-50%) scale(${on ? 1.18 : 1})`, transformOrigin: "bottom center" }}
+              aria-label={`Open moment ${i + 1}, ${clocks[i] ?? ""}: ${m.title}`}
+              className="absolute bottom-[17px] z-[2] block h-[24px] w-[14px] transition-transform duration-300 ease-(--ease-signature)"
+              style={{
+                left: `${p}%`,
+                transform: `translateX(-1px) scale(${on ? 1.25 : 1})`,
+                transformOrigin: "bottom left",
+                opacity: hollow ? 0.45 : 1,
+              }}
             >
-              <span
-                className="relative grid place-items-center rounded-full"
-                style={{
-                  width: 21,
-                  height: 21,
-                  background: hollow ? "var(--color-vellum)" : ink.deep,
-                  boxShadow: hollow
-                    ? `inset 0 0 0 1.5px ${ink.deep}`
-                    : `0 0 0 1.5px rgb(255 251 240 / 0.95), 0 1px 3px rgb(27 27 24 / 0.22)`,
-                  opacity: hollow ? 0.8 : 1,
-                }}
-              >
-                {on && (
-                  <span
-                    aria-hidden
-                    className="sonar absolute inset-0 rounded-full"
-                    style={{ boxShadow: `0 0 0 1.5px ${ink.deep}` }}
-                  />
-                )}
-                <span
-                  className="fnote relative text-[9px] leading-none"
-                  style={{ color: hollow ? ink.deep : PAPER, letterSpacing: "0.02em" }}
-                >
-                  {i + 1}
-                </span>
-              </span>
+              {/* The staff. */}
               <span
                 aria-hidden
-                className="block w-px"
-                style={{ height: 6, background: ink.deep, opacity: hollow ? 0.5 : 0.85 }}
+                className="absolute bottom-0 left-0 w-px"
+                style={{ height: 22, background: ink.deep }}
               />
+              {/* The pennant, flying off the staff. */}
+              <span
+                aria-hidden
+                className="absolute left-[1px] top-[1px] block"
+                style={{
+                  width: 11,
+                  height: 10,
+                  background: ink.deep,
+                  clipPath: "polygon(0 0, 100% 32%, 0 64%)",
+                }}
+              />
+              {on && (
+                <span
+                  aria-hidden
+                  className="sonar absolute left-[-5px] top-[-1px] rounded-full"
+                  style={{ width: 12, height: 12, boxShadow: `0 0 0 1.5px ${ink.deep}` }}
+                />
+              )}
+              {/* The slip — clock and title on vellum, pinned above the rail. */}
+              {on && (
+                <span
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[6px] px-2.5 py-1.5"
+                  style={{
+                    background: "var(--color-vellum)",
+                    boxShadow: "var(--ring-ink), 0 8px 20px rgb(27 27 24 / 0.2)",
+                    animation: "takeover 0.3s var(--ease-signature) both",
+                  }}
+                >
+                  <span className="fnote text-[9px]" style={{ color: ink.deep }}>
+                    [ {clocks[i] ?? ""} ]
+                  </span>
+                  <span className="text-[11.5px] font-semibold text-ink">{m.title}</span>
+                </span>
+              )}
             </button>
           );
         })}
