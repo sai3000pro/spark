@@ -42,7 +42,7 @@ import { CustomEase } from "gsap/CustomEase";
 import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from "lucide-react";
-import { JournalHero } from "@/components/hero/JournalHero";
+import { LandingHero } from "@/components/hero/LandingHero";
 import { LiveTripProvider } from "@/components/shell/LiveTripProvider";
 import { KeyframeImg } from "@/components/system/ui";
 import { distance, duration, shortDate } from "@/lib/format";
@@ -667,15 +667,23 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         </nav>
       </header>
 
-      {/* ── I · hero — the journal's night, in layers ──────────────────────
-          Generated riso forest planes with fog between them, the shader
-          aurora, brass fireflies, and the blob companion asleep on the path
+      {/* ── I · hero — the painted aurora night, whole ─────────────────────
+          The original art-directed plates (the illustrated trees), the live
+          CSS aurora and fireflies, and the blob companion asleep on the path
           (hover wakes it — it IS the start-a-trip button, announcing a live
-          walk when one runs). Typography is the journal's own; the scene
-          parallaxes off pointer and scroll. See components/hero/JournalHero. */}
-      <LiveTripProvider initial={active}>
-        <JournalHero dateLabel={dateLabel} placeLabel={placeLabel} />
-      </LiveTripProvider>
+          walk when one runs). `.aurora-app` scopes the scene's own tokens;
+          --appbar-h matches the glass bar so the plate fills exactly one
+          viewport beneath it, and the inline min-height override stops the
+          scope class from padding the scene to 100vh and leaving a bare navy
+          band under the fold. */}
+      <div
+        className="aurora-app relative"
+        style={{ "--appbar-h": "57px", minHeight: 0 } as React.CSSProperties}
+      >
+        <LiveTripProvider initial={active}>
+          <LandingHero />
+        </LiveTripProvider>
+      </div>
 
       {/* The seam: the kept moments lapping like a ticker of the day — the
           night scene handing off to the journal that pressed it. */}

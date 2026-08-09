@@ -835,45 +835,6 @@ button[aria-expanded="true"] .note-ring path {
   }
 }
 
-/* ── The journal hero's night ────────────────────────────────────────────
-   The layered scene (components/hero/JournalHero.tsx) hosts the aurora
-   shell's blob companion, whose CSS reads the aurora tokens. Rather than
-   restyling the character, the scope remaps those tokens to the journal's
-   own pigments — same chrome, journal ink. */
-.journal-hero {
-  /* The blob's chrome, in journal pigments. */
-  --color-ink-950: #16292e; /* pine glass behind its label */
-  --color-fog-100: #f6f0df; /* milk label text */
-  --color-brand-300: #e3c98f; /* brass highlights */
-  --color-brand-400: #d5b473;
-  --color-warn-400: #d5b473; /* its fireflies are brass */
-  --color-signal-500: #7d7730; /* recording = moss */
-  --color-signal-400: #8a8433;
-  --color-compute-500: #d5b473; /* processing = brass */
-  --color-compute-400: #d5b473;
-  --color-fail-400: #cf5e32; /* error = clay */
-  --font-hero: var(--font-grotesk);
-  --ease-out-soft: cubic-bezier(0.5, 0, 0, 1);
-}
-.journal-hero .hero-blob:focus-visible {
-  box-shadow:
-    0 0 0 2px var(--color-clay),
-    0 0 0 6px rgb(22 41 46 / 0.75);
-}
-
-/* Fireflies for the journal hero — brass motes drifting between the trees.
-   Position and drift come from per-element CSS vars. */
-.jh-fly {
-  position: absolute;
-  z-index: 2;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  pointer-events: none;
-  background: radial-gradient(circle, rgb(213 180 115 / 0.95) 0%, rgb(213 180 115 / 0) 70%);
-  opacity: 0.65;
-}
-
 /* Quiet live signals, gated behind no-preference (the global reduced-motion
    override would spin an infinite animation rather than neutralise it). */
 @media (prefers-reduced-motion: no-preference) {
@@ -884,26 +845,6 @@ button[aria-expanded="true"] .note-ring path {
   /* The day bar's clay nib while the replay runs. */
   .nib-live {
     animation: glow-breathe 1.5s ease-in-out infinite;
-  }
-  /* The hero's fireflies drift and twinkle; reduced motion leaves them
-     resting lit. */
-  .jh-fly {
-    animation:
-      jh-drift var(--fd, 9s) ease-in-out var(--fdel, 0s) infinite alternate,
-      jh-twinkle 3.4s ease-in-out var(--fdel, 0s) infinite alternate;
-  }
-  @keyframes jh-drift {
-    to {
-      transform: translate(var(--fx, 18px), var(--fy, -14px));
-    }
-  }
-  @keyframes jh-twinkle {
-    from {
-      opacity: 0.22;
-    }
-    to {
-      opacity: 0.8;
-    }
   }
 }
 
