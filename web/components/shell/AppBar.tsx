@@ -18,8 +18,8 @@
  */
 import Link from "next/link";
 import { Suspense } from "react";
+import { BlobMark } from "@/components/shell/BlobMark";
 import { RecordControl } from "@/components/shell/RecordControl";
-import { SparkMark } from "@/components/shell/SparkMark";
 import { TelemetryPills } from "@/components/shell/TelemetryPills";
 import { ViewSwitch } from "@/components/shell/ViewSwitch";
 import { SearchMount } from "@/components/search/SearchMount";
@@ -38,7 +38,12 @@ export function AppBar() {
           className="group flex shrink-0 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
           aria-label="Spark home"
         >
-          <SparkMark />
+          {/* The robot itself, asleep until you do something. It replaces the
+              drawn four-point spark: a mark that IS the product beats a mark
+              that stands for it, and the frames are already in cache for the
+              hero. SparkMark survives for EmptyLibrary, where a static glyph is
+              the right weight. */}
+          <BlobMark />
           {/* Wordmark is the first thing to go at phone width. White, not teal:
               the glyph carries the brand colour and the word carries the name,
               exactly as the brand sheet draws it. */}

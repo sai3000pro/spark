@@ -132,7 +132,17 @@ const ROAM = { left: 0.18, right: 0.3, ceiling: 0.55 };
  * ran the cycle at 3.2 fps — four near-identical drawings that slowly is what
  * "there's no walk animation" meant.
  */
-const WALK_CYCLE_UNITS = 1;
+const WALK_CYCLE_UNITS = 0.72;
+/**
+ * How far the body rises at the top of each step, in character-heights.
+ *
+ * THIS IS WHAT MAKES EIGHT DRAWINGS LOOK SMOOTH. A sprite walk is a handful of
+ * stills, and between them nothing moves but the character's x — so the eye
+ * reads the cuts. A continuous bob, computed from the sub-frame position within
+ * the stride, means the blob is never actually still: the drawings step, the
+ * body flows. Two rises per cycle, one per footfall.
+ */
+const WALK_BOB = 0.035;
 /** A skid is a shorter, faster scrabble than a walk. */
 const SKID_CYCLE_UNITS = 0.8;
 /** Vertical speed below which the arc reads as weightless, in heights/s. */
@@ -185,19 +195,17 @@ const clipMs = (c: BlobClipName) => 1000 / BLOB_CLIPS[c].fps;
 
 const SEQUENCES = {
   /**
-   * z, zz, zzz, then nothing.
+   * z, zz, zzz, big zzz, then nothing.
    *
-   * The strip's first and last drawings are BOTH empty-headed, so looping all
-   * five shows nothing twice in a row and the Zzz look like they stall. Dropping
-   * the leading one makes the cycle read as it was drawn: the z's gather, then
-   * clear. Starting at the empty frame means the loop opens on the same drawing
-   * the server painted.
+   * The ORDER AND THE REST FRAME BELONG TO THE PIPELINE, which knows what is
+   * drawn on each frame; this used to re-cut them here as well, and the two
+   * corrections cancelled into a loop that never showed the single z at all.
    */
   sleep: {
-    frames: BLOB_CLIPS.sleep.frames.slice(1),
+    frames: BLOB_CLIPS.sleep.frames,
     frameMs: clipMs("sleep"),
     loop: true,
-    from: BLOB_CLIPS.sleep.frames.length - 2,
+    from: BLOB_CLIPS.sleep.rest,
   },
   "nod-off": {
     frames: BLOB_CLIPS.wake.frames,
@@ -461,26 +469,40 @@ export function HeroBlobButton() {
     };
   }, []);
 
+  /**
+   * Fetch AND decode. `preload` only fills the HTTP cache; the first time an
+   * undecoded image is painted the compositor still has to do the work, which
+   * lands as a hitch on the opening frame of a clip. Decoding ahead of time
+   * moves that cost into the idle moment before the beat.
+   */
+  const warm = useCallback((frames: readonly BlobFrame[], facings: readonly BlobFacing[]) => {
+    for (const frame of frames) {
+      for (const face of facings) {
+        const url = blobSprite(frame, face);
+        preload(url, { as: "image" });
+        const img = new Image();
+        img.src = url;
+        void img.decode?.().catch(() => {});
+      }
+    }
+  }, []);
+
   const warmWake = useCallback(() => {
     if (warmedWake.current) return;
     warmedWake.current = true;
-    for (const pose of WARM_WAKE)
-      preload(blobSprite(pose, REST_FACING), { as: "image" });
+    warm(WARM_WAKE, [REST_FACING]);
     if (!prefetched.current) {
       prefetched.current = true;
       router.prefetch("/live");
     }
-  }, [router]);
+  }, [router, warm]);
 
   const warmPlay = useCallback(() => {
     if (warmedPlay.current) return;
     warmedPlay.current = true;
     // Both facings: which way it walks home is not known until it is thrown.
-    for (const pose of WARM_PLAY) {
-      preload(blobSprite(pose, "left"), { as: "image" });
-      preload(blobSprite(pose, "right"), { as: "image" });
-    }
-  }, []);
+    warm(WARM_PLAY, ["left", "right"]);
+  }, [warm]);
 
   const rouse = useCallback(() => {
     clearTimer(sleepTimer);
@@ -611,7 +633,12 @@ export function HeroBlobButton() {
         // until it is nearly here — which is exactly when the character needs to
         // start bracing for it.
         const v = m.vy / env.unit;
-        const onGround = m.y >= 0 && Math.abs(m.vx) > 0;
+        // Sliding, not merely touching. During a bounce sequence the blob is on
+        // the ground for a single frame at a time, and testing `y >= 0` alone
+        // flickered between the shocked face and the scrabble on every hop.
+        // `stepBallistic` reports a real bounce distinctly, so a frame that is
+        // grounded and NOT a bounce is a genuine skid.
+        const onGround = m.y >= 0 && result !== "bounce" && Math.abs(m.vx) > 0;
         if (onGround !== skidRef.current) {
           skidRef.current = onGround;
           setSkidding(onGround); // once per transition — the cell has to follow
@@ -654,27 +681,28 @@ export function HeroBlobButton() {
         // Cadence locked to DISTANCE, not to time: that is what stops it
         // moon-walking when the last step home is shorter than the others.
         travelled += moved;
-        const step = (WALK_CYCLE_UNITS * env.unit) / walk.length;
+        const cycle = WALK_CYCLE_UNITS * env.unit;
+        const step = cycle / walk.length;
         showFrame(walk[Math.floor(travelled / step) % walk.length], facing);
-        paint(m.x, 0, 0, 0);
+        // Continuous between the drawings — see WALK_BOB.
+        const bob = -WALK_BOB * env.unit * Math.abs(Math.sin((Math.PI * 2 * travelled) / cycle));
+        paint(m.x, bob, 0, 0);
         if (arrived) {
-          snapHome();
+          snapHome(); // clears the bob as well as the offset
           showFrame(walk[0], REST_FACING); // both feet planted, not mid-stride
           setFacing(REST_FACING);
-          const over = rootRef.current?.matches(":hover") ?? false;
-          if (over) {
-            // Still under your cursor when it gets back — it picks the
-            // conversation up rather than settling down in front of you.
-            setPhase("asking");
-          } else {
-            // IT SITS DOWN. The walk is drawn standing and the resting art is
-            // drawn seated, so arriving straight into the sleep loop would snap
-            // the character from its feet to the ground in one frame. The wake
-            // clip played backwards IS that transition — alert, drowsy, down —
-            // and then the sleep loop takes over.
-            setNodding(true);
-            setPhase("asleep");
-          }
+          // IT SITS DOWN, whether or not you are still holding the cursor over
+          // it. Being carried across the scene does not make it want to ask you
+          // something — that offer belongs to the moment it has settled back in
+          // its spot. If your cursor is still there when it has, the effect
+          // below notices and it asks then, with the whole stirring beat rather
+          // than a question snapping into existence mid-landing.
+          //
+          // The walk is drawn standing and the resting art is drawn seated, so
+          // this also covers the transition: the wake clip played backwards is
+          // alert, drowsy, down.
+          setNodding(true);
+          setPhase("asleep");
           return;
         }
       }
@@ -697,6 +725,16 @@ export function HeroBlobButton() {
     }, LAND_MS);
     return () => clearTimer(phaseTimer);
   }, [phase]);
+
+  // A cursor still resting on it once it is HOME AND SETTLED counts as noticing
+  // it afresh. This is what defers the question through a drag: nothing during
+  // the gesture, the flight or the walk can put the blob into `asking`, and the
+  // offer arrives only once it is back in place and has finished sitting down.
+  useEffect(() => {
+    if (phase !== "asleep" || nodding) return;
+    if (!rootRef.current?.matches(":hover")) return;
+    rouse();
+  }, [phase, nodding, rouse]);
 
   // Standing at home again, so the offsets belong at zero. This is the one place
   // that has to be true however it got there: the end of a walk home, a release
@@ -753,15 +791,12 @@ export function HeroBlobButton() {
     // too late to fetch. A drag has a whole flight of cover, so warm both.
     if (!warmedWalk.current) {
       warmedWalk.current = true;
-      for (const f of WARM_WALK) {
-        preload(blobSprite(f, "left"), { as: "image" });
-        preload(blobSprite(f, "right"), { as: "image" });
-      }
+      warm(WARM_WALK, ["left", "right"]);
     }
     clearTimer(pressTimer);
     clearTimer(sleepTimer);
     setPhase("grabbed");
-  }, []);
+  }, [warm]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     pointerKind.current = e.pointerType;
@@ -915,7 +950,11 @@ export function HeroBlobButton() {
           ? "Building the album…"
           : state === "error"
             ? (error ?? "Something went wrong")
-            : "Start a new journey";
+            // "Trip", not "journey". The app bar's green pill says "Start a
+            // trip?" forty pixels above this, the API route is /api/trip/start,
+            // and the library counts trips — a third word for the same act made
+            // one page read as three products.
+            : "Start a trip";
 
   // A live trip is a state worth announcing whether or not you are looking at
   // the blob, so it overrides the sleep cycle.
@@ -1031,9 +1070,14 @@ export function HeroBlobButton() {
           ? "Setting off"
           : state === "error"
             ? `Could not start a trip: ${error ?? "something went wrong"}`
-            : "Start a new journey"
+            : "Start a trip"
       }
-      title="Opens a recording session. The rover-follow behaviour is not implemented yet."
+      // NO `title`. It carried "the rover-follow behaviour is not implemented
+      // yet", which the browser showed as a native tooltip on the hero's primary
+      // action — a landing page apologising for itself, in the one place a
+      // visitor is most likely to hover. The caveat is real and it is kept: the
+      // footer states it, and TripSessionCard states it again the moment a trip
+      // actually ends. Neither of those ambushes the button.
     >
       {inner}
     </button>

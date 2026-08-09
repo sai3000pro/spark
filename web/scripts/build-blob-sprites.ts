@@ -127,6 +127,17 @@ interface SheetSpec {
   scaleNudge: number;
   /** Names in reading order. Length is gated against the core count. */
   names: readonly string[];
+  /**
+   * Extra frames built from a frame the artist DID draw, by keeping only some of
+   * its lettering.
+   *
+   * The sleep strip goes 0, 1, 3, 3-large, 0 z's — there is no two-z drawing, so
+   * the loop reads "z, zzz, big zzz" and skips a beat. The z's are separate
+   * painted objects, so a two-z frame is the three-z frame minus its furthest
+   * one: the artist's own glyphs, at the artist's own sizes and positions, just
+   * one fewer of them. Nothing is invented.
+   */
+  derive?: ReadonlyArray<{ name: string; from: number; keepGlyphs: number }>;
 }
 
 /**
@@ -171,6 +182,7 @@ const SHEETS: SheetSpec[] = [
     scaleRef: 0,
     scaleNudge: SEATED_NUDGE(),
     names: ["sleep-0", "sleep-1", "sleep-2", "sleep-3", "sleep-4"],
+    derive: [{ name: "sleep-2z", from: 2, keepGlyphs: 2 }],
   },
   {
     file: "Asking question.png",
@@ -228,13 +240,23 @@ interface ClipSpec {
 const CLIPS: ClipSpec[] = [
   {
     name: "sleep",
-    frames: ["sleep-0", "sleep-1", "sleep-2", "sleep-3", "sleep-4"],
+    /**
+     * z, zz, zzz, BIG zzz, then nothing.
+     *
+     * Not the strip's own order. It was drawn 0, 1, 3, 3-large, 0 — no two-z
+     * frame, and an empty drawing at BOTH ends — so playing it as cut reads as
+     * "z, zzz, big zzz" with a stall. `sleep-2z` fills the gap (see `derive`)
+     * and the leading empty frame is dropped so the count climbs cleanly and
+     * clears once.
+     */
+    frames: ["sleep-1", "sleep-2z", "sleep-2", "sleep-3", "sleep-4"],
     cell: "base",
     groundRef: 0,
-    fps: 1.1,
+    fps: 1.4,
     loop: true,
-    rest: 3,
-    note: "the Zzz gather and clear",
+    /** The empty-headed frame: what the server paints and what rest looks like. */
+    rest: 4,
+    note: "one z, two, three, three big, then nothing",
   },
   {
     name: "wake",
@@ -304,6 +326,8 @@ interface Frame {
   eyePx: number;
   coreH: number;
   coreW: number;
+  /** Set when this frame is another frame with some of its lettering removed. */
+  derivedFrom?: string;
   accessories: { glow: number; glyph: number; stray: number };
 }
 
@@ -396,9 +420,18 @@ async function cutSheet(spec: SheetSpec, refCoreH: number | null): Promise<{ fra
       keep: "seeded",
       seeds: bodyObjs.map(local),
     });
-    const glyph = glyphObjs.length
-      ? keyRegion(img, rx, ry, rw, rh, bg, bodyY, { ...keyOpts, keep: "seeded", seeds: glyphObjs.map(local) })
-      : null;
+    // Nearest the head first, so "keep two" keeps the two closest and drops the
+    // one drifting furthest away — which is how the z's were drawn to rise.
+    const byNearness = [...glyphObjs].sort(
+      (a, z) =>
+        Math.hypot((a.box.x0 + a.box.x1) / 2 - core.cx, (a.box.y0 + a.box.y1) / 2 - core.box.y1) -
+        Math.hypot((z.box.x0 + z.box.x1) / 2 - core.cx, (z.box.y0 + z.box.y1) / 2 - core.box.y1),
+    );
+    const keyGlyphs = (objs: SheetObject[]) =>
+      objs.length
+        ? keyRegion(img, rx, ry, rw, rh, bg, bodyY, { ...keyOpts, keep: "seeded", seeds: objs.map(local) })
+        : null;
+    const glyph = keyGlyphs(byNearness);
 
     // ── Facing ───────────────────────────────────────────────────────────────
     // The amber eye mass against the body's own centroid, over the core's box so
@@ -452,6 +485,16 @@ async function cutSheet(spec: SheetSpec, refCoreH: number | null): Promise<{ fra
       coreW: core.box.x1 - core.box.x0 + 1,
       accessories: counts,
     });
+
+    for (const d of spec.derive ?? []) {
+      if (d.from !== i) continue;
+      const kept = byNearness.slice(0, d.keepGlyphs);
+      if (kept.length !== d.keepGlyphs) {
+        fail(`${d.name}: wanted ${d.keepGlyphs} of \`${spec.names[i]}\`'s glyphs, it has ${byNearness.length}`);
+        continue;
+      }
+      frames.push({ ...frames[frames.length - 1], name: d.name, glyph: keyGlyphs(kept), derivedFrom: spec.names[i] });
+    }
   }
 
   const refScale = measureScale(cores[spec.scaleRef], cores[spec.scaleRef]);
@@ -566,6 +609,7 @@ async function main() {
         `eyes ${f.eyeOffset > 0 ? "+" : ""}${f.eyeOffset.toFixed(0)} (${f.eyePx}px) -> ${f.facing}` +
         `${f.glyph ? "   lettering" : ""}${f.accessories.glow ? `   ${f.accessories.glow} glow` : ""}` +
         `${f.accessories.stray ? `   ${f.accessories.stray} STRAY DROPPED` : ""}` +
+        `${f.derivedFrom ? `   derived from ${f.derivedFrom}` : ""}` +
         `${Math.abs(lift) > 0.01 ? `   lift ${lift >= 0 ? "+" : ""}${lift.toFixed(3)}` : ""}`,
     );
     err(alphaMap(k, 44, 13, k.mainBox));

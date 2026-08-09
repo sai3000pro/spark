@@ -29,7 +29,10 @@ export function LibraryHeader({ tripCount, totals }: Props) {
       </h2>
       {tripCount > 0 && (
         <p className="tnum mt-1.5 font-mono text-[11px] text-fog-400">
-          {tripCount} journeys · {totals.moments} moments · {duration(totals.seconds)} captured ·{" "}
+          {/* "trips", matching the button that starts one and the route that
+              serves it. This line said "journeys" while the control above it
+              said "trip". */}
+          {tripCount} trips · {totals.moments} moments · {duration(totals.seconds)} captured ·{" "}
           {compactNumber(totals.detections)} detections
         </p>
       )}

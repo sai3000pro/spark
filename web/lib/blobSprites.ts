@@ -46,6 +46,7 @@ export type BlobFrame =
   | "sleep-0"
   | "sleep-1"
   | "sleep-2"
+  | "sleep-2z"
   | "sleep-3"
   | "sleep-4"
   | "wake-0"
@@ -98,6 +99,7 @@ export const BLOB_FRAMES = {
   "sleep-0": { cell: "base", paintedFacing: "right", glyph: false, source: "Blob sleep-cycle strip.png", sheetIndex: 0 },
   "sleep-1": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 1 },
   "sleep-2": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 2 },
+  "sleep-2z": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 2 },
   "sleep-3": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 3 },
   "sleep-4": { cell: "base", paintedFacing: "right", glyph: false, source: "Blob sleep-cycle strip.png", sheetIndex: 4 },
   "wake-0": { cell: "base", paintedFacing: "right", glyph: true, source: "Asking question.png", sheetIndex: 0 },
@@ -120,12 +122,12 @@ export const BLOB_FRAMES = {
  */
 export const BLOB_CLIPS = {
   sleep: {
-    note: "the Zzz gather and clear",
+    note: "one z, two, three, three big, then nothing",
     cell: "base",
-    frames: ["sleep-0", "sleep-1", "sleep-2", "sleep-3", "sleep-4"],
-    fps: 1.1,
+    frames: ["sleep-1", "sleep-2z", "sleep-2", "sleep-3", "sleep-4"],
+    fps: 1.4,
     loop: true,
-    rest: 3,
+    rest: 4,
     lift: [0.000, 0.000, 0.000, 0.000, 0.000],
   },
   wake: {

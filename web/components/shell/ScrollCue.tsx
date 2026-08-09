@@ -14,15 +14,29 @@
  * landing-page gesture; naming the destination is most of what makes it read as
  * designed. It is fog-grey rather than brand orange because the blob above it is
  * the page's only primary, and a second orange thing 200px below would compete.
+ *
+ * The destination is a PROP because the page grew a section between the hero and
+ * the library. A cue that still said "Albums" would now skip the explanation of
+ * the product entirely — it would scroll you past the answer to the question the
+ * headline just raised.
  */
-export function ScrollCue() {
+export function ScrollCue({
+  href = "#what",
+  label = "What it does",
+  /** Screen-reader phrasing, which wants a verb the visible label does not. */
+  description = "Skip to what Spark does",
+}: {
+  href?: string;
+  label?: string;
+  description?: string;
+}) {
   return (
     <a
-      href="#albums"
-      aria-label="Skip to your albums"
+      href={href}
+      aria-label={description}
       className="hero-cue group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
     >
-      <span className="eyebrow transition-colors group-hover:text-fog-200">Albums</span>
+      <span className="eyebrow transition-colors group-hover:text-fog-200">{label}</span>
       <svg
         width="14"
         height="14"

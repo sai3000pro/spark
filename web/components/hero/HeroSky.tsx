@@ -90,6 +90,40 @@ const CURTAINS = [
   { cy: 134, amp: 36, len: 560, thick: 124, phase: 3.3, dur: 43, sway: 19, opacity: 0.44, blur: 11, ray: 62 },
 ] as const;
 
+/* The two motions in globals.css that carry a curtain outside its own path. */
+/** `@keyframes aurora-sway` translates by this much, each way. */
+const SWAY_UNITS = 9;
+/** ...and reaches this much taller at the same time. */
+const SCALE_SLACK = 0.06;
+/** A CSS blur is a Gaussian; three sigma is past where it is still visible. */
+const BLUR_SIGMA = 3;
+
+/**
+ * The band the curtains truly occupy, DERIVED from the table above.
+ *
+ * The ray masks are sized from this. Hardcoding it would mean any change to a
+ * `cy`, `amp`, `thick` or `blur` above could silently clip a curtain's hem — the
+ * kind of break that only shows up at one viewport size, in one phase of a
+ * 71-second cycle.
+ *
+ * A curtain's own extent is `cy - amp` at the top (the sine's trough) down to
+ * `cy + amp + 1.3 * thick` at the bottom (its crest, plus the thickest the
+ * breathing gets). Then each one is padded by what the animations and its own
+ * blur add to it.
+ */
+const BAND = CURTAINS.reduce(
+  (acc, c) => {
+    const top = c.cy - c.amp;
+    const bottom = c.cy + c.amp + 1.3 * c.thick;
+    const pad = SWAY_UNITS + BLUR_SIGMA * c.blur + SCALE_SLACK * (bottom - top);
+    return { top: Math.min(acc.top, top - pad), bottom: Math.max(acc.bottom, bottom + pad) };
+  },
+  { top: Infinity, bottom: -Infinity },
+);
+
+const MASK_Y = Math.floor(BAND.top);
+const MASK_H = Math.ceil(BAND.bottom - BAND.top);
+
 /**
  * One curtain, as a closed path.
  *
@@ -187,21 +221,47 @@ export function HeroSky() {
               <rect width={c.ray} height="10" fill="url(#spark-au-ray)" />
             </pattern>
           ))}
+          {/*
+            THE MASK IS SIZED TO THE PATH, WHICH IS SMALLER THAN IT LOOKS.
+
+            A <mask> forces an offscreen surface, and these were being asked for
+            at roughly four times the area they need — with `preserveAspectRatio
+            ="none"` stretching the 1000-unit viewBox across a 136%-wide element,
+            the widest curtain's mask alone resolved to about 7100 x 620 CSS px,
+            and there are four of them re-rasterised behind an animated
+            `mix-blend-mode: screen` group.
+
+            Horizontally: the mask lives INSIDE the travel group, so it slides
+            with the path rather than staying still under it. It therefore only
+            has to cover the path's own extent — `-len` to `VB_W + len`, which is
+            `VB_W + 2 * len` wide. It was declared at `VB_W + 4 * len`, i.e.
+            exactly double, covering a wavelength of empty space at each end.
+
+            Vertically: the lowest hem any curtain reaches is cy + amp + 1.3 *
+            thick = 331 units (curtain 3), and the highest top edge is 22
+            (curtain 2). Adding the 9-unit sway, the 6% scaleY and ~3 sigma of
+            the largest blur gives a true extent of about -60 to 400. It was
+            declared -160 to 540.
+
+            Nothing about the picture changes — the rays are a repeating pattern
+            and this only stops rasterising the parts of it that fall outside the
+            drawing. See MASK_Y / MASK_H below.
+          */}
           {CURTAINS.map((c, i) => (
             <mask
               key={i}
               id={`spark-au-ray-mask-${i}`}
               maskUnits="userSpaceOnUse"
-              x={-2 * c.len}
-              y="-160"
-              width={VB_W + 4 * c.len}
-              height="700"
+              x={-c.len}
+              y={MASK_Y}
+              width={VB_W + 2 * c.len}
+              height={MASK_H}
             >
               <rect
-                x={-2 * c.len}
-                y="-160"
-                width={VB_W + 4 * c.len}
-                height="700"
+                x={-c.len}
+                y={MASK_Y}
+                width={VB_W + 2 * c.len}
+                height={MASK_H}
                 fill={`url(#spark-au-rays-${i})`}
               />
             </mask>

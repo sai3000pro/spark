@@ -214,6 +214,32 @@ body:has(.aurora-app) {
   background: var(--color-ink-950);
 }
 
+/*
+  Anchor jumps glide instead of teleporting.
+
+  This is the ONE part of "scrolling" a page can actually control: the wheel and
+  the trackpad belong to the browser and the OS, but a jump to #what or #albums
+  is ours, and by default it is an instant cut that loses the reader's place
+  completely — you arrive somewhere with no idea which way you travelled.
+
+  ── WHY IT IS SCOPED, AND SCOPED HERE ───────────────────────────────────────
+  `scroll-behavior` only does anything on the SCROLLING element, which is <html>,
+  so it cannot live on .aurora-app itself. But it must not apply to the whole
+  document either: /landing-page drives its own scrolling through Lenis, and
+  native smooth-scroll fighting a JS smooth-scroll for the same gesture is a
+  well-known way to produce exactly the stutter this is meant to remove.
+  `html:has(.aurora-app)` turns it on only while the aurora landing is mounted.
+
+  Gated on no-preference because a smooth scroll is vestibular motion — this is
+  the one case where the global `animation-duration: 0.01ms` override at the foot
+  of the file does not help, since scroll-behavior is not an animation.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.aurora-app) {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -1758,6 +1784,102 @@ button[aria-expanded="true"] .note-ring path {
   }
 }
 
+/* ── The brand mark ────────────────────────────────────────────────────────
+   The same creature as the hero, at 26px instead of 300. See
+   components/shell/BlobMark.tsx.
+
+   THE BOX IS DERIVED FROM THE CELL, exactly as the hero's is. `--mark-body` is
+   the CHARACTER's height; the cell that holds it is taller (headroom the sheet
+   leaves for the Zzz and the "?") and narrower-than-square, so both dimensions
+   are computed from the generated geometry rather than typed in. Swap the art
+   for a sheet with different headroom and this still lands right. */
+.blob-mark {
+  position: relative;
+  display: block;
+  flex: none;
+  height: calc(var(--mark-body) / var(--mark-body-h));
+  width: calc(var(--mark-body) / var(--mark-body-h) * var(--mark-cell-ar));
+}
+
+.blob-mark__sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /*
+    Centre the CHARACTER in the row, not the cell.
+
+    The drawing occupies from (footY - bodyH) to footY of the cell — 0.182 to
+    0.908 — whose midpoint is 0.545, not 0.5. Left alone, the blob sits low and
+    the bar's `items-center` lines up 3px of empty cell with the wordmark instead
+    of the robot. The shift is that difference, as a fraction of the box.
+  */
+  transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%));
+  transform-origin: 50% calc(var(--mark-foot-y) * 100%);
+  /* Not gated on reduced motion: this is a 420ms colour settle, not movement,
+     and the global block at the foot of this file zeroes it anyway. */
+  transition: filter 420ms var(--ease-out-soft);
+}
+
+/* Asleep it is dimmer and cooler, and it comes up to full as it wakes — the same
+   grammar the hero uses for its resting state, so the two read as one character
+   in two places rather than two treatments. */
+.blob-mark[data-phase="asleep"] .blob-mark__sprite {
+  /* 0.72 was too far: the sprite is already near-white on a near-black bar, and
+     dimming it that hard took the eyelids and blush below the point where they
+     read at all, leaving a grey pebble. This is enough to say "resting" while
+     the face survives. */
+  filter: brightness(0.86) saturate(0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Breathing, on the feet, like the hero's. Slower asleep. */
+  .blob-mark[data-phase="awake"] .blob-mark__sprite,
+  .blob-mark[data-phase="greeting"] .blob-mark__sprite {
+    animation: mark-breathe 3.4s ease-in-out infinite alternate;
+  }
+  .blob-mark[data-phase="asleep"] .blob-mark__sprite {
+    animation: mark-doze 5s ease-in-out infinite alternate;
+  }
+  /* A little hop toward you on hover. One-shot, so it lands and stays put
+     rather than bouncing for as long as the cursor happens to rest there. */
+  .blob-mark[data-near] .blob-mark__sprite {
+    animation: mark-greet 420ms var(--ease-out-soft);
+  }
+}
+
+/* The keyframes carry the centring shift themselves, because `animation` and the
+   base `transform` are the same property — an animation without it would snap
+   the character back down to the cell's centre for the whole of its run. */
+@keyframes mark-breathe {
+  from {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1);
+  }
+  to {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1.03);
+  }
+}
+
+@keyframes mark-doze {
+  from {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1);
+  }
+  to {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1.05);
+  }
+}
+
+@keyframes mark-greet {
+  0% {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1);
+  }
+  38% {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100% - 14%)) scale(1.08);
+  }
+  100% {
+    transform: translateY(calc((0.5 - (var(--mark-foot-y) - var(--mark-body-h) / 2)) * 100%)) scale(1);
+  }
+}
+
 /*
   Everything that moves lives in here. See the trap note at the top of this
   block: the global reduced-motion override would break scroll timelines and
@@ -1897,6 +2019,60 @@ button[aria-expanded="true"] .note-ring path {
   }
   to {
     opacity: 1;
+  }
+}
+
+/* ── Blocks rising as they arrive ──────────────────────────────────────────
+   Used by components/home/WhatItDoes.tsx.
+
+   A VIEW TIMELINE, NOT AN IntersectionObserver, and the difference is the whole
+   reason this exists rather than reusing RevealGrid.
+
+   RevealGrid plays once and unobserves — right for the album tiles, because
+   photographs that re-hid themselves every time you scrolled back up would be
+   maddening. But it means the motion is a one-way event: going down the page
+   things animate, going up nothing does, and the page feels alive in one
+   direction and dead in the other.
+
+   A scroll-driven timeline is symmetric by construction. The same scroll
+   position always produces the same frame, so scrolling up is scrolling the
+   animation backwards — the section reads identically travelling either way, at
+   whatever speed you happen to be going. That is what "as smooth upwards as
+   downwards" actually requires; easing and duration cannot buy it.
+
+   The markup default is the FINAL state, so a browser with no view timelines —
+   or a visitor with reduced motion, since this block is gated — gets the section
+   plainly visible rather than a permanently blank column. Same contract as
+   RevealGrid's, reached a different way. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .lift {
+      animation: lift-in linear both;
+      animation-timeline: view();
+      /*
+        `--lift-start` staggers the columns by OFFSETTING WHERE EACH ONE BEGINS,
+        not by delaying it. A delay would be a time, and time only runs one way:
+        scrolling back up, a stagger built from delays plays in the wrong order.
+        An offset in the range is a position, so it reverses correctly.
+
+        The end is `cover 34%` for all three, so they converge — the row finishes
+        together and settles rather than trailing off to one side.
+      */
+      animation-range: entry var(--lift-start, 6%) cover 34%;
+    }
+  }
+}
+
+@keyframes lift-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: 1;
+    /* `none`, not an identity transform, so no compositor layer stays promoted
+       once the block has arrived. Same reasoning as album-reveal. */
+    transform: none;
   }
 }
 

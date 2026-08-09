@@ -20,6 +20,8 @@ import { EmptyLibrary } from "@/components/album/EmptyLibrary";
 import { LibraryHeader } from "@/components/album/LibraryHeader";
 import { TripSessionCard } from "@/components/album/TripSessionCard";
 import { LandingHero } from "@/components/hero/LandingHero";
+import { WhatItDoes } from "@/components/home/WhatItDoes";
+import { SiteFooter } from "@/components/shell/SiteFooter";
 import { listAllTrips } from "@/lib/tripData";
 
 export const metadata = {
@@ -44,6 +46,12 @@ export default function HomePage() {
     <main data-hero className="flex-1">
       <LandingHero />
 
+      {/* The answer to the headline, before the evidence for it. The hero makes
+          three claims and this is where they are actually explained; putting the
+          album grid first would show the OUTPUT of a product the visitor has not
+          been told about yet. */}
+      <WhatItDoes />
+
       {/* tabIndex={-1} so the scroll cue moves keyboard FOCUS here, not just the
           viewport. Without it the cue scrolls the page but leaves focus back in
           the hero, and the next Tab throws you to the top — the classic broken
@@ -51,9 +59,9 @@ export default function HomePage() {
       <section
         id="albums"
         tabIndex={-1}
-        className="border-t border-white/[0.06] outline-none"
+        className="scroll-mt-20 border-t border-white/[0.06] outline-none"
       >
-        <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-10 sm:px-5 sm:pt-14">
+        <div className="mx-auto w-full max-w-7xl px-4 pb-20 pt-12 sm:px-5 sm:pt-16">
           <LibraryHeader tripCount={trips.length} totals={totals} />
 
           <div id="session" className="scroll-mt-24">
@@ -63,6 +71,8 @@ export default function HomePage() {
           {trips.length === 0 ? <EmptyLibrary /> : <AlbumGallery trips={trips} />}
         </div>
       </section>
+
+      <SiteFooter />
     </main>
   );
 }
