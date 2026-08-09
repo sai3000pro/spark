@@ -9,13 +9,16 @@
  */
 import { cache } from "react";
 import { familyOf } from "./mock/labels";
-// Two builders, deliberately. The no-arg one is Waterloo Park, which is what the
-// journal reads; buildTrip(spec) builds any of the seven and is what the aurora
-// landing's library reads. Aliased so the two can never be confused at a call
-// site — see the additive accessors at the bottom of this file.
+// Two builders, deliberately. The no-arg one is the FLAGSHIP — the STACKT
+// Market walk, which is what the journal, the walk screen and the landing's
+// narration read; buildSpecTrip(spec) builds any trip and is what the shelf
+// reads. Aliased so the two can never be confused at a call site — see the
+// additive accessors at the bottom of this file.
 import { buildTrip as buildSpecTrip } from "./mock/buildTrip";
-import { buildTrip, TRIP_ID } from "./mock/trip-waterloo-park";
-import { TRIP_SPECS } from "./mock/trips";
+import { stacktMarket, TRIP_SPECS } from "./mock/trips";
+
+const TRIP_ID = stacktMarket.id;
+const buildTrip = () => buildSpecTrip(stacktMarket);
 import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
 import type {
@@ -59,6 +62,7 @@ export interface TripView {
   endedAt: string;
   placeLabel: string;
   region: string;
+  origin: GeoPoint;
   stats: TripStats;
   /** Thinned for SVG rendering — the full path is 700+ samples. */
   path: TrackPoint[];
@@ -120,6 +124,7 @@ export function getTripView(): TripView {
     endedAt: trip.endedAt,
     placeLabel: trip.place.label,
     region: trip.place.region,
+    origin: trip.place.origin,
     stats: computeTripStats(trip, distanceM),
     path: thin(trip.path, 2),
     moments: trip.moments.map(toSummary),

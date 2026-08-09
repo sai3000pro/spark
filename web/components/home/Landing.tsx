@@ -76,6 +76,8 @@ export interface LandingDiscard {
 export interface LandingProps {
   dateLabel: string;
   placeLabel: string;
+  /** "43.6408° N, 79.4022° W" — the walk's anchor, for the footer. */
+  coordsLabel: string;
   stats: {
     distance: string;
     duration: string;
@@ -203,7 +205,7 @@ function useNightAir() {
 
 /* ═════════════════════════════════ page ════════════════════════════════ */
 
-export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discards, albums, active }: LandingProps) {
+export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums, active }: LandingProps) {
   const root = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState(0);
   const air = useNightAir();
@@ -1341,7 +1343,7 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
                 </Link>
               </nav>
               <p className="fnote text-center text-[10.5px] text-mist">
-                Waterloo Park · 43.4657° N, 80.5322° W
+                {placeLabel} · {coordsLabel}
                 <br />
                 {stats.objects} things remembered · every discard on the record
               </p>

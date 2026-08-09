@@ -76,6 +76,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     <Landing
       dateLabel={tripDate(trip.startedAt)}
       placeLabel={trip.placeLabel}
+      coordsLabel={`${Math.abs(trip.origin.lat).toFixed(4)}° ${trip.origin.lat >= 0 ? "N" : "S"}, ${Math.abs(trip.origin.lng).toFixed(4)}° ${trip.origin.lng >= 0 ? "E" : "W"}`}
       stats={{
         distance: distance(trip.stats.distanceM),
         duration: duration(trip.stats.durationSec),

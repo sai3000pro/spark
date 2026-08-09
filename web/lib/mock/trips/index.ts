@@ -13,10 +13,12 @@ import { higashiyama } from "./higashiyama";
 import { highLine } from "./high-line";
 import { lionsHead } from "./lions-head";
 import { reynisfjara } from "./reynisfjara";
+import { stacktMarket } from "./stackt-market";
 import { waterlooPark } from "./waterloo-park";
 
 /** Sorted newest first — the gallery groups by month and reads top-down. */
 export const TRIP_SPECS: readonly TripSpec[] = [
+  stacktMarket, // 2026-08-08 · Toronto, ON — the flagship, street-following route
   waterlooPark, // 2026-08-02 · Waterloo, ON
   brooklynBridgePark, // 2026-06-16 · Brooklyn, NY
   highLine, // 2026-06-14 · Manhattan, NY
@@ -33,4 +35,13 @@ export const getTripSpec = (id: string): TripSpec | undefined => BY_ID.get(id);
 /** Waterloo Park — the trip every deep-linked demo assumes. */
 export const DEFAULT_TRIP_ID = waterlooPark.id;
 
-export { waterlooPark, brooklynBridgePark, highLine, alfama, higashiyama, reynisfjara, lionsHead };
+export {
+  stacktMarket,
+  waterlooPark,
+  brooklynBridgePark,
+  highLine,
+  alfama,
+  higashiyama,
+  reynisfjara,
+  lionsHead,
+};

@@ -67,6 +67,7 @@ import {
   type TrackSpec,
 } from "./generateDetections";
 import { generatePath, pathDistanceM, type Stop } from "./generatePath";
+import { generateRoutePath, type RouteSegment } from "./generateRoutePath";
 import { makeRng, rngRange } from "./rng";
 
 /** Object world position: local frame [east, up, south], offset from a place. */
@@ -106,7 +107,24 @@ export interface TripSpec {
   /** Local metres. Where the path starts and ends; moments supply their own stops. */
   start: Vec2;
   end: Vec2;
+  /**
+   * Authored street-following route (see generateRoutePath). When present the
+   * odometry traces these segments — real roads, bridges, park paths, dense
+   * GPS-noisy samples — instead of generatePath's stop-to-stop legs. Dwell
+   * segments must cover each moment's window (padded) or the dwell trigger
+   * never fires for it.
+   */
+  route?: RouteSegment[];
+  /** Odometry cadence, seconds. Route trips sample denser than the default 8. */
+  sampleSec?: number;
   moments: MomentSpec[];
+  /**
+   * Authored non-moment tracks — street life. Streetcars, runners, gulls,
+   * other people's dogs: everything the cameras honestly see that no one
+   * would keep. They thicken the detection stream and hand stage 2 more
+   * candidates to weigh and reject; they belong to no moment.
+   */
+  extraTracks?: TrackSpec[];
   /**
    * Per-trip RNG seeds.
    *
@@ -256,10 +274,12 @@ export function buildTrip(spec: TripSpec): BuiltTrip {
 
   const detections = generateDetectionsForTracks(
     spec.id,
-    [...momentTracks, ...ambientTracks],
+    [...momentTracks, ...(spec.extraTracks ?? []), ...ambientTracks],
     spec.seeds.detections,
   );
-  const path = generatePath(buildStops(spec), spec.durationSec, 8, spec.seeds.path);
+  const path = spec.route
+    ? generateRoutePath(spec.route, spec.durationSec, spec.sampleSec ?? 3, spec.seeds.path)
+    : generatePath(buildStops(spec), spec.durationSec, spec.sampleSec ?? 8, spec.seeds.path);
   const audioEvents = buildAudioEvents(spec);
   const keywordHits = buildKeywordHits(spec);
 

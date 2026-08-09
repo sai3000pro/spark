@@ -1,5 +1,6 @@
 import { AtlasApp, type NavTargetMap } from "@/components/atlas/AtlasApp";
-import { buildTrip } from "@/lib/mock/trip-waterloo-park";
+import { buildTrip } from "@/lib/mock/buildTrip";
+import { stacktMarket } from "@/lib/mock/trips";
 import { getObjectIndexView, getTripView } from "@/lib/tripData";
 
 /**
@@ -15,7 +16,7 @@ import { getObjectIndexView, getTripView } from "@/lib/tripData";
 export default async function WalkPage({ searchParams }: PageProps<"/walk">) {
   const sp = await searchParams;
   const trip = getTripView();
-  const { trip: fullTrip } = buildTrip();
+  const { trip: fullTrip } = buildTrip(stacktMarket);
   const { entries } = getObjectIndexView();
 
   // Nav targets keyed moment → track, so the takeover can say "the robot can
