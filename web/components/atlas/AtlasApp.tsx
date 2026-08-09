@@ -11,6 +11,7 @@
  */
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
@@ -42,6 +43,8 @@ const REPLAY_SPEED = 120;
 interface Props extends AtlasView {
   /** Every walk pinned on the Earth — what the pocket globe opens into. */
   globe: GlobeView;
+  /** Whether THIS walk is on the shared globe. Toggled from the ground plate. */
+  posted: boolean;
   initialMomentId?: string | null;
   initialAnchor?: string | null;
 }
@@ -54,6 +57,7 @@ export function AtlasApp({
   geo,
   globe,
   ledger,
+  posted: postedFromServer,
   initialMomentId,
   initialAnchor,
 }: Props) {
@@ -65,6 +69,34 @@ export function AtlasApp({
   const [findOpen, setFindOpen] = useState(false);
   const [globeOpen, setGlobeOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+
+  // ── Posting to the globe ───────────────────────────────────────────────
+  // Optimistic: the footnote flips at once, the server flag follows, and
+  // router.refresh() re-derives the globe view so the sphere agrees. When the
+  // refreshed server value arrives it wins — state adjusted during render, the
+  // way React's docs reconcile a prop change without an effect.
+  const router = useRouter();
+  const [posted, setPosted] = useState(postedFromServer);
+  const [seenFromServer, setSeenFromServer] = useState(postedFromServer);
+  if (postedFromServer !== seenFromServer) {
+    setSeenFromServer(postedFromServer);
+    setPosted(postedFromServer);
+  }
+  const togglePosted = async () => {
+    const next = !posted;
+    setPosted(next);
+    try {
+      const res = await fetch(`/api/trips/${trip.id}/posted`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ posted: next }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      router.refresh();
+    } catch {
+      setPosted(!next);
+    }
+  };
 
   // ── The replay ─────────────────────────────────────────────────────────
   const [playhead, setPlayhead] = useState<number | null>(null);
@@ -180,6 +212,27 @@ export function AtlasApp({
               </p>
               <p className="fnote mt-1 text-[8.5px] text-ink-faint transition-colors duration-300 group-hover:text-clay">
                 [ open the ledger ]
+              </p>
+            </button>
+            {/* Posting is the one act here that leaves the page: it sets this
+                walk onto everybody's globe. Hidden walks stay yours alone. */}
+            <button
+              type="button"
+              onClick={togglePosted}
+              aria-pressed={posted}
+              aria-label={
+                posted
+                  ? "Hide this walk from the shared globe"
+                  : "Post this walk to the shared globe, where everyone can see it"
+              }
+              className="block text-left"
+            >
+              <p
+                className={`fnote mt-1 text-[8.5px] transition-colors duration-300 hover:text-clay ${
+                  posted ? "text-moss" : "text-ink-faint"
+                }`}
+              >
+                {posted ? "[ on the globe · hide ]" : "[ post to the globe ]"}
               </p>
             </button>
             <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">

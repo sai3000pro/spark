@@ -6,7 +6,10 @@
  * cross the RSC boundary to get here.
  */
 import { haversineM } from "./globe/geo";
+import { computeTripStats } from "./pipeline";
+import { isWalkPosted } from "./postedWalks";
 import { listAllTrips, type TripThumb } from "./tripData";
+import { listUploadedWalks } from "./uploadedTrips";
 import type { GeoPoint } from "./types";
 
 export interface GlobeAlbum {
@@ -53,19 +56,48 @@ export function getGlobeView(): GlobeView {
   // single-trip listTrips() would put one pin on the globe and never exercise
   // the clustering. Nothing in the journal reads getGlobeView, so this is the
   // aurora side choosing its own source.
-  const albums: GlobeAlbum[] = listAllTrips().map((trip) => ({
-    id: trip.id,
-    title: trip.title,
-    placeLabel: trip.placeLabel,
-    region: trip.region,
-    country: trip.country,
-    origin: trip.origin,
-    startedAt: trip.startedAt,
-    momentCount: trip.stats.momentCount,
-    durationSec: trip.stats.durationSec,
-    distanceM: trip.stats.distanceM,
-    cover: trip.momentThumbs[0] ?? null,
-  }));
+  // Only what has been POSTED reaches the sphere. The seeded specs default to
+  // posted (they are the "everybody else" this plate amalgamates); an uploaded
+  // walk appears here only after its owner posts it from the map. The flag lives
+  // in lib/postedWalks.ts.
+  const albums: GlobeAlbum[] = [
+    ...listAllTrips().map(
+      (trip): GlobeAlbum => ({
+        id: trip.id,
+        title: trip.title,
+        placeLabel: trip.placeLabel,
+        region: trip.region,
+        country: trip.country,
+        origin: trip.origin,
+        startedAt: trip.startedAt,
+        momentCount: trip.stats.momentCount,
+        durationSec: trip.stats.durationSec,
+        distanceM: trip.stats.distanceM,
+        cover: trip.momentThumbs[0] ?? null,
+      }),
+    ),
+    // Uploaded walks were invisible to the globe before posting existed; now the
+    // posted ones take their place beside the specs. Their origin is whatever the
+    // upload declared — a time transect wearing a map's clothes (lib/uploadedTrips.ts).
+    ...listUploadedWalks().map(({ built }): GlobeAlbum => {
+      const { trip, distanceM } = built;
+      const stats = computeTripStats(trip, distanceM);
+      const key = trip.moments[0]?.keyframes[0];
+      return {
+        id: trip.id,
+        title: trip.title,
+        placeLabel: trip.place.label,
+        region: trip.place.region,
+        country: trip.place.country,
+        origin: trip.place.origin,
+        startedAt: trip.startedAt,
+        momentCount: stats.momentCount,
+        durationSec: stats.durationSec,
+        distanceM: stats.distanceM,
+        cover: key ? { seed: key.placeholderSeed, hue: key.hue, url: key.url } : null,
+      };
+    }),
+  ].filter((album) => isWalkPosted(album.id));
 
   const pins = clusterByProximity(albums, CLUSTER_RADIUS_KM).map((cluster) => ({
     key: cluster.items.map((a) => a.id).sort().join("+"),
