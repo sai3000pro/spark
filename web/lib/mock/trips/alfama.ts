@@ -153,7 +153,9 @@ export const alfama: TripSpec = {
     label: "Alfama",
     region: "Lisbon",
     country: "Portugal",
-    origin: { lat: 38.7115, lng: -9.13 },
+    // Nudged uphill so the whole authored shape stays on Alfama's streets —
+    // at the old anchor the first minutes printed in the Tagus.
+    origin: { lat: 38.7138, lng: -9.1308 },
   },
   start: PLACES.start,
   end: PLACES.end,

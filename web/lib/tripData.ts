@@ -15,7 +15,7 @@ import { familyOf } from "./mock/labels";
 // reads. Aliased so the two can never be confused at a call site — see the
 // additive accessors at the bottom of this file.
 import { buildTrip as buildSpecTrip } from "./mock/buildTrip";
-import { stacktMarket, TRIP_SPECS } from "./mock/trips";
+import { getTripSpec, stacktMarket, TRIP_SPECS } from "./mock/trips";
 
 const TRIP_ID = stacktMarket.id;
 const buildTrip = () => buildSpecTrip(stacktMarket);
@@ -112,8 +112,16 @@ function toSummary(m: Moment): MomentSummary {
   };
 }
 
-export function getTripView(): TripView {
-  const { trip, distanceM } = buildTrip();
+/**
+ * Any authored trip's walk-screen view. The globe made the walk multi-trip:
+ * clicking a banner on the desk globe lands on `/walk?trip=<id>`, and this is
+ * what that page reads. Unknown ids return null so the page can fall back to
+ * the flagship instead of 500ing on a stale link.
+ */
+export function getTripViewFor(tripId: string): TripView | null {
+  const spec = getTripSpec(tripId);
+  if (!spec) return null;
+  const { trip, distanceM } = buildSpecTrip(spec);
   const durationSec =
     (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
 
@@ -132,6 +140,30 @@ export function getTripView(): TripView {
     detectionBins: binDetections(trip.detections, durationSec, 240, familyOf),
     durationSec,
   };
+}
+
+/** Any authored trip's full moments — what the walk's takeover renders. */
+export function getTripMomentsFor(tripId: string): Moment[] | null {
+  const spec = getTripSpec(tripId);
+  if (!spec) return null;
+  return buildSpecTrip(spec).trip.moments;
+}
+
+/** Any authored trip's ⌘K index, same boundary as `getObjectIndexView`. */
+export function getObjectIndexViewFor(tripId: string): ObjectIndexView | null {
+  const spec = getTripSpec(tripId);
+  if (!spec) return null;
+  const { trip } = buildSpecTrip(spec);
+  return {
+    entries: buildObjectIndex(trip.moments, trip.path, trip),
+    durationSec:
+      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
+    tripId: trip.id,
+  };
+}
+
+export function getTripView(): TripView {
+  return getTripViewFor(TRIP_ID)!;
 }
 
 export interface MomentView {

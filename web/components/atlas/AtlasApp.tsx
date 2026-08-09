@@ -10,6 +10,7 @@
  * clicking a search result land inside the right splat.
  */
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
@@ -17,9 +18,22 @@ import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { clockShort, distance, duration, tripDate } from "@/lib/format";
-import { localToLngLat } from "@/lib/geo";
+import { localToLngLatAt } from "@/lib/geo";
+import { formatGeo } from "@/lib/globe/geo";
+import type { GlobeView } from "@/lib/globeData";
 import type { TripView } from "@/lib/tripData";
 import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
+
+// The globes are WebGL and mean nothing to the server — loaded lazily so the
+// map is interactive before three.js ever crosses the wire.
+const PocketGlobe = dynamic(
+  () => import("@/components/atlas/PocketGlobe").then((m) => m.PocketGlobe),
+  { ssr: false },
+);
+const GlobeOverlay = dynamic(
+  () => import("@/components/atlas/GlobeOverlay").then((m) => m.GlobeOverlay),
+  { ssr: false },
+);
 
 /** A 95-minute walk replays in ~48 seconds. */
 const REPLAY_SPEED = 120;
@@ -34,6 +48,8 @@ interface Props {
   moments: Moment[];
   entries: ObjectIndexEntry[];
   navTargets: NavTargetMap;
+  /** Every walk pinned on the Earth — what the pocket globe opens into. */
+  globe: GlobeView;
   initialMomentId?: string | null;
   initialAnchor?: string | null;
 }
@@ -43,6 +59,7 @@ export function AtlasApp({
   moments,
   entries,
   navTargets,
+  globe,
   initialMomentId,
   initialAnchor,
 }: Props) {
@@ -52,6 +69,7 @@ export function AtlasApp({
   );
   const [anchor, setAnchor] = useState<string | null>(initialAnchor ?? null);
   const [findOpen, setFindOpen] = useState(false);
+  const [globeOpen, setGlobeOpen] = useState(false);
 
   // ── The replay ─────────────────────────────────────────────────────────
   const [playhead, setPlayhead] = useState<number | null>(null);
@@ -126,6 +144,7 @@ export function AtlasApp({
   return (
     <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
       <FieldMap
+        origin={trip.origin}
         path={trip.path}
         moments={trip.moments}
         clocks={clocks}
@@ -154,8 +173,8 @@ export function AtlasApp({
           </p>
           <p className="fnote mt-2 text-[8.5px] text-ink-faint">
             {(() => {
-              const [lng, lat] = localToLngLat(trip.path[0].pos);
-              return `[ ${Math.abs(lat).toFixed(4)}° N · ${Math.abs(lng).toFixed(4)}° W ]`;
+              const [lng, lat] = localToLngLatAt(trip.origin, trip.path[0].pos);
+              return `[ ${formatGeo({ lat, lng })} ]`;
             })()}
           </p>
         </div>
@@ -204,6 +223,24 @@ export function AtlasApp({
         </div>
       )}
 
+      {/* ── The pocket globe — the door to the plate, tucked in the corner.
+             It clears the day bar on narrow screens and settles into the true
+             corner once the viewport is wide enough to spare it. ──────────── */}
+      {!openMoment && !globeOpen && (
+        <div
+          className="rise-in pointer-events-none absolute bottom-28 right-4 z-20 sm:bottom-32 lg:bottom-16 lg:right-5"
+          style={{ "--i": 5 } as React.CSSProperties}
+        >
+          <PocketGlobe
+            stops={globe.pins.map((p) => p.origin)}
+            onOpen={() => {
+              setPlaying(false);
+              setGlobeOpen(true);
+            }}
+          />
+        </div>
+      )}
+
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-20 p-4 sm:p-5">
         <div className="rise-in mx-auto max-w-3xl" style={{ "--i": 3 } as React.CSSProperties}>
           <DayBar
@@ -231,6 +268,15 @@ export function AtlasApp({
           />
         </div>
       </footer>
+
+      {/* ── The globe plate: the pocket globe, opened to a full page ─────── */}
+      {globeOpen && (
+        <GlobeOverlay
+          view={globe}
+          currentTripId={trip.id}
+          onClose={() => setGlobeOpen(false)}
+        />
+      )}
 
       {/* ── The takeover: a marker expands into its splat ────────────────── */}
       {openMoment && (

@@ -251,18 +251,21 @@ export interface BuiltTrip {
 }
 
 /**
- * Memoized per spec id. Building a trip runs the full pipeline over ~10,000
+ * Memoized per spec. Building a trip runs the full pipeline over ~10,000
  * detections, and every page in the app asks for one — so this cache is what
- * keeps the albums grid from doing that six times per request.
+ * keeps the albums grid from doing that six times per request. Keyed by the
+ * spec OBJECT, not its id: specs are module singletons, so this is the same
+ * one-build-per-process memo — except after an HMR edit, where the fresh spec
+ * module must rebuild rather than serve the pre-edit trip forever.
  *
  * Note that `buildTrip` mutates candidates in place (status → "promoted") and the
  * cache hands out the same object graph to every caller. Anything downstream that
  * filters or annotates candidates must copy, not mutate.
  */
-const cache = new Map<string, BuiltTrip>();
+const cache = new WeakMap<TripSpec, BuiltTrip>();
 
 export function buildTrip(spec: TripSpec): BuiltTrip {
-  const hit = cache.get(spec.id);
+  const hit = cache.get(spec);
   if (hit) return hit;
 
   const momentTracks = spec.moments.flatMap((s) => s.tracks);
@@ -349,7 +352,7 @@ export function buildTrip(spec: TripSpec): BuiltTrip {
   };
 
   const built: BuiltTrip = { trip, distanceM: pathDistanceM(path) };
-  cache.set(spec.id, built);
+  cache.set(spec, built);
   return built;
 }
 

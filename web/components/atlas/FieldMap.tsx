@@ -35,12 +35,14 @@ if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
 import { CloudLayer } from "@/components/atlas/CloudLayer";
-import { localToLngLat, tripBounds } from "@/lib/geo";
+import { localToLngLatAt, tripBoundsAt } from "@/lib/geo";
 import { BRASS, CLAY, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
-import type { TrackPoint, Vec2 } from "@/lib/types";
+import type { GeoPoint, TrackPoint, Vec2 } from "@/lib/types";
 
 interface Props {
+  /** Where the trip's local metre frame is pinned on Earth — `trip.origin`. */
+  origin: GeoPoint;
   path: TrackPoint[];
   moments: MomentSummary[];
   /** Wall-clock labels ("19:42"), aligned with `moments` — the banners fly them. */
@@ -60,13 +62,13 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function FieldMap({ path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ origin, path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
-  const routeCoords = useMemo(() => path.map((p) => localToLngLat(p.pos)), [path]);
+  const routeCoords = useMemo(() => path.map((p) => localToLngLatAt(origin, p.pos)), [origin, path]);
   const bounds = useMemo(
-    () => tripBounds([...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
-    [path, moments],
+    () => tripBoundsAt(origin, [...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
+    [origin, path, moments],
   );
 
   /** The replayed portion — the route the pen has re-drawn so far. */
@@ -147,7 +149,7 @@ export function FieldMap({ path, moments, clocks, activeId, reachedT, robotPos, 
 
         {/* The kept moments — specimen banners planted where the minutes were kept. */}
         {moments.map((m, i) => {
-          const [lng, lat] = localToLngLat(m.placePos);
+          const [lng, lat] = localToLngLatAt(origin, m.placePos);
           return (
             <Marker key={m.id} longitude={lng} latitude={lat} anchor="bottom" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
               <SurveyMarker
@@ -167,7 +169,7 @@ export function FieldMap({ path, moments, clocks, activeId, reachedT, robotPos, 
 
         {/* The robot, re-walking its odometry. */}
         {robotPos && (
-          <Marker longitude={localToLngLat(robotPos)[0]} latitude={localToLngLat(robotPos)[1]} anchor="center" style={{ zIndex: 4 }}>
+          <Marker longitude={localToLngLatAt(origin, robotPos)[0]} latitude={localToLngLatAt(origin, robotPos)[1]} anchor="center" style={{ zIndex: 4 }}>
             <RobotDot />
           </Marker>
         )}
