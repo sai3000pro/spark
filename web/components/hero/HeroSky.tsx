@@ -29,8 +29,33 @@
  * brightest along the lower hem (which is how a real curtain reads) and fades
  * out above. The path runs one whole wavelength past each edge of the frame and
  * slides by exactly one wavelength per cycle, so the wave travels forever with
- * no visible seam. A second, slower animation on an inner group makes it rise
- * and fall and breathe at a different period, so the two never sync.
+ * no visible seam. A second, slower animation on a wrapper makes it rise and
+ * fall and breathe at a different period, so the two never sync.
+ *
+ * ── WHY ONE <svg> PER CURTAIN, ANIMATED AT THE ELEMENT LEVEL ────────────────
+ * The first shipped version was a single <svg> with the travel/sway animations
+ * on <g> groups inside it. Chromium promotes those groups to compositor layers
+ * (will-change works inside SVG there), so it was smooth in Chrome — and a
+ * slideshow in Safari. WebKit does not create compositor layers for transform
+ * animations INSIDE an SVG subtree: it repainted four ~4000px-wide blurred,
+ * masked paths through a `screen` blend on the main thread, every frame, at
+ * 2x DPR. Measured on WebKit 26.5: 1.6 fps idle; pausing just these animations
+ * took it to 13.6.
+ *
+ * WebKit does composite transform animations on HTML-level elements, so each
+ * curtain is now its own absolutely-positioned <svg> with the travel animation
+ * on the element itself, wrapped in a <span> carrying the sway. The wave math
+ * survives because a percentage translateX of the element IS user units: the
+ * element's width renders exactly VB_W user units, so one wavelength is
+ * `len / VB_W * 100%` of the element — see --travel-pct below.
+ *
+ * The blur stays INSIDE each svg, as a real feGaussianBlur in user units,
+ * rather than as CSS `filter: blur()` on the wrapper. Two reasons: the curtain
+ * raster is static within its layer (the blur is computed once, not per
+ * frame), and user-unit blur stretches with the viewBox exactly like the old
+ * CSS blur on the inner <g> did, so the painted look does not change. The
+ * filter region is widened well past the bbox so the blur never clips into a
+ * hard edge.
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * Server component — every bit of this is static markup plus CSS.
@@ -124,112 +149,133 @@ export function HeroSky() {
 
   return (
     <>
-      <svg
-        className="hero-aurora"
-        aria-hidden
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
-        // The sky is a band, not a square. Letting the curtains stretch to fill
-        // it is correct — a real aurora is far wider than it is tall.
-        preserveAspectRatio="none"
-        style={
-          {
-            // Positioned to the band the painted aurora actually occupied, so it
-            // never washes over the treeline.
-            top: `${AURORA.top * 100}%`,
-            height: `${band * 100}%`,
-          } as React.CSSProperties
-        }
-      >
-        <defs>
-          {/*
-            Brightest along the LOWER hem, fading out upward.
-
-            That asymmetry is most of what makes a shape read as an aurora rather
-            than as a cloud: the curtain's bottom edge is where the particles hit
-            the densest air, so it is sharp and bright, and the top diffuses away.
-          */}
-          <linearGradient id="spark-au-veil" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={core} stopOpacity="0" />
-            <stop offset="34%" stopColor={core} stopOpacity="0.5" />
-            <stop offset="78%" stopColor={glow} stopOpacity="1" />
-            <stop offset="100%" stopColor={glow} stopOpacity="0.12" />
-          </linearGradient>
-
-          {/*
-            Vertical rays — the striations that run down a curtain along the
-            magnetic field lines.
-
-            One pattern PER CURTAIN, at a different spacing each, and each one
-            rides inside its curtain's travel group. A single shared comb across
-            all three was the first attempt and it read as a barcode: three
-            curtains sharing one grid of bars turns three moving things into one
-            stationary fence.
-
-            The bars never fall below 0.62, so the curtain keeps its body and only
-            gains texture — bars that went to zero shredded it into stripes. The
-            skew is real physics being flattered: field lines are not plumb.
-          */}
-          <linearGradient id="spark-au-ray" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#fff" stopOpacity="1" />
-            <stop offset="46%" stopColor="#fff" stopOpacity="0.62" />
-            <stop offset="54%" stopColor="#fff" stopOpacity="0.62" />
-            <stop offset="100%" stopColor="#fff" stopOpacity="1" />
-          </linearGradient>
-          {CURTAINS.map((c, i) => (
-            <pattern
-              key={i}
-              id={`spark-au-rays-${i}`}
-              width={c.ray}
-              height="10"
-              patternUnits="userSpaceOnUse"
-              patternTransform="skewX(-7)"
-            >
-              <rect width={c.ray} height="10" fill="url(#spark-au-ray)" />
-            </pattern>
-          ))}
-          {CURTAINS.map((c, i) => (
-            <mask
-              key={i}
-              id={`spark-au-ray-mask-${i}`}
-              maskUnits="userSpaceOnUse"
-              x={-2 * c.len}
-              y="-160"
-              width={VB_W + 4 * c.len}
-              height="700"
-            >
-              <rect
-                x={-2 * c.len}
-                y="-160"
-                width={VB_W + 4 * c.len}
-                height="700"
-                fill={`url(#spark-au-rays-${i})`}
-              />
-            </mask>
-          ))}
-        </defs>
-
-        {CURTAINS.map((c, i) => (
-          <g
-            key={i}
-            className="hero-aurora__travel"
-            style={{ "--len": `${c.len}px`, "--dur": `${c.dur}s` } as React.CSSProperties}
+      {CURTAINS.map((c, i) => (
+        <span
+          key={i}
+          className="hero-aurora"
+          aria-hidden
+          style={
+            {
+              // Positioned to the band the painted aurora actually occupied, so
+              // it never washes over the treeline.
+              top: `${AURORA.top * 100}%`,
+              height: `${band * 100}%`,
+            } as React.CSSProperties
+          }
+        >
+          <span
+            className="hero-aurora__sway"
+            style={
+              {
+                "--sway": `${c.sway}s`,
+                "--delay": `${-i * 6}s`,
+                opacity: c.opacity,
+              } as React.CSSProperties
+            }
           >
-            <g
-              className="hero-aurora__sway"
+            <svg
+              className="hero-aurora__travel"
+              viewBox={`0 0 ${VB_W} ${VB_H}`}
+              // The sky is a band, not a square. Letting the curtains stretch to
+              // fill it is correct — a real aurora is far wider than it is tall.
+              preserveAspectRatio="none"
               style={
                 {
-                  "--sway": `${c.sway}s`,
-                  "--delay": `${-i * 6}s`,
-                  opacity: c.opacity,
-                  filter: `blur(${c.blur}px)`,
+                  "--travel-pct": `${(c.len / VB_W) * 100}%`,
+                  "--dur": `${c.dur}s`,
                 } as React.CSSProperties
               }
             >
-              <path d={curtainPath(c)} fill="url(#spark-au-veil)" mask={`url(#spark-au-ray-mask-${i})`} />
-            </g>
-          </g>
-        ))}
-      </svg>
+              <defs>
+                {/*
+                  Brightest along the LOWER hem, fading out upward.
+
+                  That asymmetry is most of what makes a shape read as an aurora
+                  rather than as a cloud: the curtain's bottom edge is where the
+                  particles hit the densest air, so it is sharp and bright, and
+                  the top diffuses away.
+                */}
+                <linearGradient id={`spark-au-veil-${i}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={core} stopOpacity="0" />
+                  <stop offset="34%" stopColor={core} stopOpacity="0.5" />
+                  <stop offset="78%" stopColor={glow} stopOpacity="1" />
+                  <stop offset="100%" stopColor={glow} stopOpacity="0.12" />
+                </linearGradient>
+
+                {/*
+                  Vertical rays — the striations that run down a curtain along
+                  the magnetic field lines.
+
+                  One pattern PER CURTAIN, at a different spacing each. A single
+                  shared comb across all curtains was tried and it read as a
+                  barcode: curtains sharing one grid of bars turns moving things
+                  into one stationary fence.
+
+                  The bars never fall below 0.62, so the curtain keeps its body
+                  and only gains texture — bars that went to zero shredded it
+                  into stripes. The skew is real physics being flattered: field
+                  lines are not plumb.
+                */}
+                <linearGradient id={`spark-au-ray-${i}`} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#fff" stopOpacity="1" />
+                  <stop offset="46%" stopColor="#fff" stopOpacity="0.62" />
+                  <stop offset="54%" stopColor="#fff" stopOpacity="0.62" />
+                  <stop offset="100%" stopColor="#fff" stopOpacity="1" />
+                </linearGradient>
+                <pattern
+                  id={`spark-au-rays-${i}`}
+                  width={c.ray}
+                  height="10"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform="skewX(-7)"
+                >
+                  <rect width={c.ray} height="10" fill={`url(#spark-au-ray-${i})`} />
+                </pattern>
+                <mask
+                  id={`spark-au-ray-mask-${i}`}
+                  maskUnits="userSpaceOnUse"
+                  x={-2 * c.len}
+                  y="-160"
+                  width={VB_W + 4 * c.len}
+                  height="700"
+                >
+                  <rect
+                    x={-2 * c.len}
+                    y="-160"
+                    width={VB_W + 4 * c.len}
+                    height="700"
+                    fill={`url(#spark-au-rays-${i})`}
+                  />
+                </mask>
+                {/*
+                  The blur, in user units, exactly like the CSS blur on the old
+                  inner <g>: stdDeviation stretches with the viewBox, so the
+                  curtain is blurred more along its width than its height once
+                  the band is stretched — which is what the tuned numbers were
+                  tuned against. The region runs a wavelength past the bbox on
+                  every side so the blur fades out instead of clipping.
+                */}
+                <filter
+                  id={`spark-au-blur-${i}`}
+                  x="-15%"
+                  y="-120%"
+                  width="130%"
+                  height="340%"
+                >
+                  <feGaussianBlur stdDeviation={c.blur} />
+                </filter>
+              </defs>
+              <g filter={`url(#spark-au-blur-${i})`}>
+                <path
+                  d={curtainPath(c)}
+                  fill={`url(#spark-au-veil-${i})`}
+                  mask={`url(#spark-au-ray-mask-${i})`}
+                />
+              </g>
+            </svg>
+          </span>
+        </span>
+      ))}
 
       <div className="hero-flies" aria-hidden>
         {FIREFLIES.map((f, i) => (

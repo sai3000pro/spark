@@ -332,6 +332,13 @@ h3 {
     opacity: 0.36;
     border-radius: inherit;
     z-index: 1;
+    /* Own compositor layer. Without it, WebKit re-paints every full-section
+       multiply overlay continuously WHILE SCROLLING — measured p90 frame time
+       192ms against 43ms with the promotion, on an otherwise identical page.
+       Blend modes composite on the GPU either way; the promotion only stops
+       the per-scroll-step repaint. Chromium behaves the same with or without. */
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   /* Halftone dot field for pine grounds — a print screen, not sci-fi. */
@@ -340,6 +347,9 @@ h3 {
     position: absolute;
     inset: 0;
     pointer-events: none;
+    /* Same WebKit scroll-repaint promotion as .papergrain::after above. */
+    will-change: transform;
+    transform: translateZ(0);
     background-image: radial-gradient(
       circle at center,
       rgb(246 240 223 / 0.16) 1.1px,
@@ -979,24 +989,22 @@ button[aria-expanded="true"] .note-ring path {
    see components/hero/HeroSky.tsx for why the colour is the light the aurora
    ADDS rather than how it appears. */
 
+/* One of these PER CURTAIN — a plain span, one composited layer each. The old
+   single-<svg> version animated <g> groups inside it, which Safari will not
+   promote to compositor layers: it repainted the whole blurred, masked,
+   screen-blended sky on the main thread every frame, and the hero ran at 1.6
+   fps on WebKit. See HeroSky.tsx for the full story. */
 .hero-aurora {
   position: absolute;
-  /*
-    Wider than the box so a travelling curtain never reveals its own edge.
-
-    WIDTH, not `right`. This is an <svg> with a viewBox, which makes it a
-    REPLACED element with an intrinsic aspect ratio (1000/340), and an absolutely
-    positioned replaced element with `width: auto` resolves its width from that
-    ratio and its height — over-constrained, so `right` is dropped silently. The
-    element came out 1197px instead of 2132px and the aurora ended in a hard
-    vertical seam two thirds of the way across the sky.
-  */
+  /* Wider than the box so a travelling curtain never reveals its own edge. */
   left: -18%;
   width: 136%;
   pointer-events: none;
   /* `screen` is additive, which is how light works and why the measured colour
      is a delta. Over the navy sky it glows; over the black treeline it does
-     almost nothing, which is exactly right. */
+     almost nothing, which is exactly right. Each curtain now screens onto the
+     stack below it individually — where curtains overlap the light adds, which
+     is what overlapping curtains of light do. */
   mix-blend-mode: screen;
   /*
     ONE mask, vertical only: the aurora runs the full width of the frame.
@@ -1009,6 +1017,10 @@ button[aria-expanded="true"] .note-ring path {
     aurora that stopped halfway across the sky, which no aurora does. Full width
     is the right call; the band below keeps the curtains high enough that what
     lands on the canopy reads as the forest being lit rather than washed out.
+
+    The mask lives HERE, on the static container, not on the swaying wrapper —
+    the fade band belongs to the sky, and must not ride up and down with the
+    curtain.
 
     Percentages are of this element, which overhangs the plate box by 18% on each
     side, so the horizontal edges are off-frame and need no fade at all.
@@ -1046,27 +1058,42 @@ button[aria-expanded="true"] .note-ring path {
 /*
   A curtain travels by exactly one wavelength per cycle.
 
-  --len is the wavelength of the sine the path is built from AND the distance it
-  moves, which is what makes an infinite loop with no seam: after one cycle the
-  ribbon is byte-identical to where it started, one crest along. The path already
-  runs a full wavelength past both edges of the viewBox, so nothing pops in.
+  --travel-pct is the wavelength as a PERCENTAGE of the element (len / VB_W),
+  and it is the distance moved per cycle, which is what makes an infinite loop
+  with no seam: after one cycle the ribbon is byte-identical to where it
+  started, one crest along. The path already runs a full wavelength past both
+  edges of the viewBox, so nothing pops in.
 
-  Inside an <svg>, a px in a CSS transform is a USER UNIT, not a screen pixel —
-  which is exactly what is wanted here, because the viewBox is stretched to the
-  band and the wave has to stretch with it.
+  A percentage, not a px length: the element's width renders exactly VB_W user
+  units, so a percentage of the element IS user units, and the wave stretches
+  with the band. (The old inner-<g> version leaned on SVG treating transform px
+  as user units; an HTML-level element has no such dispensation.)
 
   `linear`, not an easing: a curtain that accelerated and decelerated once per
   cycle would announce the loop it is otherwise hiding.
 */
 .hero-aurora__travel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   will-change: transform;
 }
 
 /* The second motion, on its own near-coprime period: the curtain rises, falls
-   and brightens as it goes. Two periods that never coincide are what separate
-   "weather" from "a loop". */
+   and breathes as it goes. Two periods that never coincide are what separate
+   "weather" from "a loop".
+
+   Origin at the TOP edge: the old inner-<g> scaled about the viewBox origin
+   (y=0), and this wrapper's top edge is that same line — the curtain must hang
+   from the sky, not bounce about its own middle. */
 .hero-aurora__sway {
-  will-change: transform, opacity;
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 0;
+  will-change: transform;
 }
 
 @keyframes aurora-travel {
@@ -1074,16 +1101,17 @@ button[aria-expanded="true"] .note-ring path {
     transform: translateX(0);
   }
   to {
-    transform: translateX(calc(-1 * var(--len)));
+    transform: translateX(calc(-1 * var(--travel-pct)));
   }
 }
 
+/* ±9 of the old user units, as a percentage of the band: 9 / 340 ≈ 2.65%. */
 @keyframes aurora-sway {
   from {
-    transform: translateY(-9px) scaleY(0.94);
+    transform: translateY(-2.65%) scaleY(0.94);
   }
   to {
-    transform: translateY(9px) scaleY(1.06);
+    transform: translateY(2.65%) scaleY(1.06);
   }
 }
 
@@ -1108,6 +1136,12 @@ button[aria-expanded="true"] .note-ring path {
     transparent 70%
   );
   opacity: 0.75;
+  /* Each fly on its own compositor layer. Without this, WebKit paints the
+     drift/twinkle into the plate box's backing store, and every animation frame
+     of every fly repaints a patch of the scene — including any blurred curtain
+     that overlaps it. Thirteen flies at 60Hz was measurably a third of the
+     hero's WebKit frame cost. */
+  will-change: translate, opacity;
 }
 
 
@@ -1402,6 +1436,9 @@ button[aria-expanded="true"] .note-ring path {
   background-size: calc(var(--walk-frames) * 100%) 100%;
   background-position-x: calc(var(--idle-frame) * var(--walk-step));
   background-position-y: center;
+  /* Own layer, same reason as .hero-fly: the breathe/doze scale must not
+     repaint the plate box beneath it in WebKit. */
+  will-change: transform;
 }
 
 /* The blob's own light on the ground. One gradient, tinted with the brand token
