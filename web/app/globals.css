@@ -69,10 +69,11 @@
   --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-typewriter), ui-monospace, "SF Mono", monospace;
 
-  /* One radius scale. Nothing is a pill except status dots. */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* One radius scale — sharpened in v5.8: the journal's corners are cut,
+     not rounded. Nothing is a pill except status dots. */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
 
   /* Exactly two curves — registered in GSAP CustomEase under the same names. */
   --ease-signature: cubic-bezier(0.785, 0.135, 0.15, 0.86);
@@ -364,13 +365,13 @@ h3 {
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Pills: the ONLY rounded-full controls in the journal ───────────── */
+  /* ── Pills — cut sharp in v5.8; only status dots stay round ─────────── */
   .pill-brass {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
     background: var(--color-brass);
     color: var(--color-ink);
     font-weight: 550;
@@ -395,7 +396,7 @@ h3 {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-md);
     font-weight: 500;
     box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 55%, transparent);
     transition:
@@ -588,48 +589,6 @@ h3 {
     background: var(--color-ink);
     color: var(--color-paper);
     border-radius: 0;
-  }
-
-  /*
-    ── The device toggle ────────────────────────────────────────────────────
-
-    Demo chrome, not product chrome. It is pinned to the corner of every page in
-    both designs, so it is deliberately the quietest thing on screen: near-black
-    plate, 9px type, and 55% opacity until you actually go looking for it.
-
-    Black rather than either design's own surface, for the same reason it is
-    small — a neutral dark chip reads as "not part of the app" over navy AND over
-    cream, where a vellum plate looked like a journal component and a navy one
-    looked like an aurora component.
-  */
-  .device-toggle {
-    background: rgb(0 0 0 / 0.62);
-    border: 1px solid rgb(255 255 255 / 0.1);
-    border-radius: var(--radius-sm);
-    backdrop-filter: blur(8px);
-    opacity: 0.55;
-    transition: opacity 0.3s var(--ease-signature);
-  }
-  .device-toggle:hover,
-  .device-toggle:focus-within {
-    opacity: 1;
-  }
-
-  /*
-    The selected state — the ONE green both designs share.
-
-    `machine-400` is the aurora design's green (the active Albums|Globe pill,
-    every focus ring) and it sits a whisker off the journal's own
-    `--color-aurora`, so one value serves both grounds.
-
-    Green TEXT on a faint tint rather than a solid green block: a solid fill is
-    what the primary action uses, and this control is the opposite of primary.
-    On the near-black plate it still measures 8.9:1.
-  */
-  .selected-live {
-    background: color-mix(in srgb, var(--color-machine-400) 16%, transparent);
-    color: var(--color-machine-400);
-    border-radius: calc(var(--radius-sm) - 2px);
   }
 
   .scrollbar-thin {

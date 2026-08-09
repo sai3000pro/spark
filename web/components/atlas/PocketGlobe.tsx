@@ -47,7 +47,7 @@ export function PocketGlobe({ stops, onOpen }: Props) {
       type="button"
       onClick={onOpen}
       aria-label="Open the globe — every walk on one sphere"
-      className="group pointer-events-auto flex flex-col items-center gap-1.5"
+      className="group pointer-events-auto block"
     >
       <span
         className="relative block h-[92px] w-[92px] overflow-hidden rounded-full transition-transform duration-300 group-hover:scale-[1.045]"
@@ -82,13 +82,6 @@ export function PocketGlobe({ stops, onOpen }: Props) {
               "radial-gradient(90% 90% at 32% 26%, rgb(255 251 240 / 0.5) 0%, rgb(255 251 240 / 0) 42%), radial-gradient(120% 120% at 50% 50%, rgb(27 27 24 / 0) 58%, rgb(27 27 24 / 0.16) 100%)",
           }}
         />
-      </span>
-
-      <span
-        className="fnote rounded-[5px] px-1.5 py-0.5 text-[9px] text-ink-soft"
-        style={{ background: "rgb(255 251 240 / 0.88)", boxShadow: "var(--ring-ink)" }}
-      >
-        [ the globe ]
       </span>
     </button>
   );

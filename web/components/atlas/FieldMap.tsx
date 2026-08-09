@@ -22,9 +22,9 @@
  * haven't "happened yet" and print hollow. The camera opens tilted (pitch 48)
  * so the park reads as a place, not a diagram.
  */
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { setWorkerUrl } from "maplibre-gl";
-import MapGL, { Layer, Marker, ScaleControl, Source, type MapRef } from "react-map-gl/maplibre";
+import MapGL, { Layer, Marker, ScaleControl, Source, useMap, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // MapLibre v6 ships its tile worker as a separate module that Turbopack's
@@ -43,6 +43,11 @@ import type { GeoPoint, TrackPoint, Vec2 } from "@/lib/types";
 interface Props {
   /** Where the trip's local metre frame is pinned on Earth — `trip.origin`. */
   origin: GeoPoint;
+  /**
+   * The trip's title block, printed ON the survey — it rides the map camera's
+   * pitch and bearing like lettering pressed on the ground, not a floating card.
+   */
+  plate?: React.ReactNode;
   path: TrackPoint[];
   moments: MomentSummary[];
   /** Wall-clock labels ("19:42"), aligned with `moments` — the banners fly them. */
@@ -62,7 +67,7 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function FieldMap({ origin, path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ origin, plate, path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
   const routeCoords = useMemo(() => path.map((p) => localToLngLatAt(origin, p.pos)), [origin, path]);
@@ -176,6 +181,9 @@ export function FieldMap({ origin, path, moments, clocks, activeId, reachedT, ro
 
         <ScaleControl position="bottom-left" maxWidth={110} unit="metric" />
 
+        {/* The trip's title block, laid on the ground like survey lettering. */}
+        {plate && <GroundPlate>{plate}</GroundPlate>}
+
         {/* The weather — world-anchored, pointer-transparent, over everything
             on the page the way weather is. */}
         <CloudLayer />
@@ -199,6 +207,53 @@ export function FieldMap({ origin, path, moments, clocks, activeId, reachedT, ro
 // ─────────────────────────────────────────────────────────────────────────────
 // Marks
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lettering pressed on the survey, not a card over it.
+ *
+ * The block stays pinned to the screen's top-left corner, but it wears the map
+ * camera's pitch and bearing — rotateZ into the world's orientation first,
+ * then rotateX to lie back with the ground plane — so tilting or turning the
+ * map moves the type exactly as it moves the streets. The transform writes
+ * straight to the node on every map move; a setState here would re-render the
+ * app at pan speed.
+ */
+function GroundPlate({ children }: { children: React.ReactNode }) {
+  const { current: map } = useMap();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!map) return;
+    const apply = () => {
+      const el = ref.current;
+      if (!el) return;
+      // 0.82: full pitch lays the type too flat to read at a glance — the
+      // lettering leans with the ground rather than gluing itself to it.
+      const lean = Math.min(52, map.getPitch() * 0.82);
+      el.style.transform = `rotateX(${lean}deg) rotateZ(${-map.getBearing()}deg)`;
+    };
+    apply();
+    map.on("move", apply);
+    return () => {
+      map.off("move", apply);
+    };
+  }, [map]);
+
+  return (
+    <div
+      className="pointer-events-none absolute left-4 top-4 z-10 sm:left-6 sm:top-5"
+      style={{ perspective: "900px" }}
+    >
+      <div
+        ref={ref}
+        className="pointer-events-auto"
+        style={{ transformOrigin: "0% 100%", transformStyle: "preserve-3d" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /** The swallow-tail cut on the banner's fly end. */
 const BANNER_CLIP = "polygon(0 0, 100% 0, calc(100% - 5px) 50%, 100% 100%, 0 100%)";
@@ -306,7 +361,7 @@ function SurveyMarker({
       {/* Hover label — a vellum slip pinned over the park. */}
       {active && (
         <span
-          className="pointer-events-none absolute bottom-[calc(100%+9px)] left-1/2 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[6px] px-2.5 py-1.5"
+          className="pointer-events-none absolute bottom-[calc(100%+9px)] left-1/2 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[4px] px-2.5 py-1.5"
           style={{
             background: "var(--color-vellum)",
             boxShadow: "var(--ring-ink), 0 8px 24px rgb(27 27 24 / 0.22)",
@@ -346,7 +401,7 @@ function TrailheadMarker({ at, label, hollow }: { at: [number, number]; label: s
           {!hollow && <span className="block rounded-full" style={{ width: 4.5, height: 4.5, background: PINE }} />}
         </span>
         <span
-          className="fnote rounded-[5px] px-1.5 py-0.5 text-[9px]"
+          className="fnote rounded-[3px] px-1.5 py-0.5 text-[9px]"
           style={{ color: PINE, background: "rgb(255 251 240 / 0.88)", boxShadow: "var(--ring-ink)" }}
         >
           [ {label} ]

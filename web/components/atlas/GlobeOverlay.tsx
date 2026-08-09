@@ -229,18 +229,20 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
       />
 
       {/* ── Chrome — vellum slips pinned over the plate ──────────────────── */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
-        <div className="plate-vellum papergrain rise-in pointer-events-auto relative overflow-hidden px-4 py-3">
+      {/* No card: the plate's masthead is set straight into the page — the
+          background IS paper, so the type needs nothing under it. */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-3 p-5 sm:p-6">
+        <div className="rise-in pointer-events-auto">
           <div className="flex items-baseline gap-2.5">
-            <span className="font-display text-[19px] leading-none" style={{ fontWeight: 560 }}>
+            <span className="font-display text-[26px] leading-none" style={{ fontWeight: 580 }}>
               Spark<span className="text-clay">.</span>
             </span>
-            <span className="fnote text-[10px] text-ink-faint">[ the globe ]</span>
+            <span className="fnote text-[10px] text-ink-soft">[ the globe ]</span>
           </div>
-          <p className="tag tnum mt-1.5 text-[12px] text-ink-soft">
+          <p className="tag tnum mt-2 text-[13px] text-ink-soft">
             {view.albums.length} walks · {countries} countries · one sphere
           </p>
-          <p className="fnote mt-0.5 text-[8.5px] text-ink-faint">
+          <p className="fnote mt-1 text-[8.5px] text-ink-faint">
             [ every banner is a kept walk ]
           </p>
         </div>
@@ -254,7 +256,7 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
         >
           Back to the map
           <kbd
-            className="fnote rounded-[4px] px-1.5 py-0.5 text-[10px] text-ink-faint"
+            className="fnote rounded-[3px] px-1.5 py-0.5 text-[10px] text-ink-faint"
             style={{ boxShadow: "var(--ring-ink)" }}
           >
             esc
@@ -285,7 +287,7 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
                   onFocus={() => setHoveredKey(pin.key)}
                   onBlur={() => setHoveredKey(null)}
                   onClick={() => select(pin.key, album.id)}
-                  className="flex w-full items-center gap-2.5 rounded-[7px] px-2 py-1.5 text-left transition-colors"
+                  className="flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left transition-colors"
                   style={{
                     background: activeKey === pin.key ? `${inkOf(pin.key).deep}14` : "transparent",
                   }}
@@ -319,15 +321,12 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
       </aside>
 
       {/* ── HUD footnotes ────────────────────────────────────────────────── */}
-      {/* Nudged off the corners: the dev badge lives bottom-left, the device
-          toggle bottom-right, and both are fixed above this plate. */}
+      {/* The instrument's readout, set straight into the page (left-16 clears
+          the dev badge pinned in the corner). */}
       <span
         ref={readoutRef}
         className="fnote pointer-events-none absolute bottom-5 left-16 z-10 hidden text-[9px] text-ink-faint sm:block"
       />
-      <p className="fnote pointer-events-none absolute bottom-5 right-28 z-10 hidden rounded-[5px] px-1.5 py-0.5 text-[9px] text-ink-soft sm:block" style={{ background: "rgb(255 251 240 / 0.8)" }}>
-        [ drag to turn · click a banner to step into that walk ]
-      </p>
 
       {/* The paper wash — the page rising to meet the dive. While it is up it
           also swallows the pointer, so a landing cannot be double-booked. */}
@@ -451,10 +450,12 @@ function SpecimenPin({
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {/* The banner — DOM, so it is EXACTLY the map's mark, hoisted to orbit. */}
+      {/* The banner — DOM, so it is EXACTLY the map's mark, hoisted to orbit.
+          No distanceFactor: the flag holds its screen size at every camera
+          distance, exactly as the map's banners hold theirs at every zoom —
+          flying closer changes the ground, never the lettering. */}
       <Html
         center
-        distanceFactor={2.5}
         zIndexRange={active ? [30, 20] : [19, 10]}
         position={[0, 1.078, 0]}
       >
@@ -495,7 +496,7 @@ function SpecimenPin({
           {/* Hover slip — a vellum slip pinned over the sphere. */}
           {active && (
             <span
-              className="pointer-events-none absolute bottom-[calc(100%+10px)] left-0 flex w-max -translate-x-1/3 flex-col gap-0.5 rounded-[6px] px-2.5 py-1.5"
+              className="pointer-events-none absolute bottom-[calc(100%+10px)] left-0 flex w-max -translate-x-1/3 flex-col gap-0.5 rounded-[4px] px-2.5 py-1.5"
               style={{
                 background: "var(--color-vellum)",
                 boxShadow: "var(--ring-ink), 0 8px 24px rgb(27 27 24 / 0.22)",

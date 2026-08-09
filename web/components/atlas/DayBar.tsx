@@ -178,7 +178,7 @@ export function DayBar({
               {/* The slip — clock and title on vellum, pinned above the rail. */}
               {on && (
                 <span
-                  className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[6px] px-2.5 py-1.5"
+                  className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 flex w-max -translate-x-1/2 items-baseline gap-2 rounded-[4px] px-2.5 py-1.5"
                   style={{
                     background: "var(--color-vellum)",
                     boxShadow: "var(--ring-ink), 0 8px 20px rgb(27 27 24 / 0.2)",

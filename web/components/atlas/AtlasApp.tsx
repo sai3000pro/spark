@@ -145,6 +145,37 @@ export function AtlasApp({
     <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
       <FieldMap
         origin={trip.origin}
+        plate={
+          // No card: the title block is survey lettering laid on the ground,
+          // haloed in milk the way the map's own labels are.
+          <div
+            className="rise-in"
+            style={{
+              textShadow:
+                "0 0 5px rgb(255 251 240 / 0.95), 0 0 10px rgb(255 251 240 / 0.85), 0 0 18px rgb(255 251 240 / 0.7)",
+            }}
+          >
+            <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
+              <span className="font-display text-[24px] leading-none" style={{ fontWeight: 580 }}>
+                Spark<span className="text-clay">.</span>
+              </span>
+              <span className="fnote text-[10px] text-ink-soft">[ the walk ]</span>
+            </Link>
+            <p className="tag tnum mt-1.5 text-[12.5px] text-ink">
+              {tripDate(trip.startedAt)} · {trip.placeLabel}
+            </p>
+            <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
+              {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
+              {duration(trip.stats.durationSec)}
+            </p>
+            <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">
+              {(() => {
+                const [lng, lat] = localToLngLatAt(trip.origin, trip.path[0].pos);
+                return `[ ${formatGeo({ lat, lng })} ]`;
+              })()}
+            </p>
+          </div>
+        }
         path={trip.path}
         moments={trip.moments}
         clocks={clocks}
@@ -155,30 +186,8 @@ export function AtlasApp({
         onOpen={(id) => open(id)}
       />
 
-      {/* ── Floating chrome — vellum slips pinned over the page. ─────────── */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
-        <div className="plate-vellum papergrain rise-in pointer-events-auto relative overflow-hidden px-4 py-3">
-          <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
-            <span className="font-display text-[19px] leading-none" style={{ fontWeight: 560 }}>
-              Spark<span className="text-clay">.</span>
-            </span>
-            <span className="fnote text-[10px] text-ink-faint">[ the walk ]</span>
-          </Link>
-          <p className="tag tnum mt-1.5 text-[12px] text-ink-soft">
-            {tripDate(trip.startedAt)} · {trip.placeLabel}
-          </p>
-          <p className="tag tnum mt-0.5 text-[12px] text-ink-faint">
-            {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
-            {duration(trip.stats.durationSec)}
-          </p>
-          <p className="fnote mt-2 text-[8.5px] text-ink-faint">
-            {(() => {
-              const [lng, lat] = localToLngLatAt(trip.origin, trip.path[0].pos);
-              return `[ ${formatGeo({ lat, lng })} ]`;
-            })()}
-          </p>
-        </div>
-
+      {/* ── Floating chrome ──────────────────────────────────────────────── */}
+      <header className="pointer-events-none absolute right-0 top-0 z-20 p-4 sm:p-5">
         <div className="rise-in pointer-events-auto flex items-center gap-2" style={{ "--i": 2 } as React.CSSProperties}>
           <button
             type="button"
@@ -187,7 +196,7 @@ export function AtlasApp({
           >
             <Search size={14} strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Where&apos;s my…</span>
-            <kbd className="fnote rounded-[4px] px-1.5 py-0.5 text-[10px] text-ink-faint" style={{ boxShadow: "var(--ring-ink)" }}>
+            <kbd className="fnote rounded-[3px] px-1.5 py-0.5 text-[10px] text-ink-faint" style={{ boxShadow: "var(--ring-ink)" }}>
               ⌘K
             </kbd>
           </button>
@@ -198,37 +207,15 @@ export function AtlasApp({
               Detector bench
             </Link>
           </span>
-
-          <span className="hidden sm:block">
-            <span
-              className="chip chip-live fnote pointer-events-auto whitespace-nowrap py-2 text-[10px]"
-              title="Follow mode. Mock telemetry — no robot is connected yet."
-            >
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-moss" aria-hidden />
-              [ following · 78% ]
-            </span>
-          </span>
         </div>
       </header>
-
-      {/* Hint — only until something has been touched. */}
-      {playhead === null && !openId && !hoveredId && (
-        <div
-          className="rise-in pointer-events-none absolute left-1/2 top-20 z-10 hidden -translate-x-1/2 sm:block"
-          style={{ "--i": 6 } as React.CSSProperties}
-        >
-          <span className="tag rounded-[6px] bg-vellum/85 px-3 py-1.5 text-[12px] text-ink-soft" style={{ boxShadow: "var(--ring-ink)" }}>
-            Every pin is a kept moment — click one to step inside
-          </span>
-        </div>
-      )}
 
       {/* ── The pocket globe — the door to the plate, tucked in the corner.
              It clears the day bar on narrow screens and settles into the true
              corner once the viewport is wide enough to spare it. ──────────── */}
       {!openMoment && !globeOpen && (
         <div
-          className="rise-in pointer-events-none absolute bottom-28 right-4 z-20 sm:bottom-32 lg:bottom-16 lg:right-5"
+          className="rise-in pointer-events-none absolute bottom-28 right-4 z-20 lg:bottom-4 lg:right-4"
           style={{ "--i": 5 } as React.CSSProperties}
         >
           <PocketGlobe
