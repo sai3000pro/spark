@@ -96,6 +96,14 @@ const REST_FACING: BlobFacing = "left";
 
 /** How long the blob keeps the invitation open after your cursor leaves. */
 const SLEEP_AFTER_MS = 6000;
+/**
+ * How long it stands at its anchor after walking home before it starts nodding
+ * off — measured from ARRIVAL, so the stirring and the question both happen
+ * inside it. Deliberately its own number rather than the hover timeout: getting
+ * back to your spot after being thrown across the scene earns a beat to stand
+ * there, whether or not anyone is looking.
+ */
+const ANCHOR_PAUSE_MS = 5000;
 /*
  * There is no wake-to-prompt constant any more. The offer arrives when the WAKE
  * CLIP ENDS — its last drawing IS the asking one — so the label can no longer
@@ -518,16 +526,28 @@ export function HeroBlobButton() {
     setPhase("waking");
   }, [phase, warmWake]);
 
-  const settle = useCallback(() => {
+  /**
+   * Nod off after a pause, whatever the reason for the pause.
+   *
+   * The delay is a parameter because the two cases are genuinely different
+   * lengths: how long an offer stays open after your cursor leaves is a
+   * different question from how long the character stands at its spot after
+   * walking home.
+   */
+  const napAfter = useCallback((delayMs: number) => {
     clearTimer(sleepTimer);
     sleepTimer.current = setTimeout(() => {
-      // Six seconds later, so the phase is read HERE rather than captured when
-      // your cursor left. An updater, not a read of state, because that is the
-      // only way to see the phase as of the moment the nap actually lands.
+      // The phase is read HERE rather than captured when the timer was set. An
+      // updater, not a read of state, because that is the only way to see the
+      // phase as of the moment the nap actually lands.
       setNodding(wasAwake.current);
       setPhase((p) => (p === "waking" || p === "asking" ? "asleep" : p));
-    }, SLEEP_AFTER_MS);
+    }, delayMs);
   }, []);
+
+  // Bound with no arguments on purpose: React hands an event to a handler, and
+  // it would arrive as the delay.
+  const settle = useCallback(() => napAfter(SLEEP_AFTER_MS), [napAfter]);
 
   // Timers, the rAF and the offsets are the things that must not outlive the
   // component. The offsets especially: they live on a PARENT that survives this
@@ -573,13 +593,29 @@ export function HeroBlobButton() {
     const s = SEQUENCES[seqName] as Sequence;
     const n = s.frames.length;
     const at = (i: number) => s.frames[s.reverse ? n - 1 - i : i];
+
+    // A PHYSICS SEQUENCE IS NOT THE DRIVER'S TO PAINT. React has already
+    // rendered the right frame for the phase, and the rAF loop takes it from
+    // there; writing frame 0 here as well stamps the wrong drawing over it.
+    //
+    // That is not hypothetical: the jump clip's frame 0 is the curious blob with
+    // a question mark over its head, and `landing` runs no rAF loop — so
+    // touchdown showed the character asking a question for the whole beat before
+    // it walked home. All the driver does here is re-sync its "last written"
+    // guard to what React put in the element, so a later frame is not swallowed
+    // as a duplicate.
+    if (!s.frameMs) {
+      lastSrc.current = spriteRef.current?.getAttribute("src") ?? "";
+      return;
+    }
+
     cursor.current = s.from ?? 0;
     showFrame(at(cursor.current), facing);
 
     // Reduced motion keeps every POSE — a drawing is not a translation across
     // the screen — but stops the ambient loop. `sleep` holds the frame the
     // server already painted, so there is no swap at all.
-    if (!s.frameMs || (reduced && s.loop)) return;
+    if (reduced && s.loop) return;
 
     const tick = () => {
       cursor.current++;
@@ -691,18 +727,17 @@ export function HeroBlobButton() {
           snapHome(); // clears the bob as well as the offset
           showFrame(walk[0], REST_FACING); // both feet planted, not mid-stride
           setFacing(REST_FACING);
-          // IT SITS DOWN, whether or not you are still holding the cursor over
-          // it. Being carried across the scene does not make it want to ask you
-          // something — that offer belongs to the moment it has settled back in
-          // its spot. If your cursor is still there when it has, the effect
-          // below notices and it asks then, with the whole stirring beat rather
-          // than a question snapping into existence mid-landing.
-          //
-          // The walk is drawn standing and the resting art is drawn seated, so
-          // this also covers the transition: the wake clip played backwards is
-          // alert, drowsy, down.
-          setNodding(true);
-          setPhase("asleep");
+          // HOME, AND ONLY NOW DOES IT ASK. Being carried across the scene is
+          // not a reason to want to ask you something, so the question is held
+          // back through the grab, the flight and the walk; arriving is what
+          // earns it. The wake clip settles it down and ends on the asking
+          // drawing, so the offer comes out of a beat rather than appearing.
+          wasAwake.current = true;
+          setNodding(false);
+          setPhase("waking");
+          // And it does not stand there asking for ever: after ANCHOR_PAUSE_MS
+          // it nods off and the sleep loop takes over.
+          napAfter(ANCHOR_PAUSE_MS);
           return;
         }
       }
@@ -711,7 +746,7 @@ export function HeroBlobButton() {
 
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [phase, facing, flight, bounds, paint, snapHome, showFrame]);
+  }, [phase, facing, flight, bounds, paint, snapHome, showFrame, napAfter]);
 
   // Touchdown: a beat on the drawn landing, then it picks itself up and walks.
   useEffect(() => {
@@ -725,16 +760,6 @@ export function HeroBlobButton() {
     }, LAND_MS);
     return () => clearTimer(phaseTimer);
   }, [phase]);
-
-  // A cursor still resting on it once it is HOME AND SETTLED counts as noticing
-  // it afresh. This is what defers the question through a drag: nothing during
-  // the gesture, the flight or the walk can put the blob into `asking`, and the
-  // offer arrives only once it is back in place and has finished sitting down.
-  useEffect(() => {
-    if (phase !== "asleep" || nodding) return;
-    if (!rootRef.current?.matches(":hover")) return;
-    rouse();
-  }, [phase, nodding, rouse]);
 
   // Standing at home again, so the offsets belong at zero. This is the one place
   // that has to be true however it got there: the end of a walk home, a release
