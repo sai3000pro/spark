@@ -31,10 +31,11 @@ const COAST_FALLOFF_CELLS = 6;
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
-/** PINE — the coastline's pressed ink. */
-const COAST: Rgb = hexToRgb(PINE);
+/** The coastline's ink — PINE lifted toward LAGOON so the stipple reads a
+    shade lighter than pressed-black. */
+const COAST: Rgb = mix(hexToRgb(PINE), hexToRgb(LAGOON), 0.35);
 /** LAGOON, lightened toward the paper — the interior wash. */
-const INTERIOR: Rgb = mix(hexToRgb(LAGOON), hexToRgb(PAPER), 0.18);
+const INTERIOR: Rgb = mix(hexToRgb(LAGOON), hexToRgb(PAPER), 0.32);
 
 export function buildPaperCloud(opts: { samples?: number } = {}): PaperCloud {
   const samples = opts.samples ?? 110_000;
