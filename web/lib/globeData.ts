@@ -5,7 +5,7 @@
  * or its ten thousand detections. Anything the pin panel cannot show should not
  * cross the RSC boundary to get here.
  */
-import { haversineM } from "./geo";
+import { haversineM } from "./globe/geo";
 import { listTrips, type TripThumb } from "./tripData";
 import type { GeoPoint } from "./types";
 

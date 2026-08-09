@@ -11,7 +11,7 @@
  */
 import { useMemo } from "react";
 import { getLandMask, isLand } from "@/lib/globe/mask";
-import { FOG, INK, MEMORY } from "@/lib/theme";
+import { FOG, INK, MEMORY } from "@/lib/globe/theme";
 import type { GlobePin } from "@/lib/globeData";
 
 const COLS = 180;

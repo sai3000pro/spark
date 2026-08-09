@@ -1,5 +1,5 @@
 import { GlobeExplorerClient } from "@/components/globe/GlobeExplorerClient";
-import { PageHeader } from "@/components/shell/PageHeader";
+import { PageHeader } from "@/components/system/PageHeader";
 import { getGlobeView } from "@/lib/globeData";
 
 export const metadata = {

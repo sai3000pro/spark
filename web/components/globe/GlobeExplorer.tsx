@@ -17,7 +17,7 @@ import { GlobeStage } from "@/components/globe/GlobeStage";
 import { GlobeFlat } from "@/components/globe/GlobeFlat";
 import { Keyframe } from "@/components/Keyframe";
 import { distance, duration, shortDate } from "@/lib/format";
-import { formatGeo } from "@/lib/geo";
+import { formatGeo } from "@/lib/globe/geo";
 import type { GlobeView } from "@/lib/globeData";
 
 export function GlobeExplorer({ view }: { view: GlobeView }) {

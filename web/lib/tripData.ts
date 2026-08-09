@@ -6,15 +6,10 @@
  * functions, which bin/aggregate on the server and hand back small serializable
  * shapes. Tomorrow these read from Postgres instead of lib/mock — the view model
  * types are what the UI depends on, not the storage.
- *
- * Every accessor takes a tripId and returns null on a miss, so pages own the
- * notFound() rather than this layer guessing what a miss means.
  */
-import { cache } from "react";
 import { familyOf } from "./mock/labels";
-import { buildTrip } from "./mock/buildTrip";
-import { DEFAULT_TRIP_ID, getTripSpec, TRIP_SPECS } from "./mock/trips";
-import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
+import { buildTrip, TRIP_ID } from "./mock/trip-waterloo-park";
+import { buildObjectIndex } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
 import type {
   GeoPoint,
@@ -57,8 +52,6 @@ export interface TripView {
   endedAt: string;
   placeLabel: string;
   region: string;
-  country: string;
-  origin: GeoPoint;
   stats: TripStats;
   /** Thinned for SVG rendering — the full path is 700+ samples. */
   path: TrackPoint[];
@@ -71,8 +64,7 @@ export interface TripView {
 export interface ObjectIndexView {
   entries: ObjectIndexEntry[];
   durationSec: number;
-  /** Null for the merged cross-trip index — its entries span many trips. */
-  tripId: string | null;
+  tripId: string;
 }
 
 function toSummary(m: Moment): MomentSummary {
@@ -109,15 +101,10 @@ function toSummary(m: Moment): MomentSummary {
   };
 }
 
-const durationOf = (startedAt: string, endedAt: string) =>
-  (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000;
-
-export function getTripView(tripId: string): TripView | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-
-  const { trip, distanceM } = buildTrip(spec);
-  const durationSec = durationOf(trip.startedAt, trip.endedAt);
+export function getTripView(): TripView {
+  const { trip, distanceM } = buildTrip();
+  const durationSec =
+    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
 
   return {
     id: trip.id,
@@ -126,8 +113,6 @@ export function getTripView(tripId: string): TripView | null {
     endedAt: trip.endedAt,
     placeLabel: trip.place.label,
     region: trip.place.region,
-    country: trip.place.country,
-    origin: trip.place.origin,
     stats: computeTripStats(trip, distanceM),
     path: thin(trip.path, 2),
     moments: trip.moments.map(toSummary),
@@ -149,11 +134,8 @@ export interface MomentView {
   navTargets: Record<string, { pos: Vec2; heading: number }>;
 }
 
-export function getMomentView(tripId: string, momentId: string): MomentView | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-
-  const { trip } = buildTrip(spec);
+export function getMomentView(momentId: string): MomentView | null {
+  const { trip } = buildTrip();
   const i = trip.moments.findIndex((m) => m.id === momentId);
   if (i === -1) return null;
 
@@ -176,52 +158,23 @@ export function getMomentView(tripId: string, momentId: string): MomentView | nu
     tripId: trip.id,
     tripTitle: trip.title,
     tripStartedAt: trip.startedAt,
-    durationSec: durationOf(trip.startedAt, trip.endedAt),
+    durationSec:
+      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
     prev: prev ? { id: prev.id, title: prev.title } : undefined,
     next: next ? { id: next.id, title: next.title } : undefined,
     navTargets,
   };
 }
 
-/** One trip's index — what Ask Spark searches, scoped to the trip you're reading. */
-export function getObjectIndexView(tripId: string): ObjectIndexView | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-
-  const { trip } = buildTrip(spec);
+export function getObjectIndexView(): ObjectIndexView {
+  const { trip } = buildTrip();
   return {
     entries: buildObjectIndex(trip.moments, trip.path, trip),
-    durationSec: durationOf(trip.startedAt, trip.endedAt),
+    durationSec:
+      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
     tripId: trip.id,
   };
 }
-
-/**
- * Every trip's index, merged — what the ⌘K palette searches.
- *
- * Global rather than trip-scoped on purpose. The product claim is that the robot
- * remembers where you left things; scoping that to whichever trip happens to be
- * open would make the feature worse the more you used the product. The palette
- * also lives in a toolbar that renders on the gallery and the globe, where there
- * is no current trip at all.
- *
- * React.cache keeps this to one computation per request even though the app bar
- * and several pages all ask for it.
- */
-export const getGlobalObjectIndex = cache((): ObjectIndexView => {
-  const indexes = TRIP_SPECS.map((spec) => {
-    const { trip } = buildTrip(spec);
-    return buildObjectIndex(trip.moments, trip.path, trip);
-  });
-
-  return {
-    entries: mergeObjectIndexes(indexes),
-    // Trip-relative seconds are not comparable across trips; anything rendering a
-    // merged result should use the sighting's own tripId to scale a timecode.
-    durationSec: 0,
-    tripId: null,
-  };
-});
 
 export interface TripThumb {
   seed: number;
@@ -237,45 +190,34 @@ export interface TripListItem {
   country: string;
   origin: GeoPoint;
   startedAt: string;
-  endedAt: string;
   stats: TripStats;
   /** [0] is the cover; the rest fill the card's mini strip. */
   momentThumbs: TripThumb[];
 }
 
-/**
- * Every trip, newest first.
- *
- * The first call builds all seven trips — the full pipeline over ~35,000
- * detections. That is a one-time per-process cost absorbed by buildTrip's cache,
- * and it is real work rather than faked counts. Measure it on `next build &&
- * next start`, not in dev.
- */
 export function listTrips(): TripListItem[] {
-  return TRIP_SPECS.map((spec) => {
-    const { trip, distanceM } = buildTrip(spec);
-    return {
-      id: trip.id,
-      title: trip.title,
-      placeLabel: trip.place.label,
-      region: trip.place.region,
+  const view = getTripView();
+  const { trip } = buildTrip();
+  return [
+    {
+      id: view.id,
+      title: view.title,
+      placeLabel: view.placeLabel,
+      region: view.region,
       country: trip.place.country,
       origin: trip.place.origin,
-      startedAt: trip.startedAt,
-      endedAt: trip.endedAt,
-      stats: computeTripStats(trip, distanceM),
-      momentThumbs: trip.moments.slice(0, 4).map((m) => ({
-        seed: m.keyframes[0].placeholderSeed,
-        hue: m.keyframes[0].hue,
-        url: m.keyframes[0].url,
+      startedAt: view.startedAt,
+      stats: view.stats,
+      momentThumbs: view.moments.slice(0, 4).map((m) => ({
+        seed: m.thumbnailSeed,
+        hue: m.thumbnailHue,
+        url: m.thumbnailUrl,
       })),
-    };
-  });
+    },
+  ];
 }
 
-export const listTripIds = (): string[] => TRIP_SPECS.map((s) => s.id);
-
-export { DEFAULT_TRIP_ID };
+export { TRIP_ID };
 
 const thin = <T,>(arr: T[], every: number): T[] =>
   every <= 1 ? arr : arr.filter((_, i) => i % every === 0 || i === arr.length - 1);

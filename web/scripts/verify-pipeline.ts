@@ -27,7 +27,7 @@ import { waterlooPark } from "../lib/mock/trips/waterloo-park";
 import { LABEL_FAMILIES } from "../lib/mock/labels";
 import { buildObjectIndex, mergeObjectIndexes, searchObjects } from "../lib/objectIndex";
 import { computeTripStats, PIPELINE_CONFIG } from "../lib/pipeline";
-import { formatGeo, geoToLocal, geoToVec3, haversineM, localToGeo, vec3ToGeo } from "../lib/geo";
+import { formatGeo, geoToLocal, geoToVec3, haversineM, localToGeo, vec3ToGeo } from "../lib/globe/geo";
 import { coastCells, getLandMask, isLand } from "../lib/globe/mask";
 import { buildGlobeCloud, buildStarField } from "../lib/globe/globePoints";
 import { clusterByProximity } from "../lib/globeData";

@@ -23,9 +23,9 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { geoToVec3 } from "@/lib/geo";
+import { geoToVec3 } from "@/lib/globe/geo";
 import { buildGlobeCloud, buildStarField } from "@/lib/globe/globePoints";
-import { CANVAS_BG, INK, MACHINE, MEMORY, STATE } from "@/lib/theme";
+import { CANVAS_BG, INK, MACHINE, MEMORY, STATE } from "@/lib/globe/theme";
 import type { GlobePin } from "@/lib/globeData";
 
 interface Props {

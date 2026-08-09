@@ -20,8 +20,8 @@
  *      coastlines stay crisp, so Antarctica reads as an outline instead of a
  *      giant white cap and Europe stays legible at small sizes.
  */
-import { vec3ToGeo } from "../geo";
-import { FOG, INK, MACHINE } from "../theme";
+import { vec3ToGeo } from "./geo";
+import { FOG, INK, MACHINE } from "./theme";
 import { makeRng, rngRange } from "../mock/rng";
 import { coastCells, getLandMask, isLand } from "./mask";
 
