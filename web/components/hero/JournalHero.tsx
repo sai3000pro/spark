@@ -4,11 +4,16 @@
  * The hero: the journal's own night, built in layers instead of painted flat.
  *
  * Back to front — a deep pine sky wearing the halftone print screen, the
- * shader aurora (AuroraVeil) hanging in it, then three planes of generated
- * riso-print forest (public/hero/journal/*.webp, keyed from white): a misty
- * far treeline, a mid band, and two near wings that frame the copy. Fog
+ * shader aurora (AuroraVeil) hanging in it, then planes of sumi-e bloom
+ * trees (public/hero/journal/tree-*.webp): green-canopy sakura pre-rendered
+ * with the recompile Bloom engine (real ink-brush strokes warped along
+ * procedural branch spines, one continuous watercolor canopy clipped through
+ * the cluster mask, hue-shifted rose→green), a softened distant grove of the
+ * same, and the painterly kit's sage grass clumps as the ground. Fog
  * gradients sit between the planes so depth reads as air, not as stacking.
- * The blob companion sleeps on the ground among brass fireflies — it is the
+ * Every plane is a natural-aspect image anchored by its feet — nothing is
+ * cover-cropped, so no layer can draw a hard horizontal edge.
+ * The blob companion sleeps in the grass among brass fireflies — it is the
  * same live start-a-trip button the aurora scene had; its chrome tokens are
  * remapped to journal pigments in globals.css.
  *
@@ -158,38 +163,38 @@ export function JournalHero({ dateLabel, placeLabel }: { dateLabel: string; plac
       {/* The aurora, hanging in the upper sky. */}
       <AuroraVeil className="pointer-events-none absolute inset-x-0 top-0 h-[58%]" />
 
-      {/* The distant grove — a hazy painted band a field away. */}
-      <div data-plx="1" className="pointer-events-none absolute inset-x-[-2%]" style={{ bottom: "22%", height: "24%" }}>
-        <img
-          src="/hero/journal/grove.webp"
-          alt=""
-          aria-hidden
-          draggable={false}
-          className="h-full w-full select-none object-cover object-bottom"
-          style={{ opacity: 0.55, filter: "brightness(1.5) saturate(0.7)" }}
-        />
-      </div>
+      {/* The distant grove — softened bloom trees a field away. Natural
+          aspect, anchored by its feet: no crop, so no crop line. */}
+      <img
+        src="/hero/journal/grove.webp"
+        alt=""
+        aria-hidden
+        data-plx="1"
+        draggable={false}
+        className="pointer-events-none absolute bottom-[21%] left-1/2 w-[118%] max-w-none -translate-x-1/2 select-none"
+        style={{ opacity: 0.5 }}
+      />
       {/* Valley fog in front of the grove. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0"
         style={{
-          bottom: "18%",
+          bottom: "16%",
           height: "18%",
           background:
             "linear-gradient(180deg, rgb(169 189 185 / 0) 0%, rgb(169 189 185 / 0.12) 55%, rgb(169 189 185 / 0) 100%)",
         }}
       />
 
-      {/* The middle distance — painted trees standing back in the haze. */}
+      {/* The middle distance — bloom trees standing back in the haze. */}
       <img
         src="/hero/journal/tree-b.webp"
         alt=""
         aria-hidden
         data-plx="2"
         draggable={false}
-        className="pointer-events-none absolute left-[13%] h-[30%] w-auto select-none"
-        style={{ bottom: "13%", opacity: 0.72, filter: "brightness(1.35) saturate(0.75)" }}
+        className="pointer-events-none absolute left-[9%] w-[21%] max-w-none select-none"
+        style={{ bottom: "14%", opacity: 0.6, filter: "brightness(1.12) saturate(0.85)" }}
       />
       <img
         src="/hero/journal/tree-c.webp"
@@ -197,30 +202,30 @@ export function JournalHero({ dateLabel, placeLabel }: { dateLabel: string; plac
         aria-hidden
         data-plx="2"
         draggable={false}
-        className="pointer-events-none absolute right-[24%] h-[26%] w-auto -scale-x-100 select-none"
-        style={{ bottom: "14%", opacity: 0.66, filter: "brightness(1.4) saturate(0.7)" }}
+        className="pointer-events-none absolute right-[21%] w-[18%] max-w-none -scale-x-100 select-none"
+        style={{ bottom: "15%", opacity: 0.55, filter: "brightness(1.18) saturate(0.8)" }}
       />
       {/* Ground fog at the middle trees' feet. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0"
         style={{
-          bottom: "8%",
+          bottom: "7%",
           height: "13%",
           background:
             "linear-gradient(180deg, rgb(169 189 185 / 0) 0%, rgb(169 189 185 / 0.1) 60%, rgb(169 189 185 / 0) 100%)",
         }}
       />
 
-      {/* The near trees — each its own painted portrait, framing the page. */}
+      {/* The near trees — the bloom engine's sakura, green, framing the page. */}
       <img
         src="/hero/journal/tree-a.webp"
         alt=""
         aria-hidden
         data-plx="3"
         draggable={false}
-        className="pointer-events-none absolute left-[-7%] h-[64%] w-auto select-none"
-        style={{ bottom: "1%" }}
+        className="pointer-events-none absolute bottom-[4%] left-[-16%] w-[44%] max-w-none select-none"
+        style={{ filter: "brightness(0.78) saturate(1.05)" }}
       />
       <img
         src="/hero/journal/tree-c.webp"
@@ -228,20 +233,20 @@ export function JournalHero({ dateLabel, placeLabel }: { dateLabel: string; plac
         aria-hidden
         data-plx="3"
         draggable={false}
-        className="pointer-events-none absolute right-[-8%] h-[56%] w-auto -scale-x-100 select-none"
-        style={{ bottom: "2%", filter: "brightness(0.94)" }}
+        className="pointer-events-none absolute bottom-[5%] right-[-15%] w-[40%] max-w-none -scale-x-100 select-none"
+        style={{ filter: "brightness(0.72) saturate(1.05)" }}
       />
 
-      {/* The painted grass the walk starts on. */}
-      <div data-plx="3" className="pointer-events-none absolute inset-x-[-1%] bottom-0" style={{ height: "15%" }}>
-        <img
-          src="/hero/journal/grass.webp"
-          alt=""
-          aria-hidden
-          draggable={false}
-          className="h-full w-full select-none object-cover object-top"
-        />
-      </div>
+      {/* The painted grass the walk starts on — the kit's sage clumps. */}
+      <img
+        src="/hero/journal/grass.webp"
+        alt=""
+        aria-hidden
+        data-plx="3"
+        draggable={false}
+        className="pointer-events-none absolute bottom-[-2%] left-1/2 w-[104%] max-w-none -translate-x-1/2 select-none"
+        style={{ filter: "brightness(0.85)" }}
+      />
 
       {/* Fireflies, drifting between the trees. */}
       {FIREFLIES.map(([l, t, dx, dy, dur, delay], i) => (
