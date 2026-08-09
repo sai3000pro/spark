@@ -1,10 +1,10 @@
 /**
- * The AURORA-NIGHT shell: the original landing at `/`, plus `/globe`.
+ * The AURORA-NIGHT shell: the album library at `/library`.
  *
- * Two designs ship side by side now. The journal (FIELD NOTES — cream paper,
- * pine ink) owns app/layout.tsx, `/walk`, `/trip/*` and `/landing-page`. This
- * route group is the aurora scene: navy ground, the blob companion, the app bar
- * with the Albums|Globe switch.
+ * Two designs ship side by side. The journal (FIELD NOTES — cream paper, pine
+ * ink) owns `/` (the landing), `/walk`, `/trip/*` and `/detect`. This route
+ * group is the aurora scene: navy ground, the blob companion, the app bar with
+ * the Albums|Map switch (Map opens the journal's survey map at `/walk`).
  *
  * `.aurora-app` is the seam between them. The root layout paints the document
  * cream for the journal, so this wrapper is what re-grounds its own subtree in

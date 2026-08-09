@@ -1,27 +1,10 @@
-import { GlobeExplorerClient } from "@/components/globe/GlobeExplorerClient";
-import { PageHeader } from "@/components/system/PageHeader";
-import { getGlobeView } from "@/lib/globeData";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Globe — Spark",
-  description: "Every album, pinned where it happened.",
-};
-
+/**
+ * The globe view is retired: the day lives on the paper survey map now.
+ * Old /globe links (and the app bar's Map tab) land on the walk. The globe
+ * components stay in components/globe/ if it ever earns its way back.
+ */
 export default function GlobePage() {
-  const view = getGlobeView();
-
-  return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-12 pt-6 sm:px-5">
-      <PageHeader
-        eyebrow="Every journey, placed"
-        title="Globe"
-        meta={`${view.albums.length} albums · ${view.pins.length} places · ${countCountries(view)} countries`}
-      />
-
-      <GlobeExplorerClient view={view} />
-    </main>
-  );
+  redirect("/walk");
 }
-
-const countCountries = (view: { albums: Array<{ country: string }> }) =>
-  new Set(view.albums.map((a) => a.country)).size;

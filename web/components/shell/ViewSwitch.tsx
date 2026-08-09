@@ -1,12 +1,16 @@
 "use client";
 
 /**
- * Albums | Globe — the app's only global navigation.
+ * Albums | Map — the app's only global navigation.
  *
  * The visual language is lifted exactly from TripExplorer's tab strip rather than
  * invented: same `rounded-xl bg-ink-800 p-1` track, same active treatment.
  * Promoting a control the app already had into global nav is a large part of why
  * this reads as one designed system instead of a pile of screens.
+ *
+ * Map replaced the retired globe view: it opens the day's paper survey map
+ * (`/walk`), which is its own full-screen surface outside this shell — so the
+ * tab never shows as active here, it just takes you there.
  *
  * Real <Link>s, not buttons — these are navigations, so they prefetch, they
  * middle-click, and they work before hydration.
@@ -15,8 +19,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const VIEWS = [
-  { href: "/", label: "Albums" },
-  { href: "/globe", label: "Globe" },
+  { href: "/library", label: "Albums" },
+  { href: "/walk", label: "Map" },
 ] as const;
 
 export function ViewSwitch() {
@@ -25,8 +29,7 @@ export function ViewSwitch() {
   return (
     <nav className="flex shrink-0 gap-1 rounded-xl bg-ink-800 p-1" aria-label="Views">
       {VIEWS.map((view) => {
-        // "/" would otherwise prefix-match every route in the app.
-        const active = view.href === "/" ? pathname === "/" : pathname.startsWith(view.href);
+        const active = pathname.startsWith(view.href);
         return (
           <Link
             key={view.href}

@@ -1,5 +1,6 @@
 /**
- * The landing page: the scene, then the library.
+ * The library: the scene, then the albums. Lives at /library — the root `/`
+ * belongs to the journal landing.
  *
  * One page, two modes. The hero fills exactly one viewport and the album grid
  * sits directly beneath it, reached by scrolling or by the cue's #albums anchor.
