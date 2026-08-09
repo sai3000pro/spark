@@ -22,9 +22,9 @@
  * haven't "happened yet" and print hollow. The camera opens tilted (pitch 48)
  * so the park reads as a place, not a diagram.
  */
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { setWorkerUrl } from "maplibre-gl";
-import MapGL, { Layer, Marker, ScaleControl, Source, type MapRef } from "react-map-gl/maplibre";
+import MapGL, { Layer, Marker, ScaleControl, Source, useMap, type MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // MapLibre v6 ships its tile worker as a separate module that Turbopack's
@@ -44,8 +44,8 @@ interface Props {
   /** Where the trip's local metre frame is pinned on Earth — `trip.origin`. */
   origin: GeoPoint;
   /**
-   * The trip's title block, set flat into the page's top-left corner — milk-
-   * haloed lettering straight on the paper, not a floating card.
+   * The trip's title block — milk-haloed lettering that leans back with the
+   * map camera's pitch (level lines, no bearing roll), not a floating card.
    */
   plate?: React.ReactNode;
   path: TrackPoint[];
@@ -181,14 +181,8 @@ export function FieldMap({ origin, plate, path, moments, clocks, activeId, reach
 
         <ScaleControl position="bottom-left" maxWidth={110} unit="metric" />
 
-        {/* The trip's title block — set flat on the page, straight into the
-            paper (no card, no tilt: riding the camera's pitch was tried and
-            rejected — the lettering belongs to the journal, not the ground). */}
-        {plate && (
-          <div className="pointer-events-auto absolute left-4 top-4 z-10 sm:left-6 sm:top-5">
-            {plate}
-          </div>
-        )}
+        {/* The trip's title block, leaning back with the ground. */}
+        {plate && <GroundPlate>{plate}</GroundPlate>}
 
         {/* The weather — world-anchored, pointer-transparent, over everything
             on the page the way weather is. */}
@@ -213,6 +207,54 @@ export function FieldMap({ origin, plate, path, moments, clocks, activeId, reach
 // ─────────────────────────────────────────────────────────────────────────────
 // Marks
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lettering lying back with the ground, lines level with the screen.
+ *
+ * The block is pinned to the screen's top-left and leans back with the map
+ * camera's pitch (rotateX), so it sits in the same plane as the park below —
+ * but it deliberately does NOT turn with the bearing: a rotateZ tips the
+ * text's right side down, and level lines read better than faithful ones
+ * (tried both ways; the roll was rejected). The transform writes straight to
+ * the node on every map move; a setState here would re-render the app at pan
+ * speed.
+ */
+function GroundPlate({ children }: { children: React.ReactNode }) {
+  const { current: map } = useMap();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!map) return;
+    const apply = () => {
+      const el = ref.current;
+      if (!el) return;
+      // 0.82: full pitch lays the type too flat to read at a glance — the
+      // lettering leans with the ground rather than gluing itself to it.
+      const lean = Math.min(52, map.getPitch() * 0.82);
+      el.style.transform = `rotateX(${lean}deg)`;
+    };
+    apply();
+    map.on("move", apply);
+    return () => {
+      map.off("move", apply);
+    };
+  }, [map]);
+
+  return (
+    <div
+      className="pointer-events-none absolute left-4 top-4 z-10 sm:left-6 sm:top-5"
+      style={{ perspective: "900px" }}
+    >
+      <div
+        ref={ref}
+        className="pointer-events-auto"
+        style={{ transformOrigin: "50% 100%" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /** The swallow-tail cut on the banner's fly end. */
 const BANNER_CLIP = "polygon(0 0, 100% 0, calc(100% - 5px) 50%, 100% 100%, 0 100%)";
