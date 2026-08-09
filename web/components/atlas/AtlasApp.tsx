@@ -43,6 +43,8 @@ const REPLAY_SPEED = 120;
 interface Props extends AtlasView {
   /** Every walk pinned on the Earth — what the pocket globe opens into. */
   globe: GlobeView;
+  /** Whether THIS walk is the user's own — only your walks take the toggle. */
+  mine: boolean;
   /** Whether THIS walk is on the shared globe. Toggled from the ground plate. */
   posted: boolean;
   initialMomentId?: string | null;
@@ -57,6 +59,7 @@ export function AtlasApp({
   geo,
   globe,
   ledger,
+  mine,
   posted: postedFromServer,
   initialMomentId,
   initialAnchor,
@@ -215,7 +218,10 @@ export function AtlasApp({
               </p>
             </button>
             {/* Posting is the one act here that leaves the page: it sets this
-                walk onto everybody's globe. Hidden walks stay yours alone. */}
+                walk onto everybody's globe. Hidden walks stay yours alone —
+                and only YOUR walks offer the choice; someone else's shared
+                walk is theirs to keep up or take down. */}
+            {mine && (
             <button
               type="button"
               onClick={togglePosted}
@@ -235,6 +241,7 @@ export function AtlasApp({
                 {posted ? "[ on the globe · hide ]" : "[ post to the globe ]"}
               </p>
             </button>
+            )}
             <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">
               {(() => {
                 const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);

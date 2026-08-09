@@ -6,7 +6,7 @@
  * live trip); the contract is already the one a real share endpoint would keep.
  */
 import { NextResponse } from "next/server";
-import { isWalkPosted, setWalkPosted } from "@/lib/postedWalks";
+import { isWalkMine, isWalkPosted, setWalkPosted } from "@/lib/postedWalks";
 import { resolveTripId } from "@/lib/tripData";
 
 /** Mutable in-memory state — never prerendered, never CDN-cached. See
@@ -36,6 +36,11 @@ export async function POST(request: Request, { params }: Params) {
   const { tripId } = await params;
   if (!knownTripId(tripId)) {
     return NextResponse.json({ error: "trip not found" }, { status: 404 });
+  }
+  // You can only post — or unpost — your own walks. Everyone else's are on
+  // the globe because they put them there.
+  if (!isWalkMine(tripId)) {
+    return NextResponse.json({ error: "not your walk" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);

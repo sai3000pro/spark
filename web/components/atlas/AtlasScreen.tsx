@@ -11,7 +11,7 @@
  */
 import { AtlasApp } from "@/components/atlas/AtlasApp";
 import { getGlobeView } from "@/lib/globeData";
-import { isWalkPosted } from "@/lib/postedWalks";
+import { isWalkMine, isWalkPosted } from "@/lib/postedWalks";
 import { getAtlasView } from "@/lib/tripData";
 
 interface Props {
@@ -35,6 +35,7 @@ export function AtlasScreen({ tripId, momentId, anchor }: Props) {
       key={view.trip.id}
       {...view}
       globe={getGlobeView()}
+      mine={isWalkMine(view.trip.id)}
       posted={isWalkPosted(view.trip.id)}
       initialMomentId={momentId ?? null}
       initialAnchor={anchor ?? null}

@@ -15,6 +15,7 @@
  *
  * No `next/*` imports: scripts/verify-pipeline.ts can reach this and runs under tsx.
  */
+import { TRIP_ID } from "./tripData";
 import { isUploadedTripId } from "./uploadedTrips";
 
 interface Store {
@@ -31,6 +32,17 @@ function store(): Store {
   const fresh: Store = { overrides: new Map() };
   g[KEY] = fresh;
   return fresh;
+}
+
+/**
+ * Which walks are YOURS. Hardcoded until accounts exist: the flagship STACKT
+ * walk is this user's own recording, and anything uploaded here is theirs.
+ * Every other seeded spec belongs to another walker — they appear on the globe
+ * because THEY posted them, and you can no more unpost someone else's walk
+ * than tear a page out of their journal. Only your own walks take the toggle.
+ */
+export function isWalkMine(tripId: string): boolean {
+  return tripId === TRIP_ID || isUploadedTripId(tripId);
 }
 
 export function isWalkPosted(tripId: string): boolean {
