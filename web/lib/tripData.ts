@@ -22,6 +22,7 @@ const buildTrip = () => buildSpecTrip(stacktMarket);
 import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
 import { buildWalkLedger, type WalkLedger } from "./walkLedger";
+import { getUploadedWalk, isUploadedTripId } from "./uploadedTrips";
 import type { GeoRef } from "./geo";
 import type {
   GeoPoint,
@@ -293,6 +294,11 @@ export const getGlobalObjectIndex = cache(
 /** Every trip is spec-built; the flagship's alias keeps its call sites honest. */
 function builtTripFor(tripId: string): BuiltTrip | null {
   if (tripId === TRIP_ID) return buildTrip();
+  // Walks built from an uploaded video live in memory, not in TRIP_SPECS. They
+  // are already built — the pipeline ran once at upload — so this is a lookup,
+  // not a build. See lib/uploadedTrips.ts for what in them is measured and what
+  // is synthesized.
+  if (isUploadedTripId(tripId)) return getUploadedWalk(tripId)?.built ?? null;
   const spec = getTripSpec(tripId);
   return spec ? buildSpecTrip(spec) : null;
 }
@@ -300,6 +306,7 @@ function builtTripFor(tripId: string): BuiltTrip | null {
 /** Validates a `?trip=` param. Unknown or absent → the flagship. */
 export function resolveTripId(raw: string | string[] | undefined): string {
   const id = Array.isArray(raw) ? raw[0] : raw;
+  if (id && isUploadedTripId(id) && getUploadedWalk(id)) return id;
   return id && getTripSpec(id) ? id : TRIP_ID;
 }
 
@@ -348,6 +355,13 @@ export function getObjectIndexViewFor(tripId: string): ObjectIndexView | null {
  * lib/mock/buildTrip.ts.
  */
 export function getGeoRefFor(tripId: string): GeoRef {
+  // An uploaded walk has no calibration to read — it has no odometry either, so
+  // its "positions" are a time transect. Anchoring it on the origin it was given
+  // is what lets the map draw at all; nothing about it is surveyed.
+  if (isUploadedTripId(tripId)) {
+    const origin = getUploadedWalk(tripId)?.built.trip.place.origin;
+    return { origin: origin ?? { lat: 0, lng: 0 }, bearingDeg: 0 };
+  }
   const place = getTripSpec(tripId)?.place;
   const origin = place?.mapOrigin ?? place?.origin ?? { lat: 0, lng: 0 };
   return { origin, bearingDeg: place?.bearingDeg ?? 0 };

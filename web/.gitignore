@@ -19,6 +19,10 @@ node_modules
 # testing
 /coverage
 
+# Videos handed over for splat reconstruction (POST /api/splat/jobs). Large,
+# and not ours to keep — see lib/splatJobs.ts for the handoff.
+/.uploads/
+
 # misc
 *.pem
 

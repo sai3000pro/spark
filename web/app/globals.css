@@ -1818,6 +1818,99 @@ button[aria-expanded="true"] .note-ring path {
   }
 }
 
+/* ── The ticker stage: the same character, a second home ───────────────────
+
+   The companion that stands on the kept-moments strip at the foot of the
+   journal's hero. See components/home/TickerBlob.tsx.
+
+   NOT A SECOND COPY OF THE BLOB'S CSS. Everything above — the cell arithmetic,
+   the foot line, the composed `translate`, the focus ring, the fireflies — is
+   already written against custom properties resolved from the containing block,
+   so a second stage is a second set of NUMBERS and nothing else. Duplicating the
+   rules would guarantee the two characters drift apart the first time either is
+   touched.
+
+   THE STAGE IS THE PHYSICS' COORDINATE FRAME, not decoration. HeroBlobButton
+   measures this element for its arena (how far it may be thrown, and how high)
+   and writes --blob-dx/--blob-dy back onto it every frame, so its height is a
+   real tuning knob: it sets both the ceiling of a throw and, through the
+   fractions below, the character's size. It must stay the button's direct
+   parent.
+
+   The four numbers are unitless on purpose. `--blob-h` and `--blob-feet-y` are
+   FRACTIONS of this box, and CSS cannot divide a length by a length — so the
+   pixel intent is written once, in integers, and the fractions are derived. */
+.ticker-stage {
+  /* How tall the play area is. The strip itself is 50px; the rest is headroom
+     above it for the arc, which is why a throw rises into the page. */
+  --stage-h: 150;
+  /* The character's height on screen. Smaller than the hero's by design — it is
+     standing on a 50px bar beside a line of type, not in a landscape. */
+  --char-h: 38;
+  /* The strip's own height, and with it the foot line.
+
+     ON the belt, but SET INTO it. Two earlier cuts bracket this one: feet 7px
+     off the strip's bottom edge put the character inside the bar with the
+     ticker running through its middle, and feet exactly on the top edge left it
+     perched on a line, reading as a sticker dropped on top of the page. Sinking
+     the foot line a little below the top edge is what makes it belong to the
+     band — the silhouette breaks the edge instead of balancing on it, and there
+     is no hairline gap for a rounding error to open up.
+
+     A quarter of the character's height, which is enough to look planted and
+     little enough to keep the face clear of the type it stands over.
+
+     This line is also the FLOOR: `stepBallistic` clamps y to 0 at the foot
+     line, so wherever this sits is where a throw lands and walks home. */
+  --band-h: 50;
+  --sink: calc(var(--char-h) / 4);
+  --foot-lift: calc(var(--band-h) - var(--sink));
+
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(var(--stage-h) * 1px);
+
+  /* Above the hero's own z-10 content: an arc that passes behind a photograph
+     stack reads as a glitch. Harmless because the stage does not take clicks —
+     only the character inside it does. */
+  z-index: 20;
+  pointer-events: none;
+
+  /* Right of centre, and not by a little.
+
+     0.42 sat it directly under the hero's centred CTAs, stacked on the page's
+     one busy column — which read as an accident rather than a resident. The
+     right third is the quiet side of this layout, and it is where this
+     character has always lived: the aurora hero anchored it at 0.665 for the
+     same reason.
+
+     It also has to survive its own ROAM. The physics may carry it 0.3 of the
+     stage to the right of home, so anything past ~0.7 can be thrown off the
+     edge of the page and walk back from out of frame. */
+  --blob-cx: 0.68;
+  --blob-h: calc(var(--char-h) / var(--stage-h));
+  --blob-feet-y: calc((var(--stage-h) - var(--foot-lift)) / var(--stage-h));
+
+  /* The offsets the rAF loop writes. Declared so the first frame has something
+     to resolve against instead of inheriting the hero's. */
+  --blob-dx: 0px;
+  --blob-dy: 0px;
+  --blob-air: 0;
+}
+
+.ticker-stage .hero-blob {
+  pointer-events: auto;
+}
+
+/* The offer is sized for a hero forty times this tall; at 38px the default pill
+   was wider than the character's whole arena. */
+.ticker-stage .hero-blob__label {
+  font-size: 12px;
+  padding: 5px 11px;
+  translate: -50% -8px;
+}
+
 /* ── The brand mark ────────────────────────────────────────────────────────
    The same creature as the hero, at 26px instead of 300. See
    components/shell/BlobMark.tsx.
