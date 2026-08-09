@@ -22,6 +22,12 @@
  * or server-only — see the header of lib/pipeline.ts.
  */
 import { buildTrip, type TripSpec } from "../lib/mock/buildTrip";
+import { dropContained, fuseBoxes, type Box, type ScoredBox } from "../lib/detect/boxes";
+import { assignTracks } from "../lib/detect/track";
+import { mapPassBoxes, passCountFor, planPasses, QUALITY_PRESETS } from "../lib/detect/tta";
+import { bestViewpoint, scoreView } from "../lib/detect/viewQuality";
+import { collapseToSightings } from "../lib/pipeline";
+import type { Detection, TrackPoint } from "../lib/types";
 import { makeGeo, type GeoRef } from "../lib/geo";
 import { TRIP_SPECS } from "../lib/mock/trips";
 import { waterlooPark } from "../lib/mock/trips/waterloo-park";
@@ -795,11 +801,361 @@ function simulateCountersForCheck(elapsedSec: number) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Detection quality — fusion, tiling, tracking, best angle
+//
+// These are the parts that make stage 1 trustworthy, and every one of them is a
+// pure function precisely so it can be asserted here rather than eyeballed in a
+// browser against a photo of a car park.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function verifyDetectionQuality() {
+  heading("Detection quality");
+
+  const box = (x0: number, y0: number, x1: number, y1: number): Box => ({ x0, y0, x1, y1 });
+
+  section("Box fusion");
+  {
+    // The core claim: several passes seeing the same thing produce ONE box, and
+    // the fused coordinates sit between the members rather than copying a winner.
+    const passes: ScoredBox[][] = [
+      [{ label: "bottle", score: 0.8, box: box(0.2, 0.2, 0.3, 0.4) }],
+      [{ label: "bottle", score: 0.7, box: box(0.22, 0.21, 0.32, 0.42) }],
+      [{ label: "bottle", score: 0.75, box: box(0.21, 0.19, 0.31, 0.41) }],
+    ];
+    const fused = fuseBoxes(passes, { passCount: 3 });
+    check("three agreeing passes collapse to one box", fused.length === 1, `${fused.length}`);
+    check("support counts every contributing pass", fused[0]?.support === 3, `${fused[0]?.support}`);
+    check("full agreement reads as 1", Math.abs((fused[0]?.agreement ?? 0) - 1) < 1e-9);
+    check(
+      "the fused box is a consensus, not a copy of the best member",
+      fused[0].box.x0 > 0.2 && fused[0].box.x0 < 0.22,
+      `x0 ${fused[0].box.x0.toFixed(4)}`,
+    );
+    check(
+      "full agreement leaves the score alone",
+      Math.abs(fused[0].score - fused[0].rawScore) < 1e-9,
+      `${fused[0].score.toFixed(3)} vs raw ${fused[0].rawScore.toFixed(3)}`,
+    );
+  }
+
+  section("Agreement demotes the flicker (the whole point)");
+  {
+    // A real object every pass finds, and a hallucination one pass found with a
+    // HIGHER raw score. Before fusion the hallucination outranks the real object;
+    // after it, it must not — and it must fall under a sane threshold.
+    const real = { label: "bench", score: 0.72, box: box(0.4, 0.4, 0.6, 0.55) };
+    const ghost = { label: "dog", score: 0.86, box: box(0.05, 0.7, 0.15, 0.8) };
+    const passes: ScoredBox[][] = [
+      [real, ghost],
+      [{ ...real, score: 0.7 }],
+      [{ ...real, score: 0.74 }],
+      [{ ...real, score: 0.71 }],
+      [{ ...real, score: 0.69 }],
+      [{ ...real, score: 0.73 }],
+    ];
+    const fused = fuseBoxes(passes, { passCount: 6 });
+    const bench = fused.find((f) => f.label === "bench");
+    const dog = fused.find((f) => f.label === "dog");
+
+    check("the one-pass ghost is not dropped outright", !!dog);
+    check("...but it is demoted below the consistent detection",
+      (dog?.score ?? 1) < (bench?.score ?? 0),
+      `ghost ${dog?.score.toFixed(3)} vs real ${bench?.score.toFixed(3)}`);
+    check(
+      "...even though its RAW score was higher",
+      (dog?.rawScore ?? 0) > (bench?.rawScore ?? 1),
+      `raw ghost ${dog?.rawScore.toFixed(3)} vs raw real ${bench?.rawScore.toFixed(3)}`,
+    );
+    check("...and it lands under a 0.5 threshold", (dog?.score ?? 1) < 0.5,
+      `${dog?.score.toFixed(3)}`);
+    check("the real detection stays above it", (bench?.score ?? 0) > 0.5,
+      `${bench?.score.toFixed(3)}`);
+  }
+
+  section("Fusion keeps distinct objects distinct");
+  {
+    const passes: ScoredBox[][] = [
+      [
+        { label: "person", score: 0.9, box: box(0.3, 0.1, 0.6, 0.9) },
+        { label: "bottle", score: 0.7, box: box(0.4, 0.4, 0.45, 0.55) },
+      ],
+      [
+        { label: "person", score: 0.88, box: box(0.31, 0.11, 0.61, 0.91) },
+        { label: "bottle", score: 0.72, box: box(0.4, 0.41, 0.45, 0.56) },
+      ],
+    ];
+    const fused = dropContained(fuseBoxes(passes, { passCount: 2 }));
+    check("a bottle held by a person survives as its own object", fused.length === 2,
+      `${fused.length}: ${fused.map((f) => f.label).join(", ")}`);
+
+    // The nested-duplicate case dropContained exists for: half a person, found by
+    // a tile, sitting entirely inside the whole person.
+    const withFragment = dropContained([
+      { label: "person", score: 0.9, box: box(0.3, 0.1, 0.6, 0.9) },
+      { label: "person", score: 0.8, box: box(0.32, 0.12, 0.58, 0.5) },
+    ]);
+    check("a nested same-label fragment is absorbed", withFragment.length === 1,
+      `${withFragment.length}`);
+    check("...and the survivor is the whole object, not the fragment",
+      withFragment[0].box.y1 > 0.8, `y1 ${withFragment[0].box.y1}`);
+  }
+
+  section("Pass planning");
+  {
+    check("fast is a single look", planPasses(QUALITY_PRESETS.fast).length === 1);
+    check("balanced is flip + 2×2", planPasses(QUALITY_PRESETS.balanced).length === 6,
+      `${planPasses(QUALITY_PRESETS.balanced).length}`);
+    check("thorough is flip + 3×3", planPasses(QUALITY_PRESETS.thorough).length === 11,
+      `${planPasses(QUALITY_PRESETS.thorough).length}`);
+    check(
+      "passCountFor agrees with the plan for every preset",
+      (["fast", "balanced", "thorough"] as const).every(
+        (q) => passCountFor(QUALITY_PRESETS[q]) === planPasses(QUALITY_PRESETS[q]).length,
+      ),
+    );
+
+    // Tiles that do not cover the frame would create blind spots — an object
+    // could sit in a gap and be found only by the full-frame pass it is too
+    // small for, which is the exact failure tiling exists to fix.
+    for (const q of ["balanced", "thorough"] as const) {
+      const tiles = planPasses(QUALITY_PRESETS[q]).filter((p) => !p.full);
+      const corners: Array<[number, number]> = [
+        [0.01, 0.01], [0.99, 0.01], [0.01, 0.99], [0.99, 0.99], [0.5, 0.5],
+      ];
+      const covered = corners.every(([x, y]) =>
+        tiles.some((t) => x >= t.crop.x0 && x <= t.crop.x1 && y >= t.crop.y0 && y <= t.crop.y1),
+      );
+      check(`${q} tiles cover the whole frame`, covered);
+      check(
+        `${q} tiles stay inside the frame`,
+        tiles.every((t) => t.crop.x0 >= -1e-9 && t.crop.y0 >= -1e-9 && t.crop.x1 <= 1 + 1e-9 && t.crop.y1 <= 1 + 1e-9),
+      );
+    }
+  }
+
+  section("Mapping pass boxes back to the frame");
+  {
+    const [full, flip] = planPasses(QUALITY_PRESETS.balanced);
+    const b: ScoredBox = { label: "cup", score: 0.8, box: box(0.1, 0.3, 0.2, 0.5) };
+
+    const asIs = mapPassBoxes(full, [b])[0];
+    check("an unflipped full-frame box is unchanged",
+      Math.abs(asIs.box.x0 - 0.1) < 1e-9 && Math.abs(asIs.box.x1 - 0.2) < 1e-9);
+
+    const mirrored = mapPassBoxes(flip, [b])[0];
+    check("a flipped box mirrors about the vertical centre line",
+      Math.abs(mirrored.box.x0 - 0.8) < 1e-9 && Math.abs(mirrored.box.x1 - 0.9) < 1e-9,
+      `got ${mirrored.box.x0.toFixed(3)}–${mirrored.box.x1.toFixed(3)}`);
+    check("flipping twice is the identity",
+      Math.abs(mapPassBoxes(flip, [mirrored])[0].box.x0 - 0.1) < 1e-9);
+    check("a flip leaves y alone",
+      Math.abs(mirrored.box.y0 - 0.3) < 1e-9 && Math.abs(mirrored.box.y1 - 0.5) < 1e-9);
+
+    // Truncation. The bottom-right tile's LEFT edge is a cut through the frame;
+    // its RIGHT edge is the frame's own edge. A box against the first is half an
+    // object and must go; a box against the second is a real object at the edge
+    // of the photo and must stay.
+    const tiles = planPasses(QUALITY_PRESETS.balanced).filter((p) => !p.full);
+    const bottomRight = tiles[tiles.length - 1];
+    check("the last tile is the bottom-right one",
+      bottomRight.crop.x1 > 0.99 && bottomRight.crop.y1 > 0.99);
+
+    const againstCut = mapPassBoxes(bottomRight, [
+      { label: "person", score: 0.9, box: box(0.0, 0.4, 0.3, 0.8) },
+    ]);
+    check("a box cut by an interior tile seam is dropped", againstCut.length === 0,
+      `kept ${againstCut.length}`);
+
+    const againstFrame = mapPassBoxes(bottomRight, [
+      { label: "person", score: 0.9, box: box(0.6, 0.4, 1.0, 0.8) },
+    ]);
+    check("a box against the frame's own edge is kept", againstFrame.length === 1);
+  }
+
+  section("Temporal tracking");
+  {
+    // One object drifting steadily across 10 frames.
+    const drifting: Detection[] = Array.from({ length: 10 }, (_, k) => ({
+      id: `d${k}`,
+      tripId: "t",
+      frameId: `f${k}`,
+      t: k * 0.1,
+      label: "bottle",
+      confidence: 0.8,
+      bbox: [0.3 + k * 0.005, 0.4, 0.08, 0.16],
+      source: "onboard" as const,
+    }));
+    const tracked = assignTracks(drifting);
+    check("a drifting object keeps one track", new Set(tracked.map((d) => d.trackId)).size === 1,
+      `${new Set(tracked.map((d) => d.trackId)).size} tracks`);
+    check("no detections are lost", tracked.length === 10, `${tracked.length}`);
+    check("every detection comes out with a trackId", tracked.every((d) => !!d.trackId));
+
+    // Two objects far apart must never merge, however long they run.
+    const twoObjects: Detection[] = [];
+    for (let k = 0; k < 8; k++) {
+      twoObjects.push(
+        { id: `l${k}`, tripId: "t", frameId: `f${k}`, t: k * 0.1, label: "bottle",
+          confidence: 0.8, bbox: [0.1, 0.4, 0.08, 0.16], source: "onboard" },
+        { id: `r${k}`, tripId: "t", frameId: `f${k}`, t: k * 0.1, label: "bottle",
+          confidence: 0.8, bbox: [0.7, 0.4, 0.08, 0.16], source: "onboard" },
+      );
+    }
+    check("two separated same-label objects stay two tracks",
+      new Set(assignTracks(twoObjects).map((d) => d.trackId)).size === 2,
+      `${new Set(assignTracks(twoObjects).map((d) => d.trackId)).size}`);
+
+    // Flicker suppression — the cheapest false-positive filter there is.
+    const flicker: Detection[] = [
+      ...drifting,
+      { id: "x0", tripId: "t", frameId: "f0", t: 0, label: "dog",
+        confidence: 0.9, bbox: [0.8, 0.8, 0.1, 0.1], source: "onboard" },
+      { id: "x1", tripId: "t", frameId: "f1", t: 0.1, label: "dog",
+        confidence: 0.9, bbox: [0.8, 0.8, 0.1, 0.1], source: "onboard" },
+    ];
+    const filtered = assignTracks(flicker, { minHits: 3 });
+    check("a two-frame flicker is dropped even at high confidence",
+      filtered.every((d) => d.label !== "dog"),
+      `${filtered.filter((d) => d.label === "dog").length} survived`);
+    check("...and the real track is untouched",
+      filtered.filter((d) => d.label === "bottle").length === 10);
+
+    // THE REGRESSION THIS FIXES. Detections used to arrive with a unique trackId
+    // each, so every track had one hit and collapseToSightings — which needs
+    // three — could never produce a single sighting from live output.
+    const keyframes = [
+      { id: "kf0", t: 0.2, placeholderSeed: 1, width: 640, height: 400 },
+      { id: "kf1", t: 0.7, placeholderSeed: 2, width: 640, height: 400 },
+    ];
+    check("tracked detections actually collapse into a sighting",
+      collapseToSightings(tracked, keyframes).length === 1,
+      `${collapseToSightings(tracked, keyframes).length}`);
+    check("untracked detections do not (the old behaviour)",
+      collapseToSightings(drifting.map((d, i) => ({ ...d, trackId: `one_per_det_${i}` })), keyframes)
+        .length === 0);
+  }
+
+  section("Best angle");
+  {
+    // A well-framed subject vs a bigger, more confident, clipped one. Confidence
+    // alone picks the second; view quality must pick the first.
+    const wellFramed = scoreView([0.35, 0.3, 0.3, 0.45], "person", 0.72, 0);
+    const clippedCloseUp = scoreView([0.0, 0.0, 0.7, 1.0], "person", 0.97, 0);
+    check(
+      "a clean mid-frame look beats a clipped, closer, MORE confident one",
+      wellFramed.score > clippedCloseUp.score,
+      `${wellFramed.score.toFixed(3)} vs ${clippedCloseUp.score.toFixed(3)}`,
+    );
+    check("...and the clipped one is diagnosed as clipped",
+      clippedCloseUp.weakest === "wholeness", clippedCloseUp.weakest);
+    check("...naming the edges it is cut at",
+      clippedCloseUp.critique.includes("left") && clippedCloseUp.critique.includes("top"),
+      clippedCloseUp.critique);
+
+    check("every term stays in 0..1", (Object.values(wellFramed.terms) as number[])
+      .every((v) => v >= 0 && v <= 1));
+    check("the score stays in 0..1", wellFramed.score >= 0 && wellFramed.score <= 1);
+
+    // Symmetry in log space: half the ideal area and twice it score alike.
+    const half = scoreView([0.4, 0.4, 0.3, 0.3], "frisbee", 0.8, 0).terms.framing;
+    const double = scoreView([0.25, 0.25, 0.6, 0.6], "frisbee", 0.8, 0).terms.framing;
+    check("framing is symmetric about the ideal in log space",
+      Math.abs(half - double) < 0.12, `${half.toFixed(3)} vs ${double.toFixed(3)}`);
+
+    // A tiny speck carries no detail and must not win on being well-centred.
+    const speck = scoreView([0.49, 0.49, 0.02, 0.02], "bottle", 0.9, 0);
+    check("a distant speck scores below a properly framed subject",
+      speck.score < wellFramed.score, `${speck.score.toFixed(3)}`);
+    check("...and says the robot is too far away",
+      speck.critique.includes("too far away"), speck.critique);
+
+    // The class-shape prior: a bottle three times wider than tall is not a view
+    // of a bottle worth keeping.
+    const uprightBottle = scoreView([0.45, 0.4, 0.05, 0.14], "bottle", 0.8, 0).terms.aspect;
+    const flatBottle = scoreView([0.4, 0.45, 0.2, 0.05], "bottle", 0.8, 0).terms.aspect;
+    check("an upright bottle beats a flat one on silhouette",
+      uprightBottle > flatBottle, `${uprightBottle.toFixed(3)} vs ${flatBottle.toFixed(3)}`);
+
+    // Motion blur, straight from odometry — no pixels involved.
+    const movingPath: TrackPoint[] = [{ t: 0, pos: [0, 0], heading: 0, speed: 1.6 }];
+    const stillPath: TrackPoint[] = [{ t: 0, pos: [0, 0], heading: 0, speed: 0 }];
+    check("a look taken at speed loses to the same look taken stopped",
+      scoreView([0.35, 0.3, 0.3, 0.45], "person", 0.72, 0, { path: stillPath }).score >
+        scoreView([0.35, 0.3, 0.3, 0.45], "person", 0.72, 0, { path: movingPath }).score);
+  }
+
+  section("The pose the robot drives to");
+  {
+    const view = scoreView([0.35, 0.3, 0.3, 0.45], "person", 0.8, 0);
+    const vp = bestViewpoint({
+      objectPos: [10, 0],
+      observerPos: [0, 0],
+      t: 42,
+      view,
+      bbox: [0.35, 0.3, 0.3, 0.45],
+      depthM: 4,
+    });
+
+    const standoff = Math.hypot(vp.pos[0] - 10, vp.pos[1] - 0);
+    check("the pose stands OFF the object rather than on it", standoff > 1,
+      `${standoff.toFixed(2)} m away`);
+    check("...at the reported distance", Math.abs(standoff - vp.distanceM) < 0.02,
+      `${standoff.toFixed(2)} vs ${vp.distanceM}`);
+    check("...on the side the good look came from", vp.pos[0] < 10,
+      `x ${vp.pos[0]}`);
+
+    // The heading must actually face the object from where it puts you.
+    const bearing =
+      ((Math.atan2(10 - vp.pos[0], 0 - vp.pos[1]) * 180) / Math.PI + 360) % 360;
+    check("the heading faces the object from that pose",
+      Math.abs(((bearing - vp.heading + 540) % 360) - 180) < 1,
+      `bearing ${bearing.toFixed(1)}° vs heading ${vp.heading}°`);
+    check("heading is a degree bearing in 0–360", vp.heading >= 0 && vp.heading < 360);
+    check("it carries the time of the look it reproduces", vp.approachFromT === 42);
+    check("it explains itself", vp.why.length > 10, vp.why);
+
+    // Degenerate input must not produce NaN and steer the robot nowhere.
+    const degenerate = bestViewpoint({
+      objectPos: [3, 3], observerPos: [3, 3], t: 0, view, bbox: [0.35, 0.3, 0.3, 0.45],
+    });
+    check("a robot standing on the object still yields a finite pose",
+      Number.isFinite(degenerate.pos[0]) && Number.isFinite(degenerate.pos[1]) &&
+        Number.isFinite(degenerate.heading));
+  }
+
+  section("Best angle, on the real trip");
+  {
+    const { trip } = buildTrip(waterlooPark);
+    const scored = trip.moments.flatMap((m) => m.objects);
+    check("every sighting carries a view score", scored.every((o) => o.viewScore !== undefined));
+    check("view scores are in 0..1",
+      scored.every((o) => (o.viewScore ?? -1) >= 0 && (o.viewScore ?? 2) <= 1));
+    check("every sighting records when its best look happened",
+      scored.every((o) => o.bestT !== undefined));
+    check("the best look falls inside the sighting's own span",
+      scored.every((o) => (o.bestT ?? -1) >= o.firstSeenT - 0.01 && (o.bestT ?? -1) <= o.lastSeenT + 0.01));
+
+    // The point of the change: the best VIEW is frequently not the most
+    // confident frame. If these never disagreed, the scoring would be redundant.
+    const index = buildObjectIndex(trip.moments, trip.path, trip);
+    const withNav = index.filter((e) => e.navTarget);
+    check("nav targets carry a standoff distance",
+      withNav.every((e) => (e.navTarget?.distanceM ?? 0) > 0));
+    check("nav targets never park the robot inside the object",
+      withNav.every((e) => (e.navTarget?.distanceM ?? 0) >= 1.2));
+    check("nav targets explain themselves", withNav.every((e) => !!e.navTarget?.why));
+    check("nav targets carry the view score they reproduce",
+      withNav.every((e) => e.navTarget?.viewScore !== undefined));
+  }
+}
+
 verifyWaterlooPark();
 verifyEveryTrip();
 verifyGeoAndGlobalIndex();
 verifyGlobe();
 verifyLiveTrip();
+verifyDetectionQuality();
 
 console.log(
   failures === 0

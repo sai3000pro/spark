@@ -151,8 +151,17 @@ export interface ObjectSighting {
   confidence: number;
   firstSeenT: number;
   lastSeenT: number;
-  /** The box from the highest-confidence frame. */
+  /**
+   * The box from the BEST-LOOKING frame, which is not the same as the
+   * highest-confidence one — see lib/detect/viewQuality.ts. A detector is often
+   * most certain about an object the instant it fills the frame with its back
+   * turned; that is the worst view and it used to be the one we kept.
+   */
   bestBbox: BBox;
+  /** View quality of `bestBbox`, 0..1. Undefined for sightings built before scoring. */
+  viewScore?: number;
+  /** When the best view happened. The pose to re-shoot it from is derived from this. */
+  bestT?: number;
   keyframeId: string;
   detectionCount: number;
   /** Clickable anchor inside the splat. */
@@ -321,13 +330,31 @@ export interface ObjectIndexEntry {
   /** Highest-confidence sighting; what "show me in 3D" jumps to. */
   best: IndexedSighting;
   /**
-   * Pose the robot would drive to. Derived from the sighting's worldPos + path.
+   * Pose the robot would drive to in order to SEE the object well.
+   *
+   * `pos` is a standing position, NOT the object's own coordinates — it is offset
+   * back along the direction the best look came from, at a distance that would
+   * frame the object properly. Driving to an object's coordinates means driving
+   * into it, which is what this used to say.
    *
    * NOTE the unit mismatch with `TrackPoint.heading`, which is radians from +x:
    * this `heading` is a compass bearing in DEGREES, 0–360, clockwise from +z,
    * because it is rendered directly in the UI. Don't mix the two.
    */
-  navTarget?: { pos: Vec2; heading: number; approachFromT: number };
+  navTarget?: {
+    /** Where to stand, in the trip's local metric ground frame. */
+    pos: Vec2;
+    /** Which way to face from `pos`. Degrees, 0–360, clockwise from +z. */
+    heading: number;
+    /** Odometry time of the look this pose reproduces. */
+    approachFromT: number;
+    /** Standoff from the object, metres. */
+    distanceM?: number;
+    /** View quality of the look being reproduced, 0..1. */
+    viewScore?: number;
+    /** Plain-language rationale, shown in the UI. */
+    why?: string;
+  };
 }
 
 export interface ObjectSearchResult {

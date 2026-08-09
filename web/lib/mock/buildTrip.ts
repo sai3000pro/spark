@@ -352,7 +352,9 @@ export function buildTrip(spec: TripSpec): BuiltTrip {
     claimed.add(candidate.id);
     candidate.status = "promoted";
     delete candidate.discardReason;
-    moments.push(promoteToMoment(candidate, detections, contentFor(momentSpec)));
+    // `path` goes in so best-view scoring can see how fast the robot was moving
+    // when each look happened — a blurred frame is not the best angle.
+    moments.push(promoteToMoment(candidate, detections, contentFor(momentSpec), path));
   }
 
   // Anything that survived stage 2 but has no moment: stage 3 looked and found

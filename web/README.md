@@ -51,8 +51,13 @@ Real, and load-bearing:
 - `lib/objectIndex.ts` — the "where is my X?" index: alias matching, fuzzy fallback, nav targets.
 - `lib/momentQA.ts` + `lib/tripQA.ts` — retrieval over the real transcript. The prose is templated;
   the topics, quotes, speaker stats and citations are computed.
-- `lib/detector.ts` + `/detect` — a real object detector running in your browser, emitting real
-  `Detection[]` that go through the same `scoreCandidates`.
+- `lib/detector.ts` + `lib/detect/*` + `/detect` — a real object detector running in your browser,
+  emitting real `Detection[]` that go through the same `scoreCandidates`. Multi-pass: the frame is
+  run flipped and in overlapping tiles, and the results are fused (`lib/detect/boxes.ts`) so each
+  detection reports how many passes **agreed** with it.
+- `lib/detect/viewQuality.ts` — "best angle". Which look at an object is worth keeping, scored on
+  framing rather than on the detector's confidence, and the pose to drive to in order to get it.
+- `lib/detect/track.ts` — the IoU tracker that turns per-frame boxes into stable `trackId`s.
 - `app/api/ingest/*` — validated ingest endpoints (`GET` either one for its own contract docs).
 
 Mocked:
@@ -319,6 +324,28 @@ following you — but raise its weight if you want "just us hanging out" to beco
 
 Change a weight and run `npm run verify`; it fails loudly if a moment stops being found.
 
+## Tuning detection quality
+
+Stage 1 has its own knobs, and they answer a different question — not "is this moment interesting"
+but "is this detection real, and is this the look at it worth keeping".
+
+- `QUALITY_PRESETS` (`lib/detect/tta.ts`) — how many looks the detector gets. `fast` is one pass
+  (the on-robot budget), `balanced` is flip + 2×2 tiles, `thorough` is flip + 3×3. Tiling is what
+  finds small objects: these models resize to a ~800 px short edge, so a bottle across a wide frame
+  is destroyed in preprocessing and no threshold brings it back.
+- `agreementWeight` (`lib/detect/boxes.ts`, 0.55) — how hard a detection only one pass found is
+  demoted. It is a demotion and not a filter on purpose: genuinely hard objects are often found
+  once, and deleting them trades a flickering true positive for a permanent false negative.
+- `TrackOptions.minHits` (`lib/detect/track.ts`, 3) — a track seen fewer times than this is dropped
+  as flicker. The single most effective false-positive filter in the pipeline.
+- `VIEW_WEIGHTS` + `IDEAL_AREA` (`lib/detect/viewQuality.ts`) — what "best angle" means. `wholeness`
+  is weighted steeply because clipping is the one defect no later stage can undo.
+
+`npm run verify` asserts all of it directly — that a one-pass ghost with a *higher* raw score ends
+up ranked below a six-pass detection, that tiles cover the frame with no blind spots, that boxes cut
+by a tile seam are dropped while boxes against the frame's own edge survive, and that a clean
+mid-frame look beats a closer, clipped, more confident one.
+
 ## Day-2 integration seams
 
 | Seam | What to change |
@@ -391,7 +418,9 @@ app* below for where the seam is.
 
 ### Either
 
-9. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate.
+9. `/detect` → load YOLOS-tiny, drop a photo, watch real detections become a real candidate. Flip
+   **Looks** from Fast to Balanced and re-run: the small objects that one pass missed appear, and
+   every box gains an agreement count (`4/6`) showing how many passes actually found it.
 10. The **Phone** toggle (bottom right) shows the on-robot view.
 
 ## Gotchas
@@ -407,7 +436,13 @@ app* below for where the seam is.
 - The 4 `npm audit` highs are all inside `onnxruntime-node`/`sharp` — the **Node-side** backends of
   Transformers.js, which never execute since we run in-browser on WASM/WebGPU.
 - `onnx-community/rtdetr_v2_r18vd` does **not** exist (401). Don't "fix" the detector default to it.
-  Verified working: `Xenova/yolos-tiny` (default) and `Xenova/detr-resnet-50`.
+  Verified working (re-checked): `Xenova/yolos-tiny` (default), `Xenova/yolos-small`,
+  `Xenova/detr-resnet-50`, `Xenova/detr-resnet-101`.
+- **Transformers.js defaults to int8 weights on the WASM backend** (`DEFAULT_DEVICE_DTYPE_MAPPING`
+  in its source), and fp32 on WebGPU. So the same model gives visibly looser boxes on a laptop with
+  no WebGPU, which for a long time read as "the detector is flaky" rather than as a config default.
+  `loadDetector(id, onProgress, precision)` now sets it explicitly, and `/detect` shows which
+  landed next to the device name.
 - `Journey Moment Capture App/` is the Figma Make export, kept locally as a design reference and
   gitignored. It's a separate Vite app — not part of this build, and excluded from tsconfig/eslint.
 - **If you ever add middleware, the file is `proxy.ts`.** That convention is deprecated and renamed
