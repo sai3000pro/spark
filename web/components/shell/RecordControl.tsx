@@ -115,13 +115,15 @@ export function RecordControl({ compact = false }: { compact?: boolean }) {
       type="button"
       onClick={() => void start()}
       disabled={pending}
-      aria-label="Start a trip"
+      // The accessible name matches the visible label exactly, question mark and
+      // all: a speech-input user says what they can see.
+      aria-label="Start a trip?"
       title="Opens a recording session. The rover-follow behaviour is not implemented yet."
       className={`${PILL} border-transparent bg-machine-400 font-semibold text-ink-950 hover:bg-machine-300 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-machine-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-ink-950/55" />
       <span className={compact ? "hidden sm:inline" : ""}>
-        {pending ? "Starting…" : "Start a trip"}
+        {pending ? "Starting…" : "Start a trip?"}
       </span>
     </button>
   );
