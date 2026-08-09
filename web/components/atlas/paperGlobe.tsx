@@ -15,15 +15,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { geoToVec3 } from "@/lib/globe/geo";
-import { getLandMask } from "@/lib/globe/mask";
 import { buildPaperCloud, voyageArcPoints, type PaperCloud } from "@/lib/globe/paperCloud";
-import { BRASS_DEEP, INK } from "@/lib/theme";
+import { BRASS_DEEP, INK, MILK } from "@/lib/theme";
 import type { GeoPoint } from "@/lib/types";
-
-/* The map's own ground and water (public/map/field-notes.json) — the globe
-   prints the same plates the survey map does. */
-const MAP_GROUND = "#f6efdb";
-const MAP_WATER = "#a4d0c6";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Land
@@ -122,44 +116,18 @@ export function PaperEarth({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * One landmask texture per process — 512×256, land in the red channel, wrapped
- * in longitude and bilinear-filtered so the coastlines print with a soft
- * painterly edge instead of the mask's raw stair-steps.
- */
-let seaTextureMemo: THREE.DataTexture | null = null;
-
-function getSeaTexture(): THREE.DataTexture {
-  if (seaTextureMemo) return seaTextureMemo;
-  const mask = getLandMask();
-  const data = new Uint8Array(mask.w * mask.h * 4);
-  for (let i = 0; i < mask.land.length; i++) {
-    data[i * 4] = mask.land[i] ? 255 : 0;
-    data[i * 4 + 3] = 255;
-  }
-  const tex = new THREE.DataTexture(data, mask.w, mask.h);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  seaTextureMemo = tex;
-  return tex;
-}
-
-/**
- * The occluder does three jobs at once: its opacity hides the far hemisphere
- * (depth-testing away every far-side point and mark for free), its landmask
- * lookup prints the survey map's own plates — cream ground, wet-lagoon water —
- * onto the sphere, and its fresnel term shades the limb in ink so the sphere
- * reads round on cream — the engraver's trick of darkening a plate's edges
- * instead of lighting them.
+ * The occluder does two jobs at once: its opacity hides the far hemisphere
+ * (depth-testing away every far-side point and mark for free), and its fresnel
+ * term shades the limb in ink so the sphere reads round on cream — the
+ * engraver's trick of darkening a plate's edges instead of lighting them.
+ * The ocean is deliberately just the page: milk, no water tint — the teal
+ * map-water print was tried (v5.8) and rejected.
  */
 export function PaperSea() {
   const uniforms = useMemo(
     () => ({
-      uSea: { value: new THREE.Color(MAP_WATER) },
-      uLand: { value: new THREE.Color(MAP_GROUND) },
+      uSea: { value: new THREE.Color(MILK) },
       uInk: { value: new THREE.Color(INK) },
-      uMask: { value: getSeaTexture() },
     }),
     [],
   );
@@ -172,37 +140,22 @@ export function PaperSea() {
         vertexShader={/* glsl */ `
           varying vec3 vNormal;
           varying vec3 vView;
-          varying vec3 vPos;
           void main() {
             vNormal = normalize(normalMatrix * normal);
             vec4 mv = modelViewMatrix * vec4(position, 1.0);
             vView = normalize(-mv.xyz);
-            vPos = normalize(position);
             gl_Position = projectionMatrix * mv;
           }
         `}
         fragmentShader={/* glsl */ `
           precision mediump float;
           uniform vec3 uSea;
-          uniform vec3 uLand;
           uniform vec3 uInk;
-          uniform sampler2D uMask;
           varying vec3 vNormal;
           varying vec3 vView;
-          varying vec3 vPos;
-
           void main() {
-            // Object-space direction → equirectangular uv, matching the
-            // landmask's layout (row 0 = lat +90, column 0 = lng −180) and
-            // lib/globe/geo's convention (lng 0 → +Z, +90° → +X).
-            float lng = atan(vPos.x, vPos.z);
-            float lat = asin(clamp(vPos.y, -1.0, 1.0));
-            vec2 uv = vec2(0.5 + lng / 6.2831853, 0.5 - lat / 3.1415926);
-            float land = texture2D(uMask, uv).r;
-
-            vec3 base = mix(uSea, uLand, land);
             float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 2.2);
-            gl_FragColor = vec4(mix(base, uInk, rim * 0.42), 1.0);
+            gl_FragColor = vec4(mix(uSea, uInk, rim * 0.45), 1.0);
           }
         `}
       />

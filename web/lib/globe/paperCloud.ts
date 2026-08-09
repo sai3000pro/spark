@@ -3,17 +3,16 @@
  *
  * The desk globe's point cloud — the same fibonacci-sphere + distance-to-coast
  * sampling as the retired dark globe (lib/globe/globePoints.ts), re-inked for
- * paper: coasts crisp in PINE, interiors fading through SPRUCE toward a faint
- * LAGOON wash, the way an engraver stipples a plate. No day/night terminator —
- * ink has no night side.
+ * paper: coasts crisp in PINE, interiors in a LAGOON wash lightened toward the
+ * page, the way an engraver stipples a plate. No day/night terminator — ink
+ * has no night side.
  *
  * Pure and deterministic: no `three`, no `next`, typed arrays out. The pocket
  * globe asks for a coarse cloud, the full plate for a fine one.
  */
 import { geoToVec3, vec3ToGeo } from "./geo";
 import { coastCells, getLandMask, isLand } from "./mask";
-import { PINE, SPRUCE } from "../theme";
-import { makeRng } from "../mock/rng";
+import { LAGOON, PAPER, PINE } from "../theme";
 import type { GeoPoint } from "../types";
 
 export interface PaperCloud {
@@ -34,46 +33,40 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 /** PINE — the coastline's pressed ink. */
 const COAST: Rgb = hexToRgb(PINE);
-/**
- * The interiors are the map's own living green — its wood fill (#bcd08f, see
- * public/map/field-notes.json) deepened with SPRUCE so a small dot still
- * carries the colour on cream.
- */
-const INTERIOR: Rgb = mix(hexToRgb("#bcd08f"), hexToRgb(SPRUCE), 0.45);
+/** LAGOON, lightened toward the paper — the interior wash. */
+const INTERIOR: Rgb = mix(hexToRgb(LAGOON), hexToRgb(PAPER), 0.18);
 
 export function buildPaperCloud(opts: { samples?: number } = {}): PaperCloud {
   const samples = opts.samples ?? 110_000;
   const mask = getLandMask();
-  const rng = makeRng(7331);
 
   const positions: number[] = [];
   const colors: number[] = [];
   const sizes: number[] = [];
   const shore: number[] = [];
 
-  // Jitter, in degrees. 110k samples space ~0.61° — FINER than the mask's
-  // 0.703° cells, which would resolve its stair-stepped coastlines, so every
-  // sample is shaken by up to ~half a cell. The grid dissolves into an
-  // engraver's stipple and the mask's aliasing dissolves with it.
-  const jitter = 0.4;
-
   for (let i = 0; i < samples; i++) {
-    // Fibonacci sphere: uniform density at every latitude, no pinched poles.
+    // Fibonacci sphere, unjittered: uniform density at every latitude, and the
+    // lattice's even spacing is the look — a plate stippled by a steady hand,
+    // not sprayed. The dots are sized to nearly touch, so landmasses read as
+    // solid shapes at a glance and dissolve into points up close.
     const y = 1 - (2 * (i + 0.5)) / samples;
     const r = Math.sqrt(Math.max(0, 1 - y * y));
     const theta = i * GOLDEN_ANGLE;
+    const x = r * Math.cos(theta);
+    const z = r * Math.sin(theta);
 
-    const at = vec3ToGeo([r * Math.cos(theta), y, r * Math.sin(theta)]);
-    const lat = at.lat + (rng() - 0.5) * 2 * jitter;
-    const lng = at.lng + ((rng() - 0.5) * 2 * jitter) / Math.max(0.2, Math.cos((at.lat * Math.PI) / 180));
+    const { lat, lng } = vec3ToGeo([x, y, z]);
     if (!isLand(mask, lat, lng)) continue;
 
     const depth = Math.min(1, coastCells(mask, lat, lng) / COAST_FALLOFF_CELLS);
     // 1.0 at the shore, ~0.37 six cells in — coastlines carry the read.
     const coastFactor = Math.exp(-depth);
 
-    positions.push(...geoToVec3({ lat, lng }));
-    sizes.push(lerp(0.0044, 0.0062, coastFactor));
+    positions.push(x, y, z);
+    // ~110k samples space ~0.011 world units apart; a ~0.010–0.013 sprite
+    // (gaussian core ≈ half that) closes most of the gap between neighbours.
+    sizes.push(lerp(0.0095, 0.0125, coastFactor));
     shore.push(coastFactor);
 
     colors.push(

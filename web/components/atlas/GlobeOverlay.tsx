@@ -61,12 +61,13 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
   const [washing, setWashing] = useState(false);
   const readoutRef = useRef<HTMLSpanElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
+  const railFadeRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const landTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reducedMotion = useReducedMotion();
   const webgl = useWebGLSupport();
-  const cloud = usePaperCloud(48_000);
+  const cloud = usePaperCloud(110_000);
   const fitDist = useFitDistance();
 
   /** Chronological — the expedition line hops the walks in the order they happened. */
@@ -212,6 +213,7 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
               onArrived={onArrived}
             />
             <CameraReadout readoutRef={readoutRef} />
+            <RailFade railRef={railFadeRef} />
           </Canvas>
         )}
       </div>
@@ -265,8 +267,24 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
       </header>
 
       {/* ── The gazetteer — the journal's index of walks ─────────────────── */}
-      <aside className="rise-in pointer-events-none absolute bottom-20 left-4 top-28 z-10 hidden w-[290px] md:flex md:flex-col md:justify-center sm:left-5" style={{ "--i": 2 } as React.CSSProperties}>
-        <div className="plate-vellum papergrain pointer-events-auto relative flex max-h-full flex-col overflow-hidden p-3">
+      {/* No card: the index is set straight into the page, haloed in milk the
+          way the map's own labels are. It lives visually BEHIND the sphere —
+          zooming in swells the limb over this side of the page, so RailFade
+          dissolves it once the camera closes past reading distance. */}
+      <aside
+        className="rise-in pointer-events-none absolute bottom-20 left-4 top-28 z-10 hidden w-[290px] md:flex md:flex-col md:justify-center sm:left-5"
+        style={{ "--i": 2 } as React.CSSProperties}
+      >
+        {/* RailFade writes opacity here, NOT on the aside — rise-in's fill-mode
+            holds its final keyframe, which would override inline opacity. */}
+        <div
+          ref={railFadeRef}
+          className="pointer-events-auto relative flex max-h-full flex-col"
+          style={{
+            textShadow:
+              "0 0 5px rgb(255 251 240 / 0.95), 0 0 10px rgb(255 251 240 / 0.85), 0 0 18px rgb(255 251 240 / 0.7)",
+          }}
+        >
           <p className="fnote shrink-0 px-1 pb-2 text-[9px] text-ink-faint">
             [ gazetteer · newest first ]
           </p>
@@ -692,6 +710,35 @@ function useFitDistance(): number {
   }, []);
 
   return dist;
+}
+
+/** The gazetteer starts dissolving here… */
+const RAIL_FADE_START = 3.6;
+/** …and is fully gone (and unclickable) here. */
+const RAIL_FADE_END = 3.0;
+
+/**
+ * The page under the sphere. The gazetteer is set straight into the paper, so
+ * when the camera dives, the swelling limb should cover it the way a globe
+ * covers the desk it sits on — this fades the rail out as the camera closes,
+ * writing styles straight to the DOM (opacity changes every frame of a zoom;
+ * setState would re-render the whole overlay at 60 Hz).
+ */
+function RailFade({ railRef }: { railRef: React.RefObject<HTMLElement | null> }) {
+  useFrame(({ camera }) => {
+    const el = railRef.current;
+    if (!el) return;
+    const t = THREE.MathUtils.clamp(
+      (camera.position.length() - RAIL_FADE_END) / (RAIL_FADE_START - RAIL_FADE_END),
+      0,
+      1,
+    );
+    el.style.opacity = String(t);
+    // pointer-events:none on the aside would not reach its pointer-events-auto
+    // child, so hide the subtree outright once it is invisible.
+    el.style.visibility = t < 0.04 ? "hidden" : "";
+  });
+  return null;
 }
 
 /**

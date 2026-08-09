@@ -24,8 +24,9 @@ import { geoToVec3 } from "@/lib/globe/geo";
 import { BRASS, CLAY, PAPER } from "@/lib/theme";
 import type { GeoPoint } from "@/lib/types";
 
-/** ~12k sphere samples → ~3.5k land points: plenty at 100 px. */
-const POCKET_SAMPLES = 12_000;
+/** ~20k sphere samples → ~6k land points: dense enough that the continents
+    read as shapes even at 100 px. */
+const POCKET_SAMPLES = 20_000;
 
 interface Props {
   /** Every walk's origin — drawn as clay dots so the door hints at its room. */
@@ -50,10 +51,13 @@ export function PocketGlobe({ stops, onOpen }: Props) {
       className="group pointer-events-auto block"
     >
       <span
+        // The bezel hugs the sphere: a hairline of ink, a thin band of brass,
+        // nothing else — the camera sits close enough that the limb meets the
+        // ring on every side, so no paper shows inside it.
         className="relative block h-[92px] w-[92px] overflow-hidden rounded-full transition-transform duration-300 group-hover:scale-[1.045]"
         style={{
           background: PAPER,
-          boxShadow: `inset 0 0 0 1px rgb(27 27 24 / 0.22), 0 0 0 2.5px ${BRASS}, 0 0 0 3.5px rgb(27 27 24 / 0.18), 0 10px 26px rgb(27 27 24 / 0.28)`,
+          boxShadow: `inset 0 0 0 1px rgb(27 27 24 / 0.22), 0 0 0 2px ${BRASS}, 0 0 0 2.75px rgb(27 27 24 / 0.2), 0 10px 26px rgb(27 27 24 / 0.28)`,
           transitionTimingFunction: "var(--ease-signature)",
         }}
       >
@@ -61,12 +65,12 @@ export function PocketGlobe({ stops, onOpen }: Props) {
           frameloop="demand"
           gl={{ antialias: true }}
           dpr={[1, 1.5]}
-          camera={{ position: [0, 0.5, 2.95], fov: 38, near: 0.1, far: 20 }}
+          camera={{ position: [0, 0.35, 2.7], fov: 38, near: 0.1, far: 20 }}
           style={{ pointerEvents: "none" }}
         >
           <color attach="background" args={[PAPER]} />
           <PaperSea />
-          <PaperEarth cloud={cloud} sizeBoost={3} />
+          <PaperEarth cloud={cloud} sizeBoost={2.4} />
           <BrassBezel />
           <StopDots stops={stops} />
           <IdleSpin speed={0.14} paused={reducedMotion} />
