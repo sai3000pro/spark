@@ -5,9 +5,9 @@
  *
  * I    Hero — the album lies open. The promise typeset dead-centre on the
  *      paper (each line rising from its mask, the last line rolling all
- *      evening), flanked by two sprays of mounted photographs — the walk's
- *      painted plates, taped to vellum mats and dealt outward across the
- *      desk. Clicking a spray rotates its carousel: the top print swings
+ *      evening), flanked by two sprays of loose photographs — the walk's
+ *      painted plates on vellum mats, dealt outward across the desk,
+ *      untaped. Clicking a spray rotates its carousel: the top print swings
  *      out past the fan and files itself into the deepest slot.
  *      The kept moments lap under it all as the seam into the journal.
  * II   The sieve — one pinned typeset scene on paper: everything the robot
@@ -1715,8 +1715,9 @@ function AlbumStack({
               transition: "transform 480ms var(--ease-signature)",
             }}
           >
-            <span aria-hidden className="tape -top-2.5 left-5 -rotate-6" />
-            <span aria-hidden className="tape -top-2.5 right-7 rotate-3" />
+            {/* No tape here, unlike PrintMat — these prints are loose by
+                design: the carousel deals them around the desk, and a taped
+                corner would make every turn read as a mistake. */}
             <span className={`relative block overflow-hidden ${portrait ? "aspect-[3/4]" : "aspect-[4/3]"}`}>
               {/* The plates are pre-encoded webp in /public — same reasoning as
                   the album's prints: next/image would only re-encode them. */}
