@@ -38,7 +38,7 @@ import { SCENE_HUES } from "./mock/placeholder";
 import { estimateCameraPath } from "./video/estimateMotion";
 import { estimateWorldPos } from "./video/trackFrames";
 import type { BuiltTrip } from "./mock/buildTrip";
-import type { Detection, GeoPoint, Moment, Trip, Vec2 } from "./types";
+import type { Detection, GeoPoint, Moment, TrackPoint, Trip, Vec2 } from "./types";
 
 export interface UploadedWalkInput {
   /** Real detections from real frames. `t` is seconds into the video. */
@@ -117,8 +117,25 @@ export function __resetUploadedTrips(): void {
 // Build
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Metres between consecutive moments on the synthetic transect. */
-const TRANSECT_SPACING_M = 55;
+/** Where the camera was at time t, along the measured trace. */
+function posAtT(path: TrackPoint[], t: number): Vec2 {
+  if (!path.length) return [0, 0];
+  if (t <= path[0].t) return path[0].pos;
+  const last = path[path.length - 1];
+  if (t >= last.t) return last.pos;
+
+  let lo = 0;
+  let hi = path.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (path[mid].t <= t) lo = mid;
+    else hi = mid;
+  }
+  const a = path[lo];
+  const b = path[hi];
+  const f = (t - a.t) / (b.t - a.t || 1);
+  return [a.pos[0] + (b.pos[0] - a.pos[0]) * f, a.pos[1] + (b.pos[1] - a.pos[1]) * f];
+}
 
 export function createUploadedWalk(input: UploadedWalkInput): UploadedWalk {
   const now = new Date();
@@ -167,10 +184,12 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
 
   const promoted = candidates.filter((c) => c.status !== "discarded");
 
-  // Lay the kept moments out in time order along a transect. Read the caveat at
-  // the top of this file: this is chronology drawn as geography.
+  // Each moment sits where the camera actually was along the measured trace, so
+  // a held shot clusters its moments and a walked stretch spreads them. Read the
+  // caveat at the top of this file: the DISTANCE is estimated and the direction
+  // is not estimated at all.
   const moments: Moment[] = promoted.map((candidate, i) => {
-    const pos: Vec2 = [i * TRANSECT_SPACING_M, 0];
+    const pos = posAtT(path, (candidate.tStart + candidate.tEnd) / 2);
     const inWindow = detections.filter(
       (d) => d.t >= candidate.tStart && d.t <= candidate.tEnd,
     );
@@ -210,19 +229,6 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
 
     return promoteToMoment(candidate, detections, content);
   });
-
-  // A path so the map has something to draw. Straight, evenly walked, and
-  // labelled synthetic everywhere it surfaces.
-  const stops: Stop[] = [
-    { pos: [-TRANSECT_SPACING_M, 0], arriveT: 0, departT: 0 },
-    ...moments.map((m) => ({
-      pos: m.place.pos,
-      arriveT: m.tStart,
-      departT: m.tEnd,
-    })),
-    { pos: [moments.length * TRANSECT_SPACING_M, 0], arriveT: durationSec, departT: durationSec },
-  ];
-  const path = generatePath(stops, durationSec, 4, 20260808);
 
   for (const c of candidates) {
     if (c.status === "pending") {

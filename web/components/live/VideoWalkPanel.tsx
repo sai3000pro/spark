@@ -297,14 +297,17 @@ export function VideoWalkPanel() {
             {found.moments > 0 ? (
               <>
                 The scorer kept {found.moments} {found.moments === 1 ? "window" : "windows"} out of{" "}
-                {found.candidates}. Positions on the map are a time transect, not odometry — a video
-                carries no GPS, and inventing one would be a lie the map tells confidently.
+                {found.candidates}. Where they sit on the map comes from camera motion measured in
+                the footage — how far the boxes travel between frames. The distance is a monocular
+                estimate and the direction is not estimated at all, so read the line as
+                distance-travelled, not as a shape.
               </>
             ) : (
               <>
                 Nothing cleared the keep line. That is a real answer, not a failure: with no audio
-                pass the vision triggers are all that can fire, and quiet footage genuinely scores
-                low. Try a clip with people, movement, or objects entering the frame.
+                pass the speech triggers cannot fire at all, so a clip has to earn it on novelty,
+                faces and dwell alone. Try footage where people stay in shot for a while, or where
+                new things come into frame.
               </>
             )}
           </p>

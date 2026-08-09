@@ -73,8 +73,18 @@ export async function POST(request: Request) {
       },
       // Said in the payload, not only in a comment, because a caller that shows
       // these numbers has to be able to label them.
-      measured: ["detections", "candidates", "moments", "object sightings"],
-      synthesized: ["positions (a time transect, not odometry)", "no transcript — there was no audio pass"],
+      measured: [
+        "detections",
+        "candidates",
+        "moments",
+        "object sightings",
+        "camera motion (median box displacement — this is what makes dwell fire)",
+      ],
+      synthesized: [
+        "distance scale (monocular, from the depth proxy — an order of magnitude)",
+        "direction (not estimated at all — the trace runs along one axis)",
+        "no transcript — there was no audio pass",
+      ],
       persisted: false,
       note: "In memory only. Restarting the server forgets this walk.",
     },
