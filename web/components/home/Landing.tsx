@@ -3,9 +3,12 @@
 /**
  * The landing: the night the robot walked, pressed into its field journal.
  *
- * I    Hero — the painted aurora scene, the blob companion asleep on the path
- *      (hover wakes it; it IS the start-a-trip button), and the kept moments
- *      lapping under it as the seam into the journal.
+ * I    Hero — the album lies open. The promise typeset dead-centre on the
+ *      paper (each line rising from its mask, the last line rolling all
+ *      evening), flanked by two piles of mounted photographs — the walk's
+ *      painted plates, taped to vellum mats. Clicking a pile leafs it: the
+ *      top print slips out and files itself under the bottom of the pile.
+ *      The kept moments lap under it all as the seam into the journal.
  * II   The sieve — one pinned typeset scene on paper: everything the robot
  *      noticed, set as words on the page; scrolling crosses them out in ink,
  *      one by one, until six circled entries remain. "It kept six."
@@ -42,11 +45,8 @@ import { CustomEase } from "gsap/CustomEase";
 import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from "lucide-react";
-import { LandingHero } from "@/components/hero/LandingHero";
-import { LiveTripProvider } from "@/components/shell/LiveTripProvider";
 import { KeyframeImg } from "@/components/system/ui";
 import { distance, duration, shortDate } from "@/lib/format";
-import type { ActiveTripSnapshot } from "@/lib/liveTrip";
 import { BRASS, CLAY, MOMENT_INKS } from "@/lib/theme";
 import type { TripListItem } from "@/lib/tripData";
 
@@ -92,8 +92,6 @@ export interface LandingProps {
   discards: LandingDiscard[];
   /** Every pressed album, for the shelf. */
   albums: TripListItem[];
-  /** Live-trip snapshot — the hero's blob announces a walk in progress. */
-  active: ActiveTripSnapshot | null;
 }
 
 gsap.registerPlugin(ScrollTrigger, CustomEase, SplitText);
@@ -113,6 +111,39 @@ function mulberry32(seed: number) {
 
 /* Where a moment's ink lands on paper — the journal's own pressed cycle. */
 const PAPER_INKS = ["#8a6d2f", "#476d73", "#c14f24", "#2c4347", "#7d7730", "#1b1b18"];
+
+/* The last hero line rolls all evening. */
+const HERO_CYCLE = ["in light.", "in place.", "in sound."];
+
+/* ── The hero's photographs ──────────────────────────────────────────────
+   The walk's painted plates, mounted as prints. Three plates yield six
+   photographs: `focus` is object-position, a different window onto the same
+   painting — exactly how two prints from one negative differ. */
+interface AlbumPrint {
+  src: string;
+  focus: string;
+  clock: string;
+  caption: string;
+}
+
+const ALBUM_LEFT: AlbumPrint[] = [
+  { src: "/hero/keyart-a.webp", focus: "36% 42%", clock: "21:04", caption: "the aurora" },
+  { src: "/hero/keyart-hero.webp", focus: "50% 46%", clock: "20:31", caption: "lamplight" },
+  { src: "/hero/keyart-b.webp", focus: "40% 58%", clock: "20:12", caption: "the long way" },
+];
+
+const ALBUM_RIGHT: AlbumPrint[] = [
+  { src: "/hero/keyart-hero.webp", focus: "63% 55%", clock: "21:47", caption: "homeward" },
+  { src: "/hero/keyart-a.webp", focus: "80% 60%", clock: "21:58", caption: "still water" },
+  { src: "/hero/keyart-b.webp", focus: "28% 62%", clock: "20:47", caption: "fireflies" },
+];
+
+/* How the piles fan — depth 0 is the top print. Mirrored for the right pile. */
+const ALBUM_FAN = [
+  { r: -2.2, x: 0, y: 0 },
+  { r: 3.1, x: 12, y: 9 },
+  { r: -1.5, x: -10, y: 17 },
+];
 
 /* ── Night air — an opt-in ambient layer, synthesized on device ─────────── */
 
@@ -205,8 +236,9 @@ function useNightAir() {
 
 /* ═════════════════════════════════ page ════════════════════════════════ */
 
-export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums, active }: LandingProps) {
+export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums }: LandingProps) {
   const root = useRef<HTMLDivElement>(null);
+  const heroWord = useRef<HTMLSpanElement>(null);
   const [note, setNote] = useState(0);
   const air = useNightAir();
 
@@ -319,6 +351,43 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         sieve.scrollTrigger?.kill();
         sieve.kill();
       });
+
+      // The hero's two lines rise out of their masks on arrival.
+      const heroIn = gsap.from("[data-hero-line]", {
+        yPercent: 110,
+        duration: 1.1,
+        ease: "reveal",
+        stagger: 0.12,
+        delay: 0.1,
+      });
+      killers.push(() => heroIn.kill());
+
+      // The last line rolls all evening: up and out through the mask, the
+      // next one in from below with the ink still wet.
+      let wi = 0;
+      const cycle = () => {
+        const node = heroWord.current;
+        if (!node) return;
+        gsap
+          .timeline()
+          .to(node, {
+            yPercent: -112,
+            filter: "blur(5px)",
+            duration: 0.5,
+            ease: "signature",
+            onComplete: () => {
+              wi = (wi + 1) % HERO_CYCLE.length;
+              node.textContent = HERO_CYCLE[wi];
+            },
+          })
+          .fromTo(
+            node,
+            { yPercent: 115, filter: "blur(5px)" },
+            { yPercent: 0, filter: "blur(0px)", duration: 0.65, ease: "reveal" },
+          );
+      };
+      const cycleIv = window.setInterval(cycle, 3400);
+      killers.push(() => window.clearInterval(cycleIv));
 
       // The three plates draw their instruments when they arrive.
       el.querySelectorAll<HTMLElement>("[data-plate]").forEach((plate) => {
@@ -632,7 +701,10 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
 
   return (
     <div ref={root} className="field-site relative bg-paper text-ink">
-      <header className="glass-bar sticky top-0 z-40 flex items-center justify-between px-5 py-3 text-milk sm:px-8">
+      {/* Solid, edge to edge — the journal's cover band. No glass: over the
+          cream page a translucent bar picked up whatever scrolled beneath it
+          and read as fading out at the sides. */}
+      <header className="sticky top-0 z-40 flex items-center justify-between bg-pine px-5 py-3 text-milk shadow-[inset_0_-1px_0_rgb(246_240_223_/_0.14)] sm:px-8">
         <Link href="/" className="flex items-baseline gap-0.5 text-[20px] font-semibold tracking-tight" aria-label="Spark home">
           spark
           <span aria-hidden className="pulse-dot inline-block h-[7px] w-[7px] rounded-full bg-clay" />
@@ -667,43 +739,101 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         </nav>
       </header>
 
-      {/* ── I · hero — the painted aurora night, whole ─────────────────────
-          The original art-directed plates (the illustrated trees), the live
-          CSS aurora and fireflies, and the blob companion asleep on the path
-          (hover wakes it — it IS the start-a-trip button, announcing a live
-          walk when one runs). `.aurora-app` scopes the scene's own tokens;
-          --appbar-h matches the glass bar so the plate fills exactly one
-          viewport beneath it, and the inline min-height override stops the
-          scope class from padding the scene to 100vh and leaving a bare navy
-          band under the fold. */}
-      <div
-        className="aurora-app relative"
-        style={{ "--appbar-h": "57px", minHeight: 0 } as React.CSSProperties}
+      {/* ── I · hero — the album lies open ─────────────────────────────────
+          A whole page of the journal: the promise typeset dead-centre, and
+          the walk's photographs piled on either side the way prints wait on
+          a desk to be mounted. Each pile is a button — clicking leafs the
+          top print out and files it under the bottom. */}
+      <section
+        className="papergrain gridfield relative flex min-h-[calc(100svh-57px)] flex-col overflow-hidden bg-paper"
+        aria-label="Introduction"
       >
-        <LiveTripProvider initial={active}>
-          <LandingHero />
-        </LiveTripProvider>
-      </div>
+        <div className="relative z-10 mx-auto grid w-full max-w-[1480px] flex-1 grid-cols-1 content-center items-center gap-x-4 gap-y-14 px-5 py-16 sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.75fr)_minmax(0,1fr)]">
+          <AlbumStack
+            prints={ALBUM_LEFT}
+            side="left"
+            className="hidden w-[min(21vw,19rem)] justify-self-center lg:block"
+          />
 
-      {/* The seam: the kept moments lapping like a ticker of the day — the
-          night scene handing off to the journal that pressed it. */}
-      <div
-        aria-hidden
-        className="relative overflow-hidden border-y border-milk/10 bg-pine py-4"
-        style={{
-          maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-          WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-        }}
-      >
-        <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
-          {[0, 1].map((dup) => (
-            <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
-              {dateLabel} · {placeLabel}  ·  {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
-              {"  ·  "}
-            </span>
-          ))}
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="fnote text-[11.5px] text-ink-faint" data-reveal>
+              [ {dateLabel} · {placeLabel} ]
+            </p>
+            {/* Each line rises out of its own mask — the fold of the page. The
+                last line keeps rolling all evening: up and out, in from below.
+                The masks get a hair of padding (pulled back with margin) so
+                descenders never clip against the fold. */}
+            <h1 className="mt-6 text-[clamp(2.5rem,4.6vw,4.4rem)] leading-[1.04] text-ink">
+              <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
+                <span data-hero-line className="block">
+                  A day, remembered
+                </span>
+              </span>
+              <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
+                <span data-hero-line className="block text-brass-deep">
+                  <span ref={heroWord} className="inline-block" style={{ willChange: "transform, filter" }}>
+                    {HERO_CYCLE[0]}
+                  </span>
+                </span>
+              </span>
+            </h1>
+            <p
+              data-reveal
+              style={{ "--reveal-delay": "160ms" } as React.CSSProperties}
+              className="mx-auto mt-7 max-w-[52ch] text-[15.5px] leading-relaxed text-ink-soft sm:text-[17px]"
+            >
+              Spark follows a metre behind your walk, decides on its own which minutes
+              mattered, and rebuilds them as clouds of light pinned to the real park.
+            </p>
+            <div
+              data-reveal
+              style={{ "--reveal-delay": "240ms" } as React.CSSProperties}
+              className="mt-9 flex flex-wrap items-center justify-center gap-3"
+            >
+              <Link href="/walk" className="pill-brass px-6 py-3 text-[15px]">
+                <Plus size={15} strokeWidth={2} aria-hidden />
+                Step into the walk
+              </Link>
+              <a href="#decides" className="pill-ghost px-6 py-3 text-[15px] text-ink">
+                How it decides
+              </a>
+            </div>
+          </div>
+
+          <AlbumStack
+            prints={ALBUM_RIGHT}
+            side="right"
+            portrait
+            className="hidden w-[min(16.5vw,15rem)] justify-self-center lg:block"
+          />
+
+          {/* Below lg the piles tuck side by side under the promise. */}
+          <div className="flex items-start justify-center gap-6 lg:hidden">
+            <AlbumStack prints={ALBUM_LEFT} side="left" className="w-[min(40vw,15rem)]" />
+            <AlbumStack prints={ALBUM_RIGHT} side="right" portrait className="mt-7 w-[min(31vw,11.5rem)]" />
+          </div>
         </div>
-      </div>
+
+        {/* The seam: the kept moments lapping like a ticker of the day — the
+            open album handing off to the journal that pressed it. */}
+        <div
+          aria-hidden
+          className="relative overflow-hidden border-t border-milk/10 bg-pine py-4"
+          style={{
+            maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
+            WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
+          }}
+        >
+          <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
+            {[0, 1].map((dup) => (
+              <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
+                {dateLabel} · {placeLabel}  ·  {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
+                {"  ·  "}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ── II · the sieve ─────────────────────────────────────────────── */}
       <section
@@ -1512,6 +1642,98 @@ function PinRow() {
       })}
       <circle className="pr-traveler" cx={14} cy={108} r={3.2} fill={BRASS} />
     </svg>
+  );
+}
+
+/**
+ * A pile of the hero's photographs — the album's loose prints, waiting to be
+ * mounted. The whole pile is one button: clicking it leafs, the top print
+ * slipping out toward its edge of the desk and filing itself under the
+ * bottom. Depth transforms are computed from each print's distance to the
+ * top, so a single state change lets CSS transitions settle the whole pile.
+ */
+function AlbumStack({
+  prints,
+  side,
+  portrait = false,
+  className = "",
+}: {
+  prints: AlbumPrint[];
+  side: "left" | "right";
+  portrait?: boolean;
+  className?: string;
+}) {
+  const [head, setHead] = useState(0);
+  const [leafing, setLeafing] = useState(false);
+  const n = prints.length;
+  /* The top print always leaves outward — away from the promise. */
+  const out = side === "left" ? -1 : 1;
+
+  const leaf = () => {
+    if (leafing) return;
+    setLeafing(true);
+    window.setTimeout(() => {
+      setHead((h) => (h + 1) % n);
+      setLeafing(false);
+    }, 430);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={leaf}
+      aria-label={`Leaf through the photographs — ${head + 1} of ${n} on top`}
+      className={`group relative block cursor-pointer rounded-[8px] transition-transform duration-300 ease-(--ease-out-soft) hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-spruce/50 focus-visible:ring-offset-4 focus-visible:ring-offset-paper motion-reduce:transition-none ${className}`}
+    >
+      {prints.map((p, i) => {
+        const depth = (i - head + n) % n;
+        const fan = ALBUM_FAN[Math.min(depth, ALBUM_FAN.length - 1)];
+        const gone = leafing && depth === 0;
+        return (
+          <span
+            key={`${p.src}-${p.focus}`}
+            aria-hidden={depth !== 0 || undefined}
+            className={`papergrain block bg-vellum p-3 text-left shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_26px_46px_-24px_rgb(27_27_24_/_0.5)] motion-reduce:transition-none lg:pb-2 ${
+              depth === 0 ? "relative" : "absolute inset-0"
+            }`}
+            style={{
+              zIndex: n - depth,
+              transform: gone
+                ? `translate(${out * 118}%, -6%) rotate(${out * 16}deg)`
+                : `translate(${-out * fan.x}px, ${fan.y}px) rotate(${-out * fan.r}deg)`,
+              transition: "transform 480ms var(--ease-signature)",
+            }}
+          >
+            <span aria-hidden className="tape -top-2.5 left-5 -rotate-6" />
+            <span aria-hidden className="tape -top-2.5 right-7 rotate-3" />
+            <span className={`relative block overflow-hidden ${portrait ? "aspect-[3/4]" : "aspect-[4/3]"}`}>
+              {/* The plates are pre-encoded webp in /public — same reasoning as
+                  the album's prints: next/image would only re-encode them. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.src}
+                alt=""
+                width={960}
+                height={540}
+                draggable={false}
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{ objectPosition: p.focus }}
+              />
+            </span>
+            {/* Buried prints keep their caption strip blank — a pile shows
+                the mats' edges, not three captions deep of text. Below lg the
+                mats are too narrow to letter at all, so they go captionless. */}
+            <span
+              className="hidden items-baseline justify-between gap-3 pt-2 lg:flex"
+              style={{ opacity: depth === 0 ? 1 : 0, transition: "opacity 300ms var(--ease-out-soft)" }}
+            >
+              <span className="fnote min-w-0 truncate text-[9.5px] text-ink-soft">{p.caption}</span>
+              <span className="fnote shrink-0 whitespace-nowrap text-[9.5px] text-ink-faint">{p.clock}</span>
+            </span>
+          </span>
+        );
+      })}
+    </button>
   );
 }
 
