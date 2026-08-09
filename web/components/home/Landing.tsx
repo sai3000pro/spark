@@ -5,9 +5,10 @@
  *
  * I    Hero — the album lies open. The promise typeset dead-centre on the
  *      paper (each line rising from its mask, the last line rolling all
- *      evening), flanked by two piles of mounted photographs — the walk's
- *      painted plates, taped to vellum mats. Clicking a pile leafs it: the
- *      top print slips out and files itself under the bottom of the pile.
+ *      evening), flanked by two sprays of mounted photographs — the walk's
+ *      painted plates, taped to vellum mats and dealt outward across the
+ *      desk. Clicking a spray rotates its carousel: the top print swings
+ *      out past the fan and files itself into the deepest slot.
  *      The kept moments lap under it all as the seam into the journal.
  * II   The sieve — one pinned typeset scene on paper: everything the robot
  *      noticed, set as words on the page; scrolling crosses them out in ink,
@@ -138,11 +139,14 @@ const ALBUM_RIGHT: AlbumPrint[] = [
   { src: "/hero/keyart-b.webp", focus: "28% 62%", clock: "20:47", caption: "fireflies" },
 ];
 
-/* How the piles fan — depth 0 is the top print. Mirrored for the right pile. */
-const ALBUM_FAN = [
-  { r: -2.2, x: 0, y: 0 },
-  { r: 3.1, x: 12, y: 9 },
-  { r: -1.5, x: -10, y: 17 },
+/* How the prints spray — depth 0 is the top print, and each deeper print
+   steps further OUT, away from the promise: `x`/`y` are percentages of the
+   print's own box, `r` degrees, all mirrored through the pile's side. The top
+   print leans slightly inward, so the fan reads as dealt from the centre. */
+const ALBUM_SPRAY = [
+  { r: -4, x: -12, y: 0 },
+  { r: 8, x: 15, y: -13 },
+  { r: 16, x: 29, y: 15 },
 ];
 
 /* ── Night air — an opt-in ambient layer, synthesized on device ─────────── */
@@ -741,9 +745,10 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
 
       {/* ── I · hero — the album lies open ─────────────────────────────────
           A whole page of the journal: the promise typeset dead-centre, and
-          the walk's photographs piled on either side the way prints wait on
-          a desk to be mounted. Each pile is a button — clicking leafs the
-          top print out and files it under the bottom. */}
+          the walk's photographs sprayed out to either side, dealt across the
+          desk like a hand of cards fanned away from the type. Each spray is
+          a button — clicking rotates the carousel, the top print swinging
+          out past the fan and filing itself into the deepest slot. */}
       <section
         className="papergrain gridfield relative flex min-h-[calc(100svh-57px)] flex-col overflow-hidden bg-paper"
         aria-label="Introduction"
@@ -807,10 +812,11 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
             className="hidden w-[min(16.5vw,15rem)] justify-self-center lg:block"
           />
 
-          {/* Below lg the piles tuck side by side under the promise. */}
+          {/* Below lg the sprays tuck side by side under the promise, dealt
+              tighter so the two fans don't reach into each other. */}
           <div className="flex items-start justify-center gap-6 lg:hidden">
-            <AlbumStack prints={ALBUM_LEFT} side="left" className="w-[min(40vw,15rem)]" />
-            <AlbumStack prints={ALBUM_RIGHT} side="right" portrait className="mt-7 w-[min(31vw,11.5rem)]" />
+            <AlbumStack prints={ALBUM_LEFT} side="left" spread={0.45} className="w-[min(40vw,15rem)]" />
+            <AlbumStack prints={ALBUM_RIGHT} side="right" portrait spread={0.45} className="mt-7 w-[min(31vw,11.5rem)]" />
           </div>
         </div>
 
@@ -1640,21 +1646,29 @@ function PinRow() {
 }
 
 /**
- * A pile of the hero's photographs — the album's loose prints, waiting to be
- * mounted. The whole pile is one button: clicking it leafs, the top print
- * slipping out toward its edge of the desk and filing itself under the
- * bottom. Depth transforms are computed from each print's distance to the
- * top, so a single state change lets CSS transitions settle the whole pile.
+ * A spray of the hero's photographs — the album's loose prints dealt outward
+ * from the promise, each one a step further out and a few degrees looser, so
+ * both fans read as one hand of cards spread across the desk. The whole
+ * spray is one button: clicking it rotates the carousel — the top print
+ * swings out past the fan's far edge and files itself into the deepest slot
+ * while every other print glides one slot up. Slot transforms are computed
+ * from each print's distance to the top, so a single state change lets CSS
+ * transitions settle the whole spray.
+ *
+ * `spread` scales the fan's translation, not its rotation — the narrow
+ * below-lg piles sit side by side and would otherwise deal into each other.
  */
 function AlbumStack({
   prints,
   side,
   portrait = false,
+  spread = 1,
   className = "",
 }: {
   prints: AlbumPrint[];
   side: "left" | "right";
   portrait?: boolean;
+  spread?: number;
   className?: string;
 }) {
   const [head, setHead] = useState(0);
@@ -1681,7 +1695,7 @@ function AlbumStack({
     >
       {prints.map((p, i) => {
         const depth = (i - head + n) % n;
-        const fan = ALBUM_FAN[Math.min(depth, ALBUM_FAN.length - 1)];
+        const slot = ALBUM_SPRAY[Math.min(depth, ALBUM_SPRAY.length - 1)];
         const gone = leafing && depth === 0;
         return (
           <span
@@ -1692,9 +1706,12 @@ function AlbumStack({
             }`}
             style={{
               zIndex: n - depth,
+              /* `gone` overshoots past the deepest slot, so when the head
+                 advances the departed print settles back INWARD into its new
+                 place — the carousel's turn, not a teleport. */
               transform: gone
-                ? `translate(${out * 118}%, -6%) rotate(${out * 16}deg)`
-                : `translate(${-out * fan.x}px, ${fan.y}px) rotate(${-out * fan.r}deg)`,
+                ? `translate(${out * (36 * spread + 30)}%, -6%) rotate(${out * 26}deg)`
+                : `translate(${out * slot.x * spread}%, ${slot.y * spread}%) rotate(${out * slot.r}deg)`,
               transition: "transform 480ms var(--ease-signature)",
             }}
           >
