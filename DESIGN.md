@@ -1,7 +1,7 @@
 ---
-version: 5.4
+version: 5.5
 name: Spark-field-notes
-description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned deck of taped-down photographs leafed through one flick at a time, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate. v5.4: typographic choreography and honest pins — the hero's lines rise out of per-line masks and the last line rolls through its mask every 3.4s, section h2s split and rise line-by-line (SplitText, blur + fade), the map's numbered circle pins became specimen banners flying each moment's wall clock in its pressed ink (the pressed ink faces are now the journal's own six-ink cycle), the day bar plants wordless miniature pennants with vellum hover slips, NumberChip is a typewriter number circled by the hand-drawn pen ring, and the survey map's greens and water turned up from tinted paper to living moss and wet lagoon."
+description: "FIELD NOTES v5.2 — the robot as a field naturalist, and the site as its journal. Grainy cream paper (#faf4e3), deep pine ink (#16292e), and pressed specimen inks: brass #d5b473, moss #7d7730, clay #cf5e32, lagoon #476d73. One neo-grotesk (Schibsted Grotesk) carries display through UI; a typewriter mono (Fragment Mono) carries the journal's [ BRACKETED ] specimen tags. The landing is scroll cinema: a halftone-dot pine hero with a blur-cycling last line and a ticker of the kept moments, a pinned typeset sieve (the day's noticed words crossed out in ink until six circled entries remain — 'It noticed 9,984 things. It kept six.'), a smeared marquee band into three dark plates that draw their own instruments with honest count-ups and then keep idling (twinkling detections, a marching keep-line, a brass dot lapping the route), a pinned deck of taped-down photographs leafed through one flick at a time, a crossed-out-pages ledger of every discard, a three-line statement with 'Six were.' circled in clay, a numbered field-notes index answered on a taped ruled sheet, and a finale where the pane of glass floats dead-centre over the giant wordmark. An opt-in 'night air' layer (wind + crickets) is synthesized on device. v5.3: the app screens (walk / splat / bench) joined the journal — the walk is a cream survey map generated from the same palette, chrome rides on vellum slips, and the splat stage is the journal's one dark pine plate. v5.4: typographic choreography and honest pins — the hero's lines rise out of per-line masks and the last line rolls through its mask every 3.4s, section h2s split and rise line-by-line (SplitText, blur + fade), the map's numbered circle pins became specimen banners flying each moment's wall clock in its pressed ink (the pressed ink faces are now the journal's own six-ink cycle), the day bar plants wordless miniature pennants with vellum hover slips, NumberChip is a typewriter number circled by the hand-drawn pen ring, and the survey map's greens and water turned up from tinted paper to living moss and wet lagoon. v5.5: the two landings fused — the painted aurora night scene (art-directed plates, live CSS aurora, the sleeping blob companion who IS the start-a-trip button) opens the page under the journal's glass bar, the kept-moments ticker is the seam into the sieve, and the aurora album library folds in as 'The shelf': every album a taped vellum print of its moment thumbs, /library redirecting to /#albums."
 ---
 
 Applies to `web/`. Tokens live in `web/app/globals.css` (@theme) and are mirrored for
@@ -106,13 +106,16 @@ choreography, in order:
    changes overhead ("It noticed N things." → "It weighed 15 of its minutes." → "It kept
    six."), and six words get circled in their moment's ink with its clock. No-JS and
    reduced-motion land directly on the final crossed-out page.
-2. **Hero lines** — the headline's two lines rise out of per-line overflow masks on
-   arrival (the masks carry 0.12em of padding pulled back with margin so descenders
-   never clip). The last line then rolls all evening: every 3.4s it slides up and out
-   through its mask with a 5px wet-ink blur while the next slides in from below.
-   Section h2s share the grammar via `[data-lines]`: SplitText (after
-   `document.fonts.ready`) splits them into lines that rise staggered with blur +
-   fade — no masks, so tight leading keeps its descenders.
+2. **The hero** (v5.5) — the painted aurora scene, whole: art-directed plates
+   (`components/hero/LandingHero.tsx`), the live CSS aurora and fireflies, and the
+   blob companion asleep on the path. Hover wakes it (it walks, then asks); it IS
+   the start-a-trip button, and announces a live walk when one runs. The scene is
+   scoped by `.aurora-app` (its own tokens, `--appbar-h` matched to the journal's
+   glass bar) and hands off through the kept-moments ticker — a pine seam strip —
+   into the sieve (`#journal`). Section h2s reveal via `[data-lines]`: SplitText
+   (after `document.fonts.ready`) splits them into lines that rise staggered with
+   blur + fade — no masks, so tight leading keeps its descenders. Deep links into
+   the pinned page re-anchor on the first ScrollTrigger refresh.
 3. **Marquee bands** — CSS `marquee`/`marquee-track-reverse`, edge-masked; alternate
    copies wear `.smear` (blur 7px) for the smeared-ink read.
 4. **The gallery deck** — "Six moments, kept." pins on desktop as a pile of
@@ -135,6 +138,12 @@ choreography, in order:
    number. The field notes are a numbered index — selecting an entry circles its
    number in clay (CSS-transitioned dashoffset, `aria-expanded`-driven so the first
    entry arrives circled without JS) and swaps the taped, ruled, stamped answer sheet.
+   **The shelf** (`#albums`, v5.5) follows: every album as a taped vellum print — a
+   2×2 collage of its moment thumbs (odd counts promote the first print to
+   full-width), typewriter index + date on the mat, title and stats below, linking
+   to `/trip/[id]`. The aurora library page retired into it (`/library` redirects
+   to `/#albums`); the aurora scene and album components live on under
+   `components/hero` and `components/album`.
 8. **Night air** — opt-in ambient audio (brown-noise wind through a wandering lowpass,
    sparse cricket chirps), synthesized in Web Audio, toggled in the nav.
 

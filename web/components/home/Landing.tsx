@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * The landing: the robot's field journal, told as scroll cinema.
+ * The landing: the night the robot walked, pressed into its field journal.
  *
- * I    Hero — deep-pine ground, halftone dots, the promise with a
- *      blur-cycling last line, and the kept moments lapping under it.
+ * I    Hero — the painted aurora scene, the blob companion asleep on the path
+ *      (hover wakes it; it IS the start-a-trip button), and the kept moments
+ *      lapping under it as the seam into the journal.
  * II   The sieve — one pinned typeset scene on paper: everything the robot
  *      noticed, set as words on the page; scrolling crosses them out in ink,
  *      one by one, until six circled entries remain. "It kept six."
@@ -21,7 +22,9 @@
  *      they pass, with "Six were." circled in clay.
  * VII  The field notes — a numbered index whose active entry is circled by
  *      the same pen, answered on a taped, ruled, stamped sheet.
- * VIII Finale — pine again, the giant wordmark with the pane of glass
+ * VIII The shelf — every album the robot has pressed, as taped vellum prints;
+ *      the aurora library folded into the journal's own language.
+ * IX   Finale — pine again, the giant wordmark with the pane of glass
  *      floating dead-centre over it.
  *
  * Motion contract (DESIGN.md v5.1): markup defaults are the FINAL state and
@@ -39,8 +42,13 @@ import { CustomEase } from "gsap/CustomEase";
 import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
 import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from "lucide-react";
+import { LandingHero } from "@/components/hero/LandingHero";
+import { LiveTripProvider } from "@/components/shell/LiveTripProvider";
 import { KeyframeImg } from "@/components/system/ui";
+import { distance, duration, shortDate } from "@/lib/format";
+import type { ActiveTripSnapshot } from "@/lib/liveTrip";
 import { BRASS, CLAY, MOMENT_INKS } from "@/lib/theme";
+import type { TripListItem } from "@/lib/tripData";
 
 export interface LandingMoment {
   id: string;
@@ -80,6 +88,10 @@ export interface LandingProps {
   noticed: string[];
   moments: LandingMoment[];
   discards: LandingDiscard[];
+  /** Every pressed album, for the shelf. */
+  albums: TripListItem[];
+  /** Live-trip snapshot — the hero's blob announces a walk in progress. */
+  active: ActiveTripSnapshot | null;
 }
 
 gsap.registerPlugin(ScrollTrigger, CustomEase, SplitText);
@@ -96,8 +108,6 @@ function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-const HERO_CYCLE = ["in light.", "in place.", "in sound."];
 
 /* Where a moment's ink lands on paper — the journal's own pressed cycle. */
 const PAPER_INKS = ["#8a6d2f", "#476d73", "#c14f24", "#2c4347", "#7d7730", "#1b1b18"];
@@ -193,9 +203,8 @@ function useNightAir() {
 
 /* ═════════════════════════════════ page ════════════════════════════════ */
 
-export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discards }: LandingProps) {
+export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discards, albums, active }: LandingProps) {
   const root = useRef<HTMLDivElement>(null);
-  const heroWord = useRef<HTMLSpanElement>(null);
   const [note, setNote] = useState(0);
   const air = useNightAir();
 
@@ -308,43 +317,6 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         sieve.scrollTrigger?.kill();
         sieve.kill();
       });
-
-      // The hero's two lines rise out of their masks on arrival.
-      const heroIn = gsap.from("[data-hero-line]", {
-        yPercent: 110,
-        duration: 1.1,
-        ease: "reveal",
-        stagger: 0.12,
-        delay: 0.1,
-      });
-      killers.push(() => heroIn.kill());
-
-      // The last line rolls all evening: up and out through the mask, the
-      // next one in from below with the ink still wet.
-      let wi = 0;
-      const cycle = () => {
-        const node = heroWord.current;
-        if (!node) return;
-        gsap
-          .timeline()
-          .to(node, {
-            yPercent: -112,
-            filter: "blur(5px)",
-            duration: 0.5,
-            ease: "signature",
-            onComplete: () => {
-              wi = (wi + 1) % HERO_CYCLE.length;
-              node.textContent = HERO_CYCLE[wi];
-            },
-          })
-          .fromTo(
-            node,
-            { yPercent: 115, filter: "blur(5px)" },
-            { yPercent: 0, filter: "blur(0px)", duration: 0.65, ease: "reveal" },
-          );
-      };
-      const cycleIv = window.setInterval(cycle, 3400);
-      killers.push(() => window.clearInterval(cycleIv));
 
       // The three plates draw their instruments when they arrive.
       el.querySelectorAll<HTMLElement>("[data-plate]").forEach((plate) => {
@@ -533,6 +505,22 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         });
       }
 
+      // Deep links land where they aimed. The pinned sections inflate the page
+      // AFTER the browser's initial hash jump, so /#albums would strand the
+      // visitor two spacers short — re-run the jump once the pins have
+      // measured (the first ScrollTrigger refresh after setup).
+      if (window.location.hash) {
+        const target = document.querySelector(window.location.hash);
+        if (target) {
+          const reanchor = () => {
+            target.scrollIntoView();
+            ScrollTrigger.removeEventListener("refresh", reanchor);
+          };
+          ScrollTrigger.addEventListener("refresh", reanchor);
+          killers.push(() => ScrollTrigger.removeEventListener("refresh", reanchor));
+        }
+      }
+
       // One-shot reveals.
       const io = new IntersectionObserver(
         (entries) => {
@@ -648,6 +636,9 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
           <span aria-hidden className="pulse-dot inline-block h-[7px] w-[7px] rounded-full bg-clay" />
         </Link>
         <nav className="flex items-center gap-3 sm:gap-5">
+          <a href="#albums" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk md:block">
+            Albums
+          </a>
           <Link href="/walk" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
             The walk
           </Link>
@@ -674,80 +665,49 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         </nav>
       </header>
 
-      {/* ── I · hero ───────────────────────────────────────────────────── */}
-      <section
-        className="dotfield starfield relative -mt-[57px] flex min-h-svh flex-col overflow-hidden bg-pine pt-[57px]"
-        aria-label="Introduction"
+      {/* ── I · hero — the painted night the robot walked ──────────────────
+          The aurora scene, whole: art-directed plates, the live CSS aurora and
+          fireflies, and the blob companion asleep on the path (hover wakes it —
+          it IS the start-a-trip button, announcing a live walk when one runs).
+          `.aurora-app` scopes the scene's own tokens; --appbar-h matches the
+          glass bar so the plate fills exactly one viewport beneath it, and the
+          inline min-height override stops the scope class from padding the
+          scene to 100vh and leaving a bare navy band under the fold. */}
+      <div
+        className="aurora-app relative"
+        style={{ "--appbar-h": "57px", minHeight: 0 } as React.CSSProperties}
       >
-        <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-5 py-24 text-center sm:px-8">
-          <p className="fnote text-[11.5px] text-mist" data-reveal>
-            [ {dateLabel} · {placeLabel} ]
-          </p>
-          {/* Each line rises out of its own mask — the fold of the page. The
-              last line keeps rolling all evening: up and out, in from below.
-              The masks get a hair of padding (pulled back with margin) so
-              descenders never clip against the fold. */}
-          <h1 className="mt-6 text-[clamp(2.9rem,7vw,6rem)] leading-[1.04] text-milk">
-            <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
-              <span data-hero-line className="block">
-                A day, remembered
-              </span>
-            </span>
-            <span className="-mb-[0.12em] block overflow-hidden pb-[0.12em]">
-              <span data-hero-line className="block text-brass">
-                <span ref={heroWord} className="inline-block" style={{ willChange: "transform, filter" }}>
-                  {HERO_CYCLE[0]}
-                </span>
-              </span>
-            </span>
-          </h1>
-          <p
-            data-reveal
-            style={{ "--reveal-delay": "160ms" } as React.CSSProperties}
-            className="mt-7 max-w-[52ch] text-[15.5px] leading-relaxed text-mist sm:text-[17px]"
-          >
-            Spark follows a metre behind your walk, decides on its own which minutes
-            mattered, and rebuilds them as clouds of light pinned to the real park.
-          </p>
-          <div
-            data-reveal
-            style={{ "--reveal-delay": "240ms" } as React.CSSProperties}
-            className="mt-9 flex flex-wrap items-center justify-center gap-3"
-          >
-            <Link href="/walk" className="pill-brass px-6 py-3 text-[15px]">
-              <Plus size={15} strokeWidth={2} aria-hidden />
-              Step into the walk
-            </Link>
-            <a href="#decides" className="pill-ghost px-6 py-3 text-[15px] text-milk">
-              How it decides
-            </a>
-          </div>
-        </div>
+        <LiveTripProvider initial={active}>
+          <LandingHero />
+        </LiveTripProvider>
+      </div>
 
-        {/* The kept moments, lapping like a ticker of the day. */}
-        <div
-          aria-hidden
-          className="relative z-10 overflow-hidden border-t border-milk/10 py-4"
-          style={{
-            maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-            WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-          }}
-        >
-          <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
-            {[0, 1].map((dup) => (
-              <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
-                {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
-                {"  ·  "}
-              </span>
-            ))}
-          </div>
+      {/* The seam: the kept moments lapping like a ticker of the day — the
+          night scene handing off to the journal that pressed it. */}
+      <div
+        aria-hidden
+        className="relative overflow-hidden border-y border-milk/10 bg-pine py-4"
+        style={{
+          maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
+          WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
+        }}
+      >
+        <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
+          {[0, 1].map((dup) => (
+            <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
+              {dateLabel} · {placeLabel}  ·  {moments.map((mo) => `${mo.clock} — ${mo.title}`).join("  ·  ")}
+              {"  ·  "}
+            </span>
+          ))}
         </div>
-      </section>
+      </div>
 
       {/* ── II · the sieve ─────────────────────────────────────────────── */}
       <section
         data-sieve
-        className="papergrain gridfield relative flex h-svh min-h-[620px] flex-col overflow-hidden bg-paper"
+        id="journal"
+        tabIndex={-1}
+        className="papergrain gridfield relative flex h-svh min-h-[620px] flex-col overflow-hidden bg-paper outline-none"
         aria-label="Everything the robot noticed, crossed out down to what it kept"
       >
         {/* Captions. C is the markup default — the no-JS and reduced-motion
@@ -1248,7 +1208,88 @@ export function Landing({ dateLabel, placeLabel, stats, noticed, moments, discar
         </div>
       </section>
 
-      {/* ── VIII · finale ──────────────────────────────────────────────── */}
+      {/* ── VIII · the shelf ───────────────────────────────────────────────
+          The aurora library, folded into the journal: every album the robot
+          has pressed, mounted as taped vellum prints. One walk is told above;
+          the rest live here. */}
+      <section
+        id="albums"
+        tabIndex={-1}
+        className="papergrain gridfield relative border-t border-ink/10 bg-paper py-20 outline-none sm:py-24"
+        aria-label="Every album on the shelf"
+      >
+        <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h2 data-lines className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
+              The shelf.
+            </h2>
+            <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
+              [ {albums.length} ALBUMS · ONE EVENING TOLD ABOVE ]
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
+            {albums.map((t, i) => {
+              const tilt = [-0.9, 0.7, -0.5, 0.9, -0.7, 0.5, -0.8][i % 7];
+              return (
+                <Link
+                  key={t.id}
+                  href={`/trip/${t.id}`}
+                  data-reveal
+                  style={{ "--reveal-delay": `${(i % 3) * 90}ms`, "--tilt": `${tilt}deg` } as React.CSSProperties}
+                  className="group block"
+                >
+                  <article className="relative">
+                    <div className="papergrain relative rotate-[var(--tilt)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_24px_44px_-24px_rgb(27_27_24_/_0.5)] transition-transform duration-500 ease-(--ease-reveal) group-hover:-translate-y-2 group-hover:rotate-0">
+                      <span aria-hidden className="tape -top-2.5 left-6 -rotate-5" />
+                      <span aria-hidden className="tape -top-2.5 right-8 rotate-3" />
+                      {/* Odd counts still fill the mat: with 1 or 3 prints the
+                          first goes full-width, so the collage never shows a
+                          bare quadrant. */}
+                      <div className="grid grid-cols-2 gap-1 overflow-hidden">
+                        {t.momentThumbs.slice(0, 4).map((th, k, arr) => {
+                          const wide = arr.length % 2 === 1 && k === 0;
+                          return (
+                            <KeyframeImg
+                              key={k}
+                              keyframe={{ placeholderSeed: th.seed, hue: th.hue, url: th.url }}
+                              alt=""
+                              width={420}
+                              height={315}
+                              className={`w-full object-cover ${wide ? "col-span-2 aspect-[8/3]" : "aspect-[4/3]"}`}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-baseline justify-between pt-2.5">
+                        <p className="fnote text-[10px] text-ink-faint">[ {String(i + 1).padStart(3, "0")} ]</p>
+                        <p className="fnote text-[10px] text-ink-faint">{shortDate(t.startedAt)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 px-1">
+                      <h3 className="flex items-baseline gap-2 text-[21px] leading-snug text-ink">
+                        {t.title}
+                        <ArrowUpRight
+                          size={15}
+                          strokeWidth={2}
+                          className="shrink-0 translate-y-[2px] text-brass-deep transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                          aria-hidden
+                        />
+                      </h3>
+                      <p className="tag mt-1 text-[12.5px] text-ink-soft">
+                        {t.placeLabel} · {t.stats.momentCount} moments · {distance(t.stats.distanceM)} ·{" "}
+                        {duration(t.stats.durationSec)}
+                      </p>
+                    </div>
+                  </article>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── IX · finale ────────────────────────────────────────────────── */}
       <section className="dotfield starfield relative overflow-hidden bg-pine pb-10 sm:pb-14" aria-label="Enter the app">
         <div className="relative z-10 mx-auto max-w-6xl px-5 pt-24 sm:px-8 sm:pt-32">
           <div className="flex flex-wrap items-end justify-between gap-8">

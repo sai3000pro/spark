@@ -139,14 +139,14 @@ export function HeroBlobButton() {
   if (isLive) {
     return (
       <a
-        href="#session"
+        href="/walk"
         data-state={state}
         style={style}
         className="hero-blob"
         aria-label={
           state === "recording"
-            ? `Trip in progress, ${elapsedLabel(elapsedSec)}. Jump to the live session`
-            : "Building the album. Jump to the live session"
+            ? `Trip in progress, ${elapsedLabel(elapsedSec)}. Open the walk`
+            : "Building the album. Open the walk"
         }
       >
         {inner}

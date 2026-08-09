@@ -15,14 +15,20 @@
  * designed. It is fog-grey rather than brand orange because the blob above it is
  * the page's only primary, and a second orange thing 200px below would compete.
  */
-export function ScrollCue() {
+export function ScrollCue({
+  href = "#albums",
+  label = "Albums",
+}: {
+  href?: string;
+  label?: string;
+}) {
   return (
     <a
-      href="#albums"
-      aria-label="Skip to your albums"
+      href={href}
+      aria-label={`Skip to ${label.toLowerCase()}`}
       className="hero-cue group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
     >
-      <span className="eyebrow transition-colors group-hover:text-fog-200">Albums</span>
+      <span className="eyebrow transition-colors group-hover:text-fog-200">{label}</span>
       <svg
         width="14"
         height="14"

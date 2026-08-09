@@ -5,9 +5,10 @@ import {
   type LandingMoment,
 } from "@/components/home/Landing";
 import { clockTime, compactNumber, distance, duration, tripDate } from "@/lib/format";
+import { getActiveTrip } from "@/lib/liveTrip";
 import { LABEL_FAMILIES } from "@/lib/mock/labels";
 import { describeTrigger } from "@/lib/triggers";
-import { getTripView } from "@/lib/tripData";
+import { getTripView, listAllTrips } from "@/lib/tripData";
 
 /**
  * The landing. Everything the page needs is composed here on the server — the
@@ -87,6 +88,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       noticed={noticed}
       moments={moments}
       discards={discards}
+      albums={listAllTrips()}
+      active={getActiveTrip()}
     />
   );
 }

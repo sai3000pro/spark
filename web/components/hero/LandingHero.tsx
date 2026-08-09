@@ -131,7 +131,7 @@ export function LandingHero() {
         </p>
       </div>
 
-      <ScrollCue />
+      <ScrollCue href="#journal" label="The journal" />
     </section>
   );
 }
