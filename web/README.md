@@ -326,14 +326,33 @@ Change a weight and run `npm run verify`; it fails loudly if a moment stops bein
 | `POST /api/ingest/detections` | Validates + scores, doesn't persist. One `TODO` marks the DB insert. |
 | `POST /api/ingest/moments` | Same shape. Invalid payloads get a 400 naming the field. |
 | `GET /api/trips/:tripId` | Reads `lib/mock`; swap for the DB behind the same `TripView` shape. |
-| `components/relive/SplatViewer.tsx` | Switches purely on `moment.splat.status`. Drop a `.spz` in `public/mock/splats/` and it renders for real. |
-| `components/atlas/AtlasMap.tsx` | Keep `{ path, moments }`; swap internals for MapLibre if you get GPS. |
+| `components/relive/SplatViewer.tsx` | Switches purely on `moment.splat.status`. Drop a `.ply` / `.spz` / `.splat` in `public/mock/splats/`, point a moment's `splat.url` at it, and it renders for real. |
+| `components/atlas/FieldMap.tsx` | Keep `{ path, moments, geo }`; MapLibre over the trip's own calibration. Real GPS replaces `lib/geo.ts`. |
 | `lib/momentQA.ts` / `lib/tripQA.ts` | Replace the templated `run()` bodies with a Claude call; keep the citation ids. |
 | `components/relive/ReliveOverlay.tsx` | The soundtrack card opens `music.spotifyUri`; wire the playback SDK here. |
 
 The splat stage probes the asset with a `HEAD` request first and falls back to a synthetic point
 cloud built from each object's `worldPos`, badged honestly as `synthetic preview`. So the demo works
 with zero assets and upgrades itself the moment a real capture appears.
+
+### The splat renderer
+
+The real path is **`@mkkellogg/gaussian-splats-3d` 0.4.7, loaded from a CDN on three 0.160.1**
+(`lib/splat/gs3d.ts`, rendered by `components/relive/GS3DStage.tsx`). That is a *second, isolated*
+three.js: the app bundles 0.185 for React Three Fiber, and the two must never exchange objects —
+which is why the real stage is a standalone `Viewer` with its own canvas rather than mkkellogg's
+`DropInViewer`, and why `SplatViewer` mounts exactly one of the two subtrees at a time. Chrome logs
+`Multiple instances of Three.js being imported`; that is expected and load-bearing, not a bug.
+
+Two settings there are not optional: `sharedMemoryForWorkers: false` (it defaults to `true` in
+0.4.7 and that path needs COOP/COEP cross-origin isolation, which this app does not set) and
+`showLoadingUI: false` (the library's own spinner clashes with the journal; the stage draws its own
+`[ loading · NN% ]` chip). `@sparkjsdev/spark` was the previous renderer and is now an unused
+dependency.
+
+`SplatRef.view` (`lib/types.ts`) carries per-capture framing — camera up/position/look-at, scene
+rotation, scale, alpha threshold. Captures arrive in whatever frame the reconstructor used;
+INRIA-layout PLYs are y-down, which is what `trip_summerhacks`' build room sets `cameraUp` for.
 
 ## Demo path
 

@@ -347,6 +347,12 @@ export const waterlooPark: TripSpec = {
     region: "Waterloo, ON",
     country: "Canada",
     origin: { lat: 43.4735, lng: -80.531 },
+    // The map calibration, deliberately ~860 m from the globe pin above: this is
+    // the park's south-west path entrance near Father David Bauer Dr, nudged
+    // with the 8° bearing until the authored walk hugs the real lawns rather
+    // than crossing Silver Lake. `origin` moves the pin, these move the walk.
+    mapOrigin: { lat: 43.4672, lng: -80.5372 },
+    bearingDeg: 8,
   },
   start: PLACES.start,
   end: PLACES.end,

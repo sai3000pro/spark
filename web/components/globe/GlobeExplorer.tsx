@@ -12,13 +12,14 @@
  * of the list, not independent controls. The canvas gets one summary label.
  */
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState } from "react";
 import { GlobeStage } from "@/components/globe/GlobeStage";
 import { GlobeFlat } from "@/components/globe/GlobeFlat";
 import { Keyframe } from "@/components/Keyframe";
 import { distance, duration, shortDate } from "@/lib/format";
 import { formatGeo } from "@/lib/globe/geo";
 import type { GlobeView } from "@/lib/globeData";
+import { useReducedMotion } from "@/lib/useReducedMotion";
 
 export function GlobeExplorer({ view }: { view: GlobeView }) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
@@ -253,25 +254,6 @@ function LegendRow({
       />
       <span className="font-mono text-[10px] text-fog-400">{label}</span>
     </div>
-  );
-}
-
-/**
- * globals.css already neutralises CSS animation under prefers-reduced-motion, but
- * WebGL is invisible to CSS — so the preference has to be read explicitly.
- *
- * Safe from hydration mismatch because this whole tree is loaded with ssr:false;
- * the server snapshot is never used.
- */
-function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    () => false,
   );
 }
 

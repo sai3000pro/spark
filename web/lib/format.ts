@@ -85,13 +85,19 @@ function inTripZone(isoStart: string, offsetSec: number): Date {
   return new Date(new Date(isoStart).getTime() + offsetSec * 1000 + offsetMin * 60_000);
 }
 
-/** "3:18 PM", in the trip's local time — not the viewer's. */
+/**
+ * "3:18 PM", in the trip's local time — not the viewer's.
+ *
+ * Formatted by hand, NOT toLocaleTimeString: en-CA renders "3:18 p.m." on some
+ * ICU builds and "3:18 PM" on others, and the server and Safari disagree —
+ * which is a hydration mismatch on every clock the overlay prints.
+ */
 export function clockTime(isoStart: string, offsetSec = 0): string {
-  return inTripZone(isoStart, offsetSec).toLocaleTimeString("en-CA", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  });
+  const d = inTripZone(isoStart, offsetSec);
+  const h24 = d.getUTCHours();
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  const min = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${h12}:${min} ${h24 < 12 ? "AM" : "PM"}`;
 }
 
 /** "19:42" — the trip's wall clock in 24h, compact enough for a specimen tag. */

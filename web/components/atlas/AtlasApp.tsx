@@ -18,11 +18,11 @@ import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { clockShort, distance, duration, tripDate } from "@/lib/format";
-import { localToLngLatAt } from "@/lib/geo";
+import { makeGeo } from "@/lib/geo";
 import { formatGeo } from "@/lib/globe/geo";
 import type { GlobeView } from "@/lib/globeData";
-import type { TripView } from "@/lib/tripData";
-import type { Moment, ObjectIndexEntry, Vec2 } from "@/lib/types";
+import type { AtlasView, TripView } from "@/lib/tripData";
+import type { Vec2 } from "@/lib/types";
 
 // The globes are WebGL and mean nothing to the server — loaded lazily so the
 // map is interactive before three.js ever crosses the wire.
@@ -38,16 +38,7 @@ const GlobeOverlay = dynamic(
 /** A 95-minute walk replays in ~48 seconds. */
 const REPLAY_SPEED = 120;
 
-export interface NavTargetMap {
-  [momentId: string]: { [trackId: string]: { pos: Vec2; heading: number } };
-}
-
-interface Props {
-  trip: TripView;
-  /** Full moments — transcript, objects, keyframes, splat refs. */
-  moments: Moment[];
-  entries: ObjectIndexEntry[];
-  navTargets: NavTargetMap;
+interface Props extends AtlasView {
   /** Every walk pinned on the Earth — what the pocket globe opens into. */
   globe: GlobeView;
   initialMomentId?: string | null;
@@ -59,6 +50,7 @@ export function AtlasApp({
   moments,
   entries,
   navTargets,
+  geo,
   globe,
   initialMomentId,
   initialAnchor,
@@ -144,7 +136,7 @@ export function AtlasApp({
   return (
     <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
       <FieldMap
-        origin={trip.origin}
+        geo={geo}
         plate={
           // No card: the title block is survey lettering laid on the ground,
           // haloed in milk the way the map's own labels are.
@@ -170,7 +162,7 @@ export function AtlasApp({
             </p>
             <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">
               {(() => {
-                const [lng, lat] = localToLngLatAt(trip.origin, trip.path[0].pos);
+                const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);
                 return `[ ${formatGeo({ lat, lng })} ]`;
               })()}
             </p>

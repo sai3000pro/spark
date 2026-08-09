@@ -35,14 +35,14 @@ if (typeof window !== "undefined") {
   setWorkerUrl("/map-lib/maplibre-gl-worker.mjs");
 }
 import { CloudLayer } from "@/components/atlas/CloudLayer";
-import { localToLngLatAt, tripBoundsAt } from "@/lib/geo";
+import { makeGeo, type GeoRef } from "@/lib/geo";
 import { BRASS, CLAY, PINE, inkForMoment, type MomentInk } from "@/lib/theme";
 import type { MomentSummary } from "@/lib/tripData";
-import type { GeoPoint, TrackPoint, Vec2 } from "@/lib/types";
+import type { TrackPoint, Vec2 } from "@/lib/types";
 
 interface Props {
-  /** Where the trip's local metre frame is pinned on Earth — `trip.origin`. */
-  origin: GeoPoint;
+  /** This trip's map calibration — where its local metres land on Earth. */
+  geo: GeoRef;
   /**
    * The trip's title block — milk-haloed lettering that leans back with the
    * map camera's pitch (level lines, no bearing roll), not a floating card.
@@ -67,13 +67,17 @@ const line = (coords: [number, number][]) =>
     geometry: { type: "LineString", coordinates: coords },
   }) as const;
 
-export function FieldMap({ origin, plate, path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
+export function FieldMap({ geo, plate, path, moments, clocks, activeId, reachedT, robotPos, onHover, onOpen }: Props) {
   const mapRef = useRef<MapRef>(null);
 
-  const routeCoords = useMemo(() => path.map((p) => localToLngLatAt(origin, p.pos)), [origin, path]);
+  // Precomputed once per trip — the path is 350+ points and re-projects on every
+  // replay frame. makeGeo memoizes by value, so an equal ref returns the same one.
+  const g = useMemo(() => makeGeo(geo), [geo]);
+
+  const routeCoords = useMemo(() => path.map((p) => g.localToLngLat(p.pos)), [g, path]);
   const bounds = useMemo(
-    () => tripBoundsAt(origin, [...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
-    [origin, path, moments],
+    () => g.tripBounds([...path.map((p) => p.pos), ...moments.map((m) => m.placePos)]),
+    [g, path, moments],
   );
 
   /** The replayed portion — the route the pen has re-drawn so far. */
@@ -154,7 +158,7 @@ export function FieldMap({ origin, plate, path, moments, clocks, activeId, reach
 
         {/* The kept moments — specimen banners planted where the minutes were kept. */}
         {moments.map((m, i) => {
-          const [lng, lat] = localToLngLatAt(origin, m.placePos);
+          const [lng, lat] = g.localToLngLat(m.placePos);
           return (
             <Marker key={m.id} longitude={lng} latitude={lat} anchor="bottom" style={{ zIndex: activeId === m.id ? 3 : 2 }}>
               <SurveyMarker
@@ -174,7 +178,7 @@ export function FieldMap({ origin, plate, path, moments, clocks, activeId, reach
 
         {/* The robot, re-walking its odometry. */}
         {robotPos && (
-          <Marker longitude={localToLngLatAt(origin, robotPos)[0]} latitude={localToLngLatAt(origin, robotPos)[1]} anchor="center" style={{ zIndex: 4 }}>
+          <Marker longitude={g.localToLngLat(robotPos)[0]} latitude={g.localToLngLat(robotPos)[1]} anchor="center" style={{ zIndex: 4 }}>
             <RobotDot />
           </Marker>
         )}

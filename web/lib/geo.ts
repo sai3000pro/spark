@@ -1,109 +1,132 @@
 /**
- * Georeference: the robot's local metre frame → the real city.
+ * Georeference for the MAP: a trip's local metre frame → real lng/lat.
  *
- * The robot navigates in its own local metric frame (x east, z south, metres).
- * The map is real, so those metres are pinned onto the actual streets with a
- * similarity transform anchored at STACKT Market's courtyard (Bathurst & Front,
- * Toronto) — the walk's start point. BEARING is 0 because the flagship trip is
- * AUTHORED from real lat/lng waypoints via `lngLatToLocal`, so the local frame
- * is already true-north aligned.
+ * The robot navigates in its own local metric frame (x east, z south, metres —
+ * see the PLACES block in any spec under lib/mock/trips). The map is real, so
+ * those metres are pinned onto the actual world with a similarity transform:
+ * an origin the walk hangs from, and a bearing that rotates the authored frame
+ * until the route hugs the real paths instead of cutting across them.
  *
- * This is an authored calibration, not surveying. Swapping in real robot GPS =
- * replace localToLngLat with the odometry fusion output and delete the
- * constants.
+ * This is an authored calibration, not surveying: nudge a trip's `mapOrigin` /
+ * `bearingDeg` (lib/mock/buildTrip.ts, TripSpec["place"]) until the walk sits
+ * right on the tiles, the same way the old SVG map nudged its blobs. Swapping in
+ * real robot GPS = feed the odometry fusion output straight to the map and
+ * delete the calibration.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * NOT the same thing as lib/globe/geo.ts, and they must not be merged.
+ *
+ *   this file          the map. Rotated. M_PER_DEG_LAT = 110_574, and longitude
+ *                      scales by cos(origin latitude).
+ *   lib/globe/geo.ts   the globe. Unrotated. 111_320 for BOTH axes.
+ *
+ * The constants differ by ~0.7% in latitude, which is ~4 m over Waterloo Park's
+ * walk — invisible on a spinning globe, and a moment pin sitting off the path on
+ * a 15.4-zoom map. A trip's `place.origin` anchors its globe pin; `place.mapOrigin`
+ * anchors its walk. For most trips they are the same point. For Waterloo Park
+ * they are deliberately ~860 m apart, and moving either one moves a different
+ * thing.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Per trip rather than module-level, because there are eight trips in eight
+ * places. Build one with makeGeo(ref) and keep it for the render — the trig is
+ * precomputed once per trip, which is what the old module constants bought and
+ * what a 700-point path re-projected every frame needs.
  */
 import type { GeoPoint, Vec2 } from "./types";
 
-/** Where local (0, 0) lands on Earth — STACKT Market's courtyard. */
-const ORIGIN = { lng: -79.4022, lat: 43.6408 };
+/** A trip's map calibration, small enough to cross the RSC boundary as a POJO. */
+export interface GeoRef {
+  origin: GeoPoint;
+  /** Rotation of the local +x axis relative to due east, in degrees CCW. */
+  bearingDeg: number;
+}
 
-/** Rotation of the local +x axis relative to due east, in degrees CCW. */
-const BEARING_DEG = 0;
+export interface TripGeo {
+  ref: GeoRef;
+  /** Local [x, z] metres → [lng, lat]. Local +x → roughly east, +z → south. */
+  localToLngLat(pos: Vec2): [number, number];
+  /** The whole trip's bounding box in lng/lat, padded, for fitBounds. */
+  tripBounds(points: Vec2[], padM?: number): [[number, number], [number, number]];
+}
 
-/** Metres per degree at the city's latitude. */
+/** Metres per degree of latitude. Constant enough at any inhabited latitude. */
 const M_PER_DEG_LAT = 110_574;
-const M_PER_DEG_LNG = 111_320 * Math.cos((ORIGIN.lat * Math.PI) / 180);
 
-const rot = (BEARING_DEG * Math.PI) / 180;
-const cos = Math.cos(rot);
-const sin = Math.sin(rot);
+const cache = new Map<string, TripGeo>();
+
+const keyOf = (ref: GeoRef) => `${ref.origin.lat}|${ref.origin.lng}|${ref.bearingDeg}`;
 
 /**
- * Local [x, z] metres → [lng, lat], anchored at any trip's origin.
+ * Builds (and memoizes) the transform for one trip.
  *
- * Same constants and rotation as the flagship path below — the globe made the
- * walk multi-trip, and every trip's local frame is metres around its own
- * `place.origin`. The lng scale is recomputed per origin latitude; the
- * flagship's own conversion stays bit-identical (cos is monotone in between).
+ * Memoized by value so two callers holding equal-but-distinct GeoRef objects —
+ * the server builds one per request — get the same instance back, and a
+ * `useMemo` keyed on it stays honest.
  */
-export function localToLngLatAt(origin: GeoPoint, [x, z]: Vec2): [number, number] {
-  const east = x * cos - z * sin;
-  const south = x * sin + z * cos;
+export function makeGeo(ref: GeoRef): TripGeo {
+  const key = keyOf(ref);
+  const hit = cache.get(key);
+  if (hit) return hit;
+
+  const { origin } = ref;
   const mPerDegLng = 111_320 * Math.cos((origin.lat * Math.PI) / 180);
-  return [origin.lng + east / mPerDegLng, origin.lat - south / M_PER_DEG_LAT];
+
+  const rot = (ref.bearingDeg * Math.PI) / 180;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+
+  const localToLngLat = ([x, z]: Vec2): [number, number] => {
+    // Rotate the local frame, then convert metres to degrees. z grows southward
+    // in the authored data (screen-style), so it subtracts from latitude.
+    const east = x * cos - z * sin;
+    const south = x * sin + z * cos;
+    return [origin.lng + east / mPerDegLng, origin.lat - south / M_PER_DEG_LAT];
+  };
+
+  const tripBounds = (
+    points: Vec2[],
+    padM = 60,
+  ): [[number, number], [number, number]] => {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const [x, z] of points) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    }
+    const [w, s] = localToLngLat([minX - padM, maxZ + padM]);
+    const [e, n] = localToLngLat([maxX + padM, minZ - padM]);
+    return [
+      [Math.min(w, e), Math.min(s, n)],
+      [Math.max(w, e), Math.max(s, n)],
+    ];
+  };
+
+  const geo: TripGeo = { ref, localToLngLat, tripBounds };
+  cache.set(key, geo);
+  return geo;
 }
 
-/** Local [x, z] metres → [lng, lat]. Local +x → east, +z → south. */
-export function localToLngLat([x, z]: Vec2): [number, number] {
-  const east = x * cos - z * sin;
-  const south = x * sin + z * cos;
-  return [ORIGIN.lng + east / M_PER_DEG_LNG, ORIGIN.lat - south / M_PER_DEG_LAT];
-}
-
-/**
- * The inverse, for AUTHORING: real [lat, lng] → local [x, z] metres. The
- * flagship trip's route is written as coordinates read off the real streets
- * and parks, so the drawn walk genuinely follows Bathurst, Fort York Blvd and
- * the Martin Goodman Trail instead of crossing buildings. (Assumes
- * BEARING_DEG = 0, which is why it is 0.)
+/* ── Authoring helper ──────────────────────────────────────────────────────────
+ *
+ * The STACKT flagship's route is AUTHORED from real lat/lng waypoints read off
+ * the actual streets and parks (see lib/mock/trips/stackt-market.ts), so the
+ * drawn walk genuinely follows Bathurst, Fort York Blvd and the Martin Goodman
+ * Trail instead of crossing buildings. This is the inverse transform for that
+ * one authoring anchor — local frame true-north aligned (bearing 0), pinned at
+ * STACKT Market's courtyard, matching that trip's `place.origin` exactly.
  */
+const STACKT_ORIGIN = { lng: -79.4022, lat: 43.6408 };
+const STACKT_M_PER_DEG_LNG = 111_320 * Math.cos((STACKT_ORIGIN.lat * Math.PI) / 180);
+
+/** Real [lat, lng] → the STACKT walk's local [x, z] metres. Authoring only. */
 export function lngLatToLocal(lat: number, lng: number): Vec2 {
   return [
-    Number(((lng - ORIGIN.lng) * M_PER_DEG_LNG).toFixed(1)),
-    Number(((ORIGIN.lat - lat) * M_PER_DEG_LAT).toFixed(1)),
-  ];
-}
-
-/** `tripBounds`, anchored at any trip's origin. */
-export function tripBoundsAt(
-  origin: GeoPoint,
-  points: Vec2[],
-  padM = 60,
-): [[number, number], [number, number]] {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minZ = Infinity;
-  let maxZ = -Infinity;
-  for (const [x, z] of points) {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (z < minZ) minZ = z;
-    if (z > maxZ) maxZ = z;
-  }
-  const [w, s] = localToLngLatAt(origin, [minX - padM, maxZ + padM]);
-  const [e, n] = localToLngLatAt(origin, [maxX + padM, minZ - padM]);
-  return [
-    [Math.min(w, e), Math.min(s, n)],
-    [Math.max(w, e), Math.max(s, n)],
-  ];
-}
-
-/** The whole trip's bounding box in lng/lat, padded, for fitBounds. */
-export function tripBounds(points: Vec2[], padM = 60): [[number, number], [number, number]] {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minZ = Infinity;
-  let maxZ = -Infinity;
-  for (const [x, z] of points) {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (z < minZ) minZ = z;
-    if (z > maxZ) maxZ = z;
-  }
-  const [w, s] = localToLngLat([minX - padM, maxZ + padM]);
-  const [e, n] = localToLngLat([maxX + padM, minZ - padM]);
-  return [
-    [Math.min(w, e), Math.min(s, n)],
-    [Math.max(w, e), Math.max(s, n)],
+    Number(((lng - STACKT_ORIGIN.lng) * STACKT_M_PER_DEG_LNG).toFixed(1)),
+    Number(((STACKT_ORIGIN.lat - lat) * M_PER_DEG_LAT).toFixed(1)),
   ];
 }

@@ -3,19 +3,25 @@
 /**
  * The moment, in 3D — the stage inside the takeover.
  *
- * Switches purely on `moment.splat`, which is the seam that lets the real
- * reconstruction land without touching this file:
+ * Switches purely on `moment.splat`, which is the seam that lets a real
+ * reconstruction land without touching the rest of the app:
  *
- *   ready + file present  → Spark SplatMesh (the real thing)
+ *   ready + file present  → GS3DStage — @mkkellogg/gaussian-splats-3d (the real thing)
  *   anything else         → synthetic Gaussian cloud, badged honestly
  *
- * Object anchors are identical in every mode, so the find → "step inside" →
+ * The two are mutually exclusive subtrees running on two different three.js
+ * builds — the bundled 0.185 under React Three Fiber for the preview, an
+ * isolated CDN 0.160.1 for the real renderer (lib/splat/gs3d.ts explains why).
+ * They never share an object, and only one is mounted at a time.
+ *
+ * Object anchors are identical in both, so the find → "step inside" →
  * camera-fly handoff behaves the same whether or not a capture exists yet.
  */
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { GS3DStage } from "@/components/relive/GS3DStage";
 import { buildSyntheticCloud } from "@/lib/splat/syntheticCloud";
 import { colorForLabel } from "@/lib/mock/labels";
 import { compactNumber } from "@/lib/format";
@@ -30,20 +36,25 @@ interface Props {
   onSelectObject: (trackId: string | null) => void;
 }
 
-type Mode = "checking" | "spark" | "synthetic";
+type Mode = "checking" | "real" | "synthetic";
 
 export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   const [mode, setMode] = useState<Mode>(() =>
     moment.splat.status === "ready" && moment.splat.url ? "checking" : "synthetic",
   );
+  // Two numbers, because a big capture has two slow phases and conflating them
+  // parks the chip at "100%" for minutes: `progress` is the download, `ready` is
+  // the scene actually drawing.
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
 
-  // Probe for the asset instead of letting Spark fail: a 404 inside the
-  // renderer is a worse failure than not starting it.
+  // Probe for the asset instead of letting the renderer fail: a 404 deep inside
+  // a splat loader is a worse failure than never starting it.
   useEffect(() => {
     if (mode !== "checking" || !moment.splat.url) return;
     let alive = true;
     fetch(moment.splat.url, { method: "HEAD" })
-      .then((res) => alive && setMode(res.ok ? "spark" : "synthetic"))
+      .then((res) => alive && setMode(res.ok ? "real" : "synthetic"))
       .catch(() => alive && setMode("synthetic"));
     return () => {
       alive = false;
@@ -61,49 +72,72 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
     [moment],
   );
 
+  // Stable across renders so a hover never re-mounts the splat scene.
+  const fallBack = useCallback(() => setMode("synthetic"), []);
+  const markReady = useCallback(() => setReady(true), []);
+
+  const loading = mode === "real" && !ready;
+
   return (
-    // Definite size from the parent; R3F refuses to initialise on a zero box.
+    // Definite size from the parent; neither renderer initialises on a zero box.
     <div className="absolute inset-0">
-      <Canvas
-        // antialias off per Spark's guidance — costs a lot, buys nothing for splats.
-        gl={{ antialias: false }}
-        dpr={[1, 1.75]}
-        camera={{ position: [0, 1.9, 5.6], fov: 52, near: 0.05, far: 260 }}
-      >
-        <color attach="background" args={[CANVAS_BG]} />
-        <ambientLight intensity={0.6} />
-
-        <Suspense fallback={null}>
-          {mode === "spark" && moment.splat.url ? (
-            <SparkSplat url={moment.splat.url} onFail={() => setMode("synthetic")} />
-          ) : (
-            <PointCloud cloud={cloud} />
-          )}
-        </Suspense>
-
-        <Anchors anchors={cloud.anchors} focusTrackId={focusTrackId} onSelect={onSelectObject} />
-
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.08}
-          minDistance={1.2}
-          maxDistance={26}
-          maxPolarAngle={Math.PI * 0.495}
-          target={[0, 0.8, 0]}
+      {mode === "real" && moment.splat.url ? (
+        <GS3DStage
+          url={moment.splat.url}
+          view={moment.splat.view}
+          anchors={cloud.anchors}
+          focusTrackId={focusTrackId}
+          onSelectObject={onSelectObject}
+          onProgress={setProgress}
+          onReady={markReady}
+          onFail={fallBack}
         />
-        <CameraRig anchors={cloud.anchors} focusTrackId={focusTrackId} />
-      </Canvas>
+      ) : (
+        <Canvas
+          // antialias off — costs a lot, buys nothing for a point/splat cloud.
+          gl={{ antialias: false }}
+          dpr={[1, 1.75]}
+          camera={{ position: [0, 1.9, 5.6], fov: 52, near: 0.05, far: 260 }}
+        >
+          <color attach="background" args={[CANVAS_BG]} />
+          <ambientLight intensity={0.6} />
+
+          <Suspense fallback={null}>
+            <PointCloud cloud={cloud} />
+          </Suspense>
+
+          <Anchors anchors={cloud.anchors} focusTrackId={focusTrackId} onSelect={onSelectObject} />
+
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.08}
+            minDistance={1.2}
+            maxDistance={26}
+            maxPolarAngle={Math.PI * 0.495}
+            target={[0, 0.8, 0]}
+          />
+          <CameraRig anchors={cloud.anchors} focusTrackId={focusTrackId} />
+        </Canvas>
+      )}
 
       {/* ── Provenance chips over the stage ─────────────────────────────── */}
       <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap items-center gap-1.5">
-        {mode === "spark" ? (
+        {mode === "real" ? (
           <StageChip variant="live">
             [ splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians ]
           </StageChip>
         ) : (
           <StageChip variant="synth">[ synthetic preview · {compactNumber(cloud.count)} pts ]</StageChip>
         )}
+        {loading &&
+          (progress < 100 ? (
+            <StageChip>[ loading · {Math.round(progress)}% ]</StageChip>
+          ) : (
+            // The download is in; the renderer is still turning it into a scene.
+            // Splats keep appearing underneath while this shows.
+            <StageChip>[ building the scene ]</StageChip>
+          ))}
         {moment.splat.status === "processing" && <StageChip>[ reconstructing ]</StageChip>}
         {moment.splat.status === "failed" && <StageChip variant="synth">[ reconstruction failed ]</StageChip>}
       </div>
@@ -221,46 +255,6 @@ function PointCloud({ cloud }: { cloud: ReturnType<typeof buildSyntheticCloud> }
       />
     </points>
   );
-}
-
-/** The real splat path — lazily imported so the Spark bundle is only fetched when needed. */
-function SparkSplat({ url, onFail }: { url: string; onFail: () => void }) {
-  const { scene, gl } = useThree();
-  const [object, setObject] = useState<THREE.Object3D | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    let renderer: THREE.Object3D | null = null;
-
-    (async () => {
-      try {
-        const { SparkRenderer, SplatMesh } = await import("@sparkjsdev/spark");
-        if (!alive) return;
-
-        const spark = new SparkRenderer({ renderer: gl as THREE.WebGLRenderer });
-        renderer = spark as unknown as THREE.Object3D;
-        scene.add(renderer);
-
-        const splat = new SplatMesh({ url });
-        await splat.initialized;
-        if (!alive) return;
-
-        // Captures come in with an arbitrary up-axis; +Y up matches our anchors.
-        splat.rotation.set(Math.PI, 0, 0);
-        setObject(splat as unknown as THREE.Object3D);
-      } catch (err) {
-        console.warn("[splat] Spark failed to load, falling back to point cloud:", err);
-        if (alive) onFail();
-      }
-    })();
-
-    return () => {
-      alive = false;
-      if (renderer) scene.remove(renderer);
-    };
-  }, [url, scene, gl, onFail]);
-
-  return object ? <primitive object={object} /> : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -25,7 +25,8 @@ export type Vec3 = [number, number, number];
  * Geo is anchored exactly once, at `Trip.place.origin`. Everything else —
  * TrackPoint.pos, Moment.place.pos, ObjectSighting.worldPos — stays in the
  * robot's local metric frame, because that is the frame it actually navigates
- * in. lib/geo.ts converts between the two when a map or the globe needs it.
+ * in. lib/geo.ts converts between the two for the map, lib/globe/geo.ts for the
+ * globe — two conversions on purpose, see the header of either file.
  *
  * Putting a lat/lng on every moment instead would be derived data that can drift
  * from `pos`, and it would double the payload crossing the RSC boundary.
@@ -169,6 +170,30 @@ export interface TranscriptSegment {
 
 export type SplatStatus = "ready" | "processing" | "failed";
 
+/**
+ * How a real capture is framed when it renders.
+ *
+ * Purely presentational, and optional: a moment with no reconstruction never
+ * needs one, and a capture that happens to land upright doesn't either. It
+ * exists because captures arrive in whatever frame the reconstructor used —
+ * INRIA-layout PLYs are y-down, an indoor room is a different scale from an
+ * outdoor scene — and the alternative is hardcoding one capture's orientation
+ * into the viewer, which is what we did before and it only ever fit one scene.
+ */
+export interface SplatView {
+  /** Which way is up for the camera. y-down captures want [0, -1, 0]. Check,
+   *  don't assume — file layout does not tell you which way a capture stands. */
+  cameraUp?: Vec3;
+  cameraPosition?: Vec3;
+  cameraLookAt?: Vec3;
+  scenePosition?: Vec3;
+  /** Degrees, XYZ order. Applied to the splat scene as a quaternion. */
+  sceneRotationDeg?: Vec3;
+  sceneScale?: number;
+  /** 0–255. Drops near-invisible splats; real memory savings on a big capture. */
+  alphaRemovalThreshold?: number;
+}
+
 export interface SplatRef {
   status: SplatStatus;
   /** .spz / .ply / .splat under /public/mock. Only when status === "ready". */
@@ -178,6 +203,8 @@ export interface SplatRef {
   bounds?: { min: Vec3; max: Vec3 };
   /** Shown while processing, and as the reason when failed. */
   note?: string;
+  /** Framing for the real renderer. Ignored by the synthetic preview. */
+  view?: SplatView;
 }
 
 export interface MusicPick {

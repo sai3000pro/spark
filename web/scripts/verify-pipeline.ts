@@ -21,7 +21,8 @@
  * Runs under tsx, NOT under Next. Nothing reachable from here may import next/*
  * or server-only — see the header of lib/pipeline.ts.
  */
-import { buildTrip } from "../lib/mock/buildTrip";
+import { buildTrip, type TripSpec } from "../lib/mock/buildTrip";
+import { makeGeo, type GeoRef } from "../lib/geo";
 import { TRIP_SPECS } from "../lib/mock/trips";
 import { waterlooPark } from "../lib/mock/trips/waterloo-park";
 import { LABEL_FAMILIES } from "../lib/mock/labels";
@@ -41,6 +42,12 @@ import {
 } from "../lib/liveTrip";
 
 let failures = 0;
+
+/** Mirrors lib/tripData.ts getGeoRefFor. Inlined so this script stays off the data layer. */
+const geoRefFor = (spec: TripSpec): GeoRef => ({
+  origin: spec.place.mapOrigin ?? spec.place.origin,
+  bearingDeg: spec.place.bearingDeg ?? 0,
+});
 
 function check(label: string, ok: boolean, detail = "") {
   if (ok) {
@@ -415,6 +422,45 @@ function verifyGeoAndGlobalIndex() {
     const east = localToGeo(origin, [500, 0]);
     check("+z (south) lowers latitude", south.lat < origin.lat, `${south.lat} vs ${origin.lat}`);
     check("+x (east) raises longitude", east.lng > origin.lng, `${east.lng} vs ${origin.lng}`);
+  }
+
+  section("Map georeference");
+  {
+    // lib/geo.ts is the MAP transform — rotated, and with different metre-per-
+    // degree constants from lib/globe/geo.ts above. It used to be a pair of
+    // module-level constants pinned to Waterloo Park; these literals were
+    // captured from that version, and they are the guard that making it
+    // per-trip did not move the walk by a single float.
+    const g = makeGeo(geoRefFor(waterlooPark));
+    const frozen: Array<[[number, number], [number, number]]> = [
+      [[0, 0], [-80.5372, 43.4672]],
+      [[500, 0], [-80.53107153685042, 43.466570678907516]],
+      [[0, 500], [-80.53806129932649, 43.4627221477529]],
+      [[350, 240], [-80.533323499472, 43.464610106156655]],
+    ];
+    let drifted = 0;
+    for (const [local, want] of frozen) {
+      const got = g.localToLngLat(local);
+      if (got[0] !== want[0] || got[1] !== want[1]) drifted++;
+    }
+    check("Waterloo Park's map transform is bit-identical to the pre-refactor one",
+      drifted === 0, `${drifted}/${frozen.length} moved`);
+
+    check(
+      "the map calibration is NOT the globe pin (they do different jobs)",
+      waterlooPark.place.mapOrigin !== undefined &&
+        waterlooPark.place.mapOrigin.lat !== waterlooPark.place.origin.lat,
+    );
+
+    // A trip with no authored calibration must still land somewhere real, or its
+    // walk silently draws in the Gulf of Guinea.
+    let unusable = 0;
+    for (const spec of TRIP_SPECS) {
+      const ref = geoRefFor(spec);
+      const [lng, lat] = makeGeo(ref).localToLngLat([0, 0]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) unusable++;
+    }
+    check("every trip resolves a usable map georeference", unusable === 0, `${unusable} bad`);
   }
 
   section("Sphere projection");

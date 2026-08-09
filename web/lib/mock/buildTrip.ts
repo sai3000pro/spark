@@ -45,6 +45,11 @@
  *   7. Splat status across the light trips: mostly ready, exactly one processing,
  *      zero failed. Waterloo already owns the failed case and it is the better
  *      story — two failures reads as a broken pipeline rather than an honest one.
+ *   8. A new trip needs no map calibration. Omit `place.mapOrigin` and
+ *      `place.bearingDeg` and the walk anchors on `place.origin` facing east,
+ *      which is right often enough. Add them only after looking at the route on
+ *      the real tiles — that is what they are for, and guessing them is worse
+ *      than leaving them out.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import type {
@@ -103,7 +108,26 @@ export interface TripSpec {
   /** ISO 8601 with a UTC offset — the offset is what makes clock times local. */
   startedAt: string;
   durationSec: number;
-  place: { label: string; region: string; country: string; origin: GeoPoint };
+  place: {
+    label: string;
+    region: string;
+    country: string;
+    /** Where the trip sits on Earth. Anchors its pin on the globe. */
+    origin: GeoPoint;
+    /**
+     * MAP calibration — where local (0, 0) lands on the vector tiles, and how
+     * far the local +x axis is rotated off due east (degrees CCW).
+     *
+     * Usually the same point as `origin`, and both are optional: omit them and
+     * the map anchors on `origin` facing east. They exist because the two
+     * numbers do different jobs, and Waterloo Park proves it — its map anchor
+     * was nudged ~860 m from its globe pin so the walk hugs the lawns instead
+     * of crossing Silver Lake. Moving `origin` moves the pin; moving
+     * `mapOrigin` moves the walk. See lib/geo.ts.
+     */
+    mapOrigin?: GeoPoint;
+    bearingDeg?: number;
+  };
   /** Local metres. Where the path starts and ends; moments supply their own stops. */
   start: Vec2;
   end: Vec2;

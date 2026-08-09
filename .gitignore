@@ -29,3 +29,24 @@ superpowers/
 brush_bin/
 target/
 tools/video_intel/out/
+
+# Gaussian splat point clouds — capture OUTPUT, not source.
+#
+# These are the reconstructor's product and they are enormous: the three in the
+# tree right now are 96 MB, 96 MB and 21 MB, which is 213 MB against GitHub's
+# 100 MB per-file hard limit and a warning at 50 MB. They are also regenerable
+# from the capture, so committing them would trade a permanent repo weight for
+# something a re-run reproduces.
+#
+# The web app never needs one to work: components/relive probes the asset with a
+# HEAD request and falls back to a synthetic point cloud badged `synthetic
+# preview`, so a clean clone runs with none of these present. Drop a .ply into
+# web/public/mock/splats/ locally and it renders for real.
+#
+# Ignored by extension rather than by directory so a stray capture anywhere in
+# the tree is caught too. Sibling formats included — the pipeline emits .spz and
+# some tools emit .splat/.ksplat.
+*.ply
+*.spz
+*.splat
+*.ksplat

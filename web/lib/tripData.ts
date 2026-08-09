@@ -9,18 +9,19 @@
  */
 import { cache } from "react";
 import { familyOf } from "./mock/labels";
-// Two builders, deliberately. The no-arg one is the FLAGSHIP — the STACKT
-// Market walk, which is what the journal, the walk screen and the landing's
-// narration read; buildSpecTrip(spec) builds any trip and is what the shelf
-// reads. Aliased so the two can never be confused at a call site — see the
-// additive accessors at the bottom of this file.
-import { buildTrip as buildSpecTrip } from "./mock/buildTrip";
+// One builder for every trip. The FLAGSHIP — the STACKT Market walk, what the
+// journal, the walk screen and the landing's narration read — is just the
+// default spec; buildSpecTrip(spec) builds any trip and is what the shelf, the
+// globe and the atlas screens read. Aliased so a bare `buildTrip()` call site
+// can never quietly build the wrong walk.
+import { buildTrip as buildSpecTrip, type BuiltTrip } from "./mock/buildTrip";
 import { getTripSpec, stacktMarket, TRIP_SPECS } from "./mock/trips";
 
-const TRIP_ID = stacktMarket.id;
+export const TRIP_ID = stacktMarket.id;
 const buildTrip = () => buildSpecTrip(stacktMarket);
 import { buildObjectIndex, mergeObjectIndexes } from "./objectIndex";
 import { binDetections, computeTripStats, type DetectionBin } from "./pipeline";
+import type { GeoRef } from "./geo";
 import type {
   GeoPoint,
   MomentCandidate,
@@ -112,56 +113,13 @@ function toSummary(m: Moment): MomentSummary {
   };
 }
 
-/**
- * Any authored trip's walk-screen view. The globe made the walk multi-trip:
- * clicking a banner on the desk globe lands on `/walk?trip=<id>`, and this is
- * what that page reads. Unknown ids return null so the page can fall back to
- * the flagship instead of 500ing on a stale link.
- */
-export function getTripViewFor(tripId: string): TripView | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-  const { trip, distanceM } = buildSpecTrip(spec);
-  const durationSec =
-    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
-
-  return {
-    id: trip.id,
-    title: trip.title,
-    startedAt: trip.startedAt,
-    endedAt: trip.endedAt,
-    placeLabel: trip.place.label,
-    region: trip.place.region,
-    origin: trip.place.origin,
-    stats: computeTripStats(trip, distanceM),
-    path: thin(trip.path, 2),
-    moments: trip.moments.map(toSummary),
-    candidates: trip.candidates,
-    detectionBins: binDetections(trip.detections, durationSec, 240, familyOf),
-    durationSec,
-  };
-}
-
 /** Any authored trip's full moments — what the walk's takeover renders. */
 export function getTripMomentsFor(tripId: string): Moment[] | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-  return buildSpecTrip(spec).trip.moments;
+  const built = builtTripFor(tripId);
+  return built ? built.trip.moments : null;
 }
 
-/** Any authored trip's ⌘K index, same boundary as `getObjectIndexView`. */
-export function getObjectIndexViewFor(tripId: string): ObjectIndexView | null {
-  const spec = getTripSpec(tripId);
-  if (!spec) return null;
-  const { trip } = buildSpecTrip(spec);
-  return {
-    entries: buildObjectIndex(trip.moments, trip.path, trip),
-    durationSec:
-      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
-    tripId: trip.id,
-  };
-}
-
+/** The FLAGSHIP's walk-screen view — what the journal and landing narrate. */
 export function getTripView(): TripView {
   return getTripViewFor(TRIP_ID)!;
 }
@@ -261,8 +219,6 @@ export function listTrips(): TripListItem[] {
   ];
 }
 
-export { TRIP_ID };
-
 /* ── The aurora landing's multi-trip accessors ────────────────────────────────
  *
  * ADDITIVE, on purpose. Everything above this line is the journal's single-trip
@@ -319,6 +275,126 @@ export const getGlobalObjectIndex = cache(
     return { entries: mergeObjectIndexes(indexes), durationSec: 0, tripId: null };
   },
 );
+
+/* ── The atlas screen's trip-scoped accessors ─────────────────────────────────
+ *
+ * ADDITIVE too. Everything above stays exactly as it was; these exist because
+ * the walk screen used to be able to render precisely one trip, so `/trip/<id>`
+ * redirected to it and every album opened Waterloo Park. These are the same view
+ * models, resolved by id.
+ *
+ * The boundary rule from the top of this file still holds and is the reason
+ * AtlasView lists what it lists: TripView (already binned), full Moments for the
+ * takeover, and the object index. `trip.detections` — ~10,000 rows — is read to
+ * build the bins and then dropped here on the server.
+ */
+
+/** Every trip is spec-built; the flagship's alias keeps its call sites honest. */
+function builtTripFor(tripId: string): BuiltTrip | null {
+  if (tripId === TRIP_ID) return buildTrip();
+  const spec = getTripSpec(tripId);
+  return spec ? buildSpecTrip(spec) : null;
+}
+
+/** Validates a `?trip=` param. Unknown or absent → the flagship. */
+export function resolveTripId(raw: string | string[] | undefined): string {
+  const id = Array.isArray(raw) ? raw[0] : raw;
+  return id && getTripSpec(id) ? id : TRIP_ID;
+}
+
+function viewOf(built: BuiltTrip): TripView {
+  const { trip, distanceM } = built;
+  const durationSec =
+    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
+
+  return {
+    id: trip.id,
+    title: trip.title,
+    startedAt: trip.startedAt,
+    endedAt: trip.endedAt,
+    placeLabel: trip.place.label,
+    region: trip.place.region,
+    origin: trip.place.origin,
+    stats: computeTripStats(trip, distanceM),
+    path: thin(trip.path, 2),
+    moments: trip.moments.map(toSummary),
+    candidates: trip.candidates,
+    detectionBins: binDetections(trip.detections, durationSec, 240, familyOf),
+    durationSec,
+  };
+}
+
+export function getTripViewFor(tripId: string): TripView | null {
+  const built = builtTripFor(tripId);
+  return built ? viewOf(built) : null;
+}
+
+export function getObjectIndexViewFor(tripId: string): ObjectIndexView | null {
+  const built = builtTripFor(tripId);
+  if (!built) return null;
+  const { trip } = built;
+  return {
+    entries: buildObjectIndex(trip.moments, trip.path, trip),
+    durationSec:
+      (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000,
+    tripId: trip.id,
+  };
+}
+
+/**
+ * A trip's map calibration, read off the SPEC. `mapOrigin` falls back to the
+ * globe pin and the bearing to due east; see authoring rule 8 in
+ * lib/mock/buildTrip.ts.
+ */
+export function getGeoRefFor(tripId: string): GeoRef {
+  const place = getTripSpec(tripId)?.place;
+  const origin = place?.mapOrigin ?? place?.origin ?? { lat: 0, lng: 0 };
+  return { origin, bearingDeg: place?.bearingDeg ?? 0 };
+}
+
+/** Nav targets keyed moment → track. Built here because both atlas routes need it. */
+export interface NavTargetMap {
+  [momentId: string]: { [trackId: string]: { pos: Vec2; heading: number } };
+}
+
+/** Everything the atlas screen renders, composed once on the server. */
+export interface AtlasView {
+  trip: TripView;
+  /** Full moments — transcript, objects, keyframes, splat refs — for the takeover. */
+  moments: Moment[];
+  entries: ObjectIndexEntry[];
+  navTargets: NavTargetMap;
+  geo: GeoRef;
+}
+
+export const getAtlasView = cache((tripId: string): AtlasView | null => {
+  const built = builtTripFor(tripId);
+  if (!built) return null;
+  const { trip } = built;
+
+  const entries = buildObjectIndex(trip.moments, trip.path, trip);
+
+  // Keyed moment → track so the takeover can say "the robot can drive back to
+  // this" without shipping the whole index again.
+  const navTargets: NavTargetMap = {};
+  for (const entry of entries) {
+    if (!entry.navTarget) continue;
+    for (const s of entry.sightings) {
+      (navTargets[s.momentId] ??= {})[s.trackId] = {
+        pos: entry.navTarget.pos,
+        heading: entry.navTarget.heading,
+      };
+    }
+  }
+
+  return {
+    trip: viewOf(built),
+    moments: trip.moments,
+    entries,
+    navTargets,
+    geo: getGeoRefFor(tripId),
+  };
+});
 
 const thin = <T,>(arr: T[], every: number): T[] =>
   every <= 1 ? arr : arr.filter((_, i) => i % every === 0 || i === arr.length - 1);

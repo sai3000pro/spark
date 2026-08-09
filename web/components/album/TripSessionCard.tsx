@@ -110,7 +110,12 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
   if (justEnded) {
     return (
       <Card tone="warn">
-        <Eyebrow tone="warn">Session ended</Eyebrow>
+        {/* "Trip", like everywhere else. The body below stays technical on
+            purpose — see this file's header — because it is addressed to whoever
+            wires the robot up, and that is the one audience the exact route name
+            helps. The EYEBROW is not addressed to them; it is the state of the
+            thing the visitor just stopped. */}
+        <Eyebrow tone="warn">Trip ended</Eyebrow>
         <p className="mt-2 font-display text-[15px] font-semibold text-fog-100">
           Nothing was captured.
         </p>
@@ -125,7 +130,7 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
             href="/detect"
             className="font-mono text-[11px] text-fog-400 transition-colors hover:text-machine-300"
           >
-            See what that loop emits →
+            Watch it decide →
           </Link>
         </div>
       </Card>
@@ -143,18 +148,27 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
   // The live states below keep the full ringed card — there, the panel IS the
   // subject and stopping the trip has to be possible from the thing you read.
   return (
+    // The copy here is the first thing a visitor reads below the fold, and it
+    // used to be written for us rather than for them: "puts Spark in follow mode
+    // and begins the stage-1 detection loop", under a link reading "see what that
+    // loop emits". Both name internals — a mode, a numbered stage, a loop, an
+    // emission — that mean nothing to anyone who has not read the pipeline.
+    //
+    // The NUMBER stays exactly as it was. It is the one honest, load-bearing fact
+    // on the screen, and softening the language around it is not the same as
+    // softening it.
     <Card tone="idle" bare>
       <Eyebrow tone="idle">No trip in progress</Eyebrow>
       <p className="mt-2 max-w-[52ch] text-[13px] leading-relaxed text-fog-400">
-        Starting one puts Spark in follow mode and begins the stage-1 detection loop. It has run{" "}
-        {compactNumber(detectionsSoFar)} detections so far.
+        Start one and Spark follows you, deciding on its own what is worth keeping. It has looked at{" "}
+        {compactNumber(detectionsSoFar)} things so far.
       </p>
       {error && <p className="mt-2 text-[12px] text-fail-400">{error}</p>}
       <Link
         href="/detect"
         className="mt-3 inline-block font-mono text-[11px] text-fog-400 transition-colors hover:text-machine-300"
       >
-        See what that loop emits →
+        Watch it decide →
       </Link>
     </Card>
   );
