@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import csv
 import math
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence
 

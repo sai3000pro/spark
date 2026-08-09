@@ -17,7 +17,7 @@ is derived solely from ``frame_id`` + ``payload_type`` inside the session root.
 from __future__ import annotations
 
 import re
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 PROTOCOL_VERSION = 1
 
@@ -30,12 +30,24 @@ PT_RGB = "rgb"
 PT_DEPTH = "depth"
 PT_CONFIDENCE = "confidence"
 PT_FRAME_METADATA = "frame_metadata"
+# Audio is streamed as sequential fixed-format PCM chunks.  It reuses the
+# (frame_id, payload_type) identity model where frame_id == chunk sequence, so
+# idempotency / resume / reconciliation all work exactly as for image frames.
+PT_AUDIO = "audio"
 
 _PAYLOAD_LAYOUT = {
     PT_RGB: ("frames", ".jpg"),
     PT_DEPTH: ("depth", ".f32"),
     PT_CONFIDENCE: ("confidence", ".u8"),
+    PT_AUDIO: ("audio", ".pcm"),
 }
+
+# Default live-audio wire format (16 kHz mono signed 16-bit LE PCM — Whisper's
+# native rate, cheapest downstream).  The actual values ride in the audio
+# bulk_header ``meta`` and are persisted to phone/audio.json on first chunk.
+AUDIO_SAMPLE_RATE = 16000
+AUDIO_CHANNELS = 1
+AUDIO_CODEC = "pcm_s16le"
 
 # message type strings
 T_HELLO = "hello"

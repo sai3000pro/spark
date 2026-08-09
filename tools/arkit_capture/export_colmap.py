@@ -26,7 +26,7 @@ import math
 import shutil
 import sys
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Set
 
 import numpy as np
 
@@ -89,8 +89,13 @@ def _colored_points(reader: CaptureReader, frames: List[FrameMeta],
     for fm in frames:
         if not fm.has_depth:
             continue
-        depth = reader.load_depth(fm)
-        conf = reader.load_confidence(fm)
+        # Metadata may advertise depth that never landed on disk (dropped/partial
+        # payload during live streaming); skip such frames instead of crashing.
+        try:
+            depth = reader.load_depth(fm)
+            conf = reader.load_confidence(fm)
+        except (FileNotFoundError, OSError):
+            continue
         if depth is None:
             continue
         h, w = depth.shape
@@ -99,7 +104,13 @@ def _colored_points(reader: CaptureReader, frames: List[FrameMeta],
         vv, uu = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
         valid = np.isfinite(depth) & (depth > 0.1) & (depth < 8.0)
         if conf is not None:
-            valid &= conf >= CONFIDENCE_MEDIUM
+            conf_ok = valid & (conf >= CONFIDENCE_MEDIUM)
+            # Only trust the confidence map when it actually keeps points. Some
+            # captures stream all-low (0) confidence for otherwise-good LiDAR depth;
+            # filtering on it would discard the entire frame. Fall back to depth-only
+            # rather than produce an empty reconstruction (adaptive, not per-capture).
+            if conf_ok.sum() >= 0.05 * max(1, valid.sum()):
+                valid = conf_ok
         valid[::subsample, ::subsample] = valid[::subsample, ::subsample]
         mask = np.zeros_like(valid)
         mask[::subsample, ::subsample] = True
@@ -134,7 +145,8 @@ def _colored_points(reader: CaptureReader, frames: List[FrameMeta],
 
 
 def export_colmap(capture_dir: Path, out_dir: Path, *, sharp_only: bool = True,
-                  max_points: int = 200_000, subsample: int = 6) -> dict:
+                  max_points: int = 200_000, subsample: int = 6,
+                  rotate_cw: bool = False) -> dict:
     capture_dir = Path(capture_dir)
     out_dir = Path(out_dir)
     images_dir = out_dir / "images"
@@ -149,17 +161,32 @@ def export_colmap(capture_dir: Path, out_dir: Path, *, sharp_only: bool = True,
     keep = _sharp_ids(reader, frames) if sharp_only else None
     selected = [fm for fm in frames if keep is None or fm.frame_id in keep]
 
+    # 90deg-CW image rotation = +90deg rotation of camera coords about the optical
+    # (z) axis. Rotating image + intrinsics + pose together keeps every 3D ray
+    # identical, so the reconstruction is unchanged — frames just store upright.
+    _RZ = np.array([[0., -1., 0.], [1., 0., 0.], [0., 0., 1.]])
     cameras, images_lines = [], []
     for idx, fm in enumerate(selected, start=1):
         name = f"{fm.frame_id:06d}.jpg"
-        shutil.copy2(reader.rgb_path(fm), images_dir / name)
         K = np.asarray(fm.camera_intrinsics, dtype=float)
-        cameras.append(f"{idx} PINHOLE {fm.image_width} {fm.image_height} "
-                       f"{K[0,0]:.6f} {K[1,1]:.6f} {K[0,2]:.6f} {K[1,2]:.6f}")
-        T_cw = np.asarray(fm.camera_transform, dtype=float)
-        T_wc = np.linalg.inv(T_cw)
+        fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
+        W0, H0 = fm.image_width, fm.image_height
+        T_wc = np.linalg.inv(np.asarray(fm.camera_transform, dtype=float))
         R = _FLIP @ T_wc[:3, :3]
         t = _FLIP @ T_wc[:3, 3]
+        if rotate_cw:
+            from PIL import Image
+            with Image.open(reader.rgb_path(fm)) as im:
+                im.transpose(Image.ROTATE_270).save(images_dir / name, quality=95)
+            cam_w, cam_h = H0, W0                  # dims swap
+            fx, fy, cx, cy = fy, fx, (H0 - 1 - cy), cx   # rotated intrinsics
+            R = _RZ @ R
+            t = _RZ @ t                            # rotated pose (about optical z)
+        else:
+            shutil.copy2(reader.rgb_path(fm), images_dir / name)
+            cam_w, cam_h = W0, H0
+        cameras.append(f"{idx} PINHOLE {cam_w} {cam_h} "
+                       f"{fx:.6f} {fy:.6f} {cx:.6f} {cy:.6f}")
         qw, qx, qy, qz = _quat_from_R(R)
         images_lines.append(
             f"{idx} {qw:.9f} {qx:.9f} {qy:.9f} {qz:.9f} "
@@ -191,11 +218,17 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--all-frames", action="store_true", help="include blurry frames too")
     ap.add_argument("--max-points", type=int, default=200_000)
+    # Default ON: this iOS capture app stores landscape buffers that must be
+    # rotated 90deg CW to display upright, and the metadata carries no orientation
+    # signal to auto-detect from. Use --no-rotate-cw for an already-upright capture.
+    ap.add_argument("--rotate-cw", action=argparse.BooleanOptionalAction, default=True,
+                    help="rotate frames 90deg clockwise (+ intrinsics + poses); default ON")
     args = ap.parse_args(argv)
     import json
     print(json.dumps(export_colmap(Path(args.capture), Path(args.out),
                                    sharp_only=not args.all_frames,
-                                   max_points=args.max_points), indent=2))
+                                   max_points=args.max_points,
+                                   rotate_cw=args.rotate_cw), indent=2))
 
 
 if __name__ == "__main__":

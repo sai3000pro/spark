@@ -1,6 +1,5 @@
 """Clock-sync estimation unit tests: injected offset, jitter, drift, filtering."""
 
-import math
 import unittest
 
 from tools.live_capture_server.clock_sync import ClockSyncEstimator, estimate

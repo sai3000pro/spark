@@ -50,3 +50,6 @@ tools/video_intel/out/
 *.spz
 *.splat
 *.ksplat
+
+# External tool, cloned locally (125GB nested git repo) — never vendor it
+ComfyUI/

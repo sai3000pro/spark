@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 from tools.arkit_capture.formats import sha256_hex
 from tools.live_capture_server import protocol
-from tools.live_capture_server.clock_sync import ClockSyncEstimator, estimate
+from tools.live_capture_server.clock_sync import ClockSyncEstimator
 from tools.live_capture_server.ws import WSClosed, ws_connect
 
 
@@ -99,12 +99,20 @@ class PhoneClient:
         return self.clock
 
     # -- session --
-    def begin(self, session_id: Optional[str] = None) -> str:
+    def begin(self, session_id: Optional[str] = None,
+              latitude: Optional[float] = None, longitude: Optional[float] = None,
+              place_name: Optional[str] = None) -> str:
         msg = {"type": protocol.T_BEGIN_SESSION,
                "protocol_version": protocol.PROTOCOL_VERSION,
                "device_session_id": self.device_session_id}
         if session_id:
             msg["session_id"] = session_id
+        if latitude is not None:
+            msg["latitude"] = latitude
+        if longitude is not None:
+            msg["longitude"] = longitude
+        if place_name is not None:
+            msg["place_name"] = place_name
         self._send(msg)
         ack = self._recv_json()
         self.session_id = ack["session_id"]
@@ -115,18 +123,23 @@ class PhoneClient:
         return self._seq
 
     def send_payload(self, frame_id: int, payload_type: str, data: bytes,
-                     retries: int = 3) -> str:
+                     retries: int = 3, meta: Optional[dict] = None,
+                     record_manifest: bool = True) -> str:
         """Send one bulk payload; block for ACK. Returns 'stored'|'duplicate'.
 
         Records the payload in the local manifest first (local-first).  Retries
-        on NACK / transient disconnect.
+        on NACK / transient disconnect.  ``meta`` rides in the bulk_header (used
+        by audio to declare its PCM format).  ``record_manifest=False`` keeps a
+        payload out of end-of-session frame reconciliation (audio is a live
+        best-effort stream, not part of the frame manifest).
         """
         sha = sha256_hex(data)
-        self.manifest.setdefault(str(frame_id), {})[payload_type] = sha
+        if record_manifest:
+            self.manifest.setdefault(str(frame_id), {})[payload_type] = sha
         for attempt in range(retries + 1):
             try:
                 hdr = protocol.bulk_header(self.session_id, frame_id, payload_type,
-                                           self._next_seq(), len(data), sha)
+                                           self._next_seq(), len(data), sha, meta=meta)
                 self._send(hdr)
                 self.ws.send_binary(data)
                 resp = self._recv_json()
@@ -140,6 +153,20 @@ class PhoneClient:
                 if not self.reconnect():
                     raise
         raise RuntimeError(f"payload {frame_id}/{payload_type} failed after retries")
+
+    def send_audio_chunk(self, chunk_seq: int, pcm: bytes, *,
+                         sample_rate: int = protocol.AUDIO_SAMPLE_RATE,
+                         channels: int = protocol.AUDIO_CHANNELS,
+                         codec: str = protocol.AUDIO_CODEC,
+                         start_session_time: Optional[float] = None) -> str:
+        """Stream one PCM audio chunk (frame_id == chunk_seq). Best-effort: not
+        recorded in the frame manifest.  The PCM format rides in ``meta`` and is
+        persisted server-side on the first chunk."""
+        meta = {"sample_rate": sample_rate, "channels": channels, "codec": codec}
+        if start_session_time is not None:
+            meta["start_session_time"] = start_session_time
+        return self.send_payload(chunk_seq, protocol.PT_AUDIO, pcm, meta=meta,
+                                 record_manifest=False)
 
     def send_frame(self, frame: Frame) -> Dict[str, str]:
         """Mirror a fully-persisted frame: metadata + rgb + depth + confidence."""

@@ -10,6 +10,7 @@
  * never pixels. Anything needing pixels or an LLM happens in stage 3, which only
  * runs for windows that survived stage 2.
  */
+import { pickBestView } from "./detect/viewQuality";
 import type {
   AudioEvent,
   Detection,
@@ -335,10 +336,12 @@ export function promoteToMoment(
   candidate: MomentCandidate,
   detections: Detection[],
   content: MomentContent,
+  /** Odometry, so best-view scoring can tell a still frame from a blurred one. */
+  path: TrackPoint[] = [],
 ): Moment {
   const inSpan = detections.filter((d) => d.t >= candidate.tStart && d.t <= candidate.tEnd);
   const keyframes = buildKeyframes(content.id, candidate.tStart, candidate.tEnd, content.hue);
-  const objects = collapseToSightings(inSpan, keyframes);
+  const objects = collapseToSightings(inSpan, keyframes, path);
 
   return {
     id: content.id,
@@ -362,13 +365,23 @@ export function promoteToMoment(
 /**
  * Many Detections → one ObjectSighting per trackId.
  *
- * Keeps PEAK confidence and the box from that peak frame: the best evidence we
- * ever had of the object, which is what you want both for the UI chip and for
- * placing the splat anchor.
+ * TWO DIFFERENT "BESTS", and conflating them was a bug.
+ *
+ *   · `confidence` stays PEAK confidence across the track. It answers "how sure
+ *     are we this is a bottle at all", and it is what ranks one sighting against
+ *     another in the object index.
+ *   · `bestBbox` / `keyframeId` now come from the best-LOOKING frame, scored by
+ *     lib/detect/viewQuality.ts. They answer "which look at it do we show, and
+ *     which pose would reproduce it", and confidence is a poor proxy for that —
+ *     detectors peak on huge, close, badly-framed objects.
+ *
+ * Passing `path` enables the motion-blur term; without it that term stays
+ * neutral and everything else still scores.
  */
 export function collapseToSightings(
   detections: Detection[],
   keyframes: Keyframe[],
+  path: TrackPoint[] = [],
 ): ObjectSighting[] {
   const byTrack = new Map<string, Detection[]>();
   for (const d of detections) {
@@ -383,7 +396,9 @@ export function collapseToSightings(
     // Ignore flickers — a two-frame track is usually a false positive.
     if (dets.length < 3) continue;
 
-    const best = dets.reduce((a, b) => (b.confidence > a.confidence ? b : a));
+    const peak = dets.reduce((a, b) => (b.confidence > a.confidence ? b : a));
+    const bestView = pickBestView(dets, { path })!;
+    const best = bestView.detection;
     const withWorld = dets.filter((d) => d.worldPos);
     const worldPos: Vec3 | undefined = withWorld.length
       ? (withWorld
@@ -399,12 +414,14 @@ export function collapseToSightings(
       : undefined;
 
     sightings.push({
-      label: best.label,
+      label: peak.label,
       trackId,
-      confidence: best.confidence,
+      confidence: peak.confidence,
       firstSeenT: Math.min(...dets.map((d) => d.t)),
       lastSeenT: Math.max(...dets.map((d) => d.t)),
       bestBbox: best.bbox,
+      viewScore: Number(bestView.view.score.toFixed(3)),
+      bestT: best.t,
       keyframeId: nearestKeyframe(keyframes, best.t).id,
       detectionCount: dets.length,
       worldPos,

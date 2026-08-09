@@ -1,25 +1,21 @@
-import { AtlasScreen, firstParam } from "@/components/atlas/AtlasScreen";
-import { resolveTripId } from "@/lib/tripData";
+import { MapScreen } from "@/components/map/MapScreen";
 
 /**
- * The walk: a day as a full-screen survey map of the real place, with every kept
- * moment pinned as a Gaussian splat you can step inside.
+ * The walk: the day as a survey map of the real place, every located moment
+ * pinned as a Gaussian splat you can step inside.
  *
- * `?trip=<tripId>` picks the trip; without it you get the demo's default, which
- * is Waterloo Park built by the journal's own builder — the bare `/walk` this
- * route has always served, unchanged. `?m=<momentId>` (optionally
- * `&anchor=<trackId>`) opens a moment's splat on load.
- *
- * `/trip/<tripId>` renders the same screen with the id in the path; both go
- * through components/atlas/AtlasScreen.tsx, which is where the composition lives.
+ * This is now REAL data — the located splats from the studio (given coordinates
+ * in the album), not the old mock trip. The mock trip explorer still lives at
+ * `/trip/<tripId>`. Deep-links like `?m=` from the older landing degrade
+ * gracefully: this map has no per-moment overlay, it opens the splat in bigview.
  */
-export default async function WalkPage({ searchParams }: PageProps<"/walk">) {
-  const sp = await searchParams;
-  return (
-    <AtlasScreen
-      tripId={resolveTripId(sp.trip)}
-      momentId={firstParam(sp.m)}
-      anchor={firstParam(sp.anchor)}
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "Spark — the map",
+  description: "Every located moment pinned on a real map of the place.",
+};
+
+export default function WalkPage() {
+  return <MapScreen />;
 }

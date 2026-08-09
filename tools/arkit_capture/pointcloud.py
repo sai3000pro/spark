@@ -24,7 +24,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from .formats import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM
+from .formats import CONFIDENCE_MEDIUM
 from .intrinsics import intrinsic_params, scale_intrinsics
 
 

@@ -18,10 +18,9 @@
  */
 import Link from "next/link";
 import { Suspense } from "react";
+import { NavBrandSwitch } from "@/components/shell/NavBrandSwitch";
 import { RecordControl } from "@/components/shell/RecordControl";
-import { SparkMark } from "@/components/shell/SparkMark";
 import { TelemetryPills } from "@/components/shell/TelemetryPills";
-import { ViewSwitch } from "@/components/shell/ViewSwitch";
 import { SearchMount } from "@/components/search/SearchMount";
 import { getActiveTrip } from "@/lib/liveTrip";
 import { getGlobalObjectIndex } from "@/lib/tripData";
@@ -33,21 +32,9 @@ export function AppBar() {
     // If you change the contents, re-measure and update --appbar-h in globals.css.
     <header data-appbar className="glass sticky top-0 z-30 h-(--appbar-h) border-x-0 border-t-0">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-2 px-4 sm:gap-3 sm:px-5">
-        <Link
-          href="/"
-          className="group flex shrink-0 items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
-          aria-label="Spark home"
-        >
-          <SparkMark />
-          {/* Wordmark is the first thing to go at phone width. White, not teal:
-              the glyph carries the brand colour and the word carries the name,
-              exactly as the brand sheet draws it. */}
-          <span className="hidden font-display text-[15px] font-bold tracking-[0.18em] text-fog-100 sm:inline">
-            SPARK
-          </span>
-        </Link>
-
-        <ViewSwitch />
+        {/* The one consistent nav element, in its dark-scene tone — the same
+            Spark. wordmark + Album | Map switch the journal pages carry. */}
+        <NavBrandSwitch tone="night" />
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {/* /detect was only reachable from a buried text link on the album

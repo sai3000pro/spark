@@ -5,9 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import numpy as np
 
-from tools.arkit_capture.formats import CaptureReader, decode_depth, sha256_hex
+from tools.arkit_capture.formats import CaptureReader, sha256_hex
 from tools.arkit_capture.inspect_capture import inspect
 from tools.live_capture_server import protocol
 from tools.live_capture_server.client import PhoneClient

@@ -23,6 +23,11 @@ public struct FrameMetadata: Codable, Equatable {
     public var cameraIntrinsics: [[Double]]
     public var trackingState: String
     public var trackingReason: String?
+    /// Coverage-triggered keyframe tag (Phase 3). Omitted from JSON when nil so the
+    /// wire format stays byte-compatible with pre-keyframe captures; the desktop
+    /// LiveReconManager reads `meta.keyframe` to prioritise these frames.
+    public var keyframe: Bool?
+    public var trigger: String?   // e.g. "threshold_crossing", "novel_viewpoint"
 
     enum CodingKeys: String, CodingKey {
         case formatVersion = "format_version"
@@ -44,6 +49,8 @@ public struct FrameMetadata: Codable, Equatable {
         case cameraIntrinsics = "camera_intrinsics"
         case trackingState = "tracking_state"
         case trackingReason = "tracking_reason"
+        case keyframe
+        case trigger
     }
 
     public init(frameID: Int,
@@ -107,6 +114,12 @@ public struct SessionInfo: Codable {
     public var cameraTransformModified: Bool
     public var intrinsicsStorage: String
     public var sampleRateHz: Double?
+    // Optional capture-location tags (Phase: GPS). Codable skips nil values, so
+    // session.json stays byte-identical for captures recorded without a location
+    // fix (denied/unavailable/timeout). The laptop reads these to stamp meta.place.
+    public var latitude: Double?
+    public var longitude: Double?
+    public var placeName: String?
 
     enum CodingKeys: String, CodingKey {
         case formatVersion = "format_version"
@@ -119,10 +132,15 @@ public struct SessionInfo: Codable {
         case cameraTransformModified = "camera_transform_modified"
         case intrinsicsStorage = "intrinsics_storage"
         case sampleRateHz = "sample_rate_hz"
+        case latitude
+        case longitude
+        case placeName = "place_name"
     }
 
     public init(sessionID: String, deviceModel: String?, appVersion: String?,
-                sampleRateHz: Double?, createdAt: String? = nil) {
+                sampleRateHz: Double?, createdAt: String? = nil,
+                latitude: Double? = nil, longitude: Double? = nil,
+                placeName: String? = nil) {
         self.formatVersion = CaptureFormat.captureFormatVersion
         self.sessionID = sessionID
         self.createdAt = createdAt
@@ -133,6 +151,9 @@ public struct SessionInfo: Codable {
         self.cameraTransformModified = false
         self.intrinsicsStorage = "row-major nested arrays"
         self.sampleRateHz = sampleRateHz
+        self.latitude = latitude
+        self.longitude = longitude
+        self.placeName = placeName
     }
 }
 
@@ -172,5 +193,107 @@ public struct SessionSummary: Codable {
         framesWithoutDepth = 0; trackingNormal = 0; trackingLimited = 0
         trackingNotAvailable = 0; storageBytes = 0; interruptionCount = 0
         recordingStatus = "unknown"
+    }
+}
+
+
+
+/// Pure, ARKit-free coverage accumulator + keyframe selector (Phase 3).
+///
+/// Separated from the app's `CoverageMap` so the keyframe *logic* is unit-testable
+/// on macOS with no simulator. Two independent keyframe triggers:
+///   1. **threshold_crossing** — a voxel's azimuth-bucket bitmask first reaches
+///      `enoughAngles` distinct viewing angles (fires ONCE per voxel, on the edge).
+///   2. **novel_viewpoint** — the camera pose is sufficiently far (translation or
+///      rotation) from the last accepted keyframe, so orbiting a filled region still
+///      yields fresh views, while a stationary camera does not flood keyframes.
+///
+/// Thread-safety is the caller's responsibility (the app wraps it in its NSLock).
+public final class KeyframeCoverage {
+    public let azBuckets: Int
+    public let cellSize: Float
+    public let enoughAngles: Int
+    public let minTranslation: Float   // metres
+    public let minRotation: Float      // radians
+
+    private var cells: [Int64: UInt16] = [:]     // voxel key -> azimuth-bucket bitmask
+    private var crossed: Set<Int64> = []         // voxels that already fired a crossing
+    private var lastKeyframePose: simd_float4x4?
+
+    public init(azBuckets: Int = 12, cellSize: Float = 0.12, enoughAngles: Int = 5,
+                minTranslation: Float = 0.15, minRotation: Float = 0.26 /* ~15° */) {
+        self.azBuckets = azBuckets
+        self.cellSize = cellSize
+        self.enoughAngles = enoughAngles
+        self.minTranslation = minTranslation
+        self.minRotation = minRotation
+    }
+
+    public func reset() {
+        cells.removeAll(); crossed.removeAll(); lastKeyframePose = nil
+    }
+
+    public var voxelCount: Int { cells.count }
+    public var greenCount: Int { cells.values.reduce(0) { $0 + (($1.nonzeroBitCount >= enoughAngles) ? 1 : 0) } }
+    public var fraction: Double { cells.isEmpty ? 0 : Double(greenCount) / Double(cells.count) }
+
+    public func key(_ x: Float, _ y: Float, _ z: Float) -> Int64 {
+        let qx = Int64((x / cellSize).rounded()) + 0x100000
+        let qy = Int64((y / cellSize).rounded()) + 0x100000
+        let qz = Int64((z / cellSize).rounded()) + 0x100000
+        return ((qx & 0x1FFFFF) << 42) | ((qy & 0x1FFFFF) << 21) | (qz & 0x1FFFFF)
+    }
+
+    public func level(_ x: Float, _ y: Float, _ z: Float) -> Float {
+        let mask = cells[key(x, y, z)] ?? 0
+        return min(1, Float(mask.nonzeroBitCount) / Float(enoughAngles))
+    }
+
+    /// Observe one voxel from a given azimuth bucket. Returns true iff this observation
+    /// pushed the voxel across `enoughAngles` for the FIRST time (edge, once per voxel).
+    @discardableResult
+    public func observe(x: Float, y: Float, z: Float, bucket: Int) -> Bool {
+        let k = key(x, y, z)
+        let b = max(0, min(azBuckets - 1, bucket))
+        let before = cells[k] ?? 0
+        let after = before | (UInt16(1) << b)
+        cells[k] = after
+        if after != before,
+           before.nonzeroBitCount < enoughAngles,
+           after.nonzeroBitCount >= enoughAngles,
+           !crossed.contains(k) {
+            crossed.insert(k)
+            return true
+        }
+        return false
+    }
+
+    /// Should `pose` be accepted as a novel-viewpoint keyframe? True on the first call,
+    /// or when translation/rotation vs the last accepted keyframe exceeds the minimums.
+    /// When true, records `pose` as the new reference.
+    public func acceptPoseNovelty(_ pose: simd_float4x4) -> Bool {
+        guard let last = lastKeyframePose else {
+            lastKeyframePose = pose; return true
+        }
+        let dt = simd_distance(SIMD3<Float>(pose.columns.3.x, pose.columns.3.y, pose.columns.3.z),
+                               SIMD3<Float>(last.columns.3.x, last.columns.3.y, last.columns.3.z))
+        let dr = Self.rotationAngle(between: last, and: pose)
+        if dt >= minTranslation || dr >= minRotation {
+            lastKeyframePose = pose; return true
+        }
+        return false
+    }
+
+    /// Geodesic angle (radians) between the rotation parts of two rigid transforms.
+    public static func rotationAngle(between a: simd_float4x4, and b: simd_float4x4) -> Float {
+        let qa = simd_quatf(rotationMatrix3(a)), qb = simd_quatf(rotationMatrix3(b))
+        let dot = abs(simd_dot(qa.vector, qb.vector))
+        return 2 * acos(min(1, dot))
+    }
+
+    private static func rotationMatrix3(_ m: simd_float4x4) -> simd_float3x3 {
+        simd_float3x3(columns: (SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z),
+                                SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z),
+                                SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z)))
     }
 }

@@ -1,14 +1,12 @@
 /**
  * "There is more below."
  *
- * A plain <a href="#albums">, not next/link — this is a same-page jump, and
- * routing it through the App Router would be a navigation. As an anchor it works
- * before hydration and with JS disabled, is focusable and Enter-activatable for
- * free, middle-clicks, and moves keyboard focus to the target section.
- *
- * It is a CHILD of the hero rather than fixed, so it scrolls away by itself.
- * That removes the entire question of "when does it hide" — no scroll listener,
- * no state, no fade logic.
+ * A link INTO the album now that the library is its own route (/album) rather
+ * than a section stacked under the hero. Still a plain <a>, not next/link — it
+ * works before hydration and with JS disabled, is focusable and
+ * Enter-activatable for free, and middle-clicks. It is a CHILD of the hero
+ * rather than fixed, so it scrolls away by itself: no scroll listener, no fade
+ * logic.
  *
  * The label is deliberate. A naked bouncing chevron is the default generated
  * landing-page gesture; naming the destination is most of what makes it read as
@@ -18,8 +16,8 @@
 export function ScrollCue() {
   return (
     <a
-      href="#albums"
-      aria-label="Skip to your albums"
+      href="/album"
+      aria-label="Open your album"
       className="hero-cue group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950"
     >
       <span className="eyebrow transition-colors group-hover:text-fog-200">Albums</span>

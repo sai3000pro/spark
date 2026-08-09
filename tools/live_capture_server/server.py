@@ -215,6 +215,15 @@ class PhoneSession:
             self.store = self.manager.get_or_create(sid, device_session_id=dsid)
         else:
             self.store = self.manager.create(device_session_id=dsid)
+        # Optional, additive: persist a capture location if the phone sent one.
+        lat = msg.get("latitude")
+        lng = msg.get("longitude")
+        place = msg.get("place_name")
+        if lat is not None or lng is not None or place is not None:
+            try:
+                self.store.set_place(latitude=lat, longitude=lng, place_name=place)
+            except Exception:
+                pass
         self._send({
             "type": protocol.T_SESSION_ACK,
             "protocol_version": protocol.PROTOCOL_VERSION,
@@ -252,7 +261,8 @@ class PhoneSession:
                         "reason": "byte_length mismatch"})
             return
         try:
-            status = self.store.store_payload(frame_id, ptype, hdr["sha256"], data)
+            status = self.store.store_payload(frame_id, ptype, hdr["sha256"], data,
+                                              meta=hdr.get("meta"))
         except (StorageError, Exception) as e:
             self._send({"type": protocol.T_NACK, "frame_id": frame_id,
                         "payload_type": ptype, "sequence": seq, "reason": str(e)})
@@ -266,6 +276,7 @@ class PhoneSession:
             return
         self.store.flush_metadata()
         result = self.store.reconcile(msg.get("manifest", {"frames": {}}))
+        self.manager.fire_end(self.store.session_id)
         self._send(result)
 
     def _handle_finalize(self, msg):

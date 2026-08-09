@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
+import { NavBrandSwitch } from "@/components/shell/NavBrandSwitch";
 import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
@@ -126,13 +127,8 @@ export function AtlasApp({
       {/* ── Floating chrome — vellum slips pinned over the page. ─────────── */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
         <div className="plate-vellum papergrain rise-in pointer-events-auto relative overflow-hidden px-4 py-3">
-          <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
-            <span className="font-display text-[19px] leading-none" style={{ fontWeight: 560 }}>
-              Spark<span className="text-clay">.</span>
-            </span>
-            <span className="fnote text-[10px] text-ink-faint">[ the walk ]</span>
-          </Link>
-          <p className="tag tnum mt-1.5 text-[12px] text-ink-soft">
+          <NavBrandSwitch tone="paper" />
+          <p className="tag tnum mt-2.5 text-[12px] text-ink-soft">
             {tripDate(trip.startedAt)} · {trip.placeLabel}
           </p>
           <p className="tag tnum mt-0.5 text-[12px] text-ink-faint">
