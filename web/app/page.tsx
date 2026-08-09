@@ -5,6 +5,7 @@ import {
   type LandingMoment,
 } from "@/components/home/Landing";
 import { clockTime, compactNumber, distance, duration, tripDate } from "@/lib/format";
+import { getActiveTrip } from "@/lib/liveTrip";
 import { LABEL_FAMILIES } from "@/lib/mock/labels";
 import { describeTrigger } from "@/lib/triggers";
 import { getTripView, listAllTrips } from "@/lib/tripData";
@@ -89,6 +90,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       moments={moments}
       discards={discards}
       albums={listAllTrips()}
+      // Read here rather than polled on the client so the companion on the
+      // ticker paints the right state on the very first frame.
+      activeTrip={getActiveTrip()}
     />
   );
 }

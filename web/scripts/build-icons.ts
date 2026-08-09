@@ -1,29 +1,31 @@
 /**
- * The tab icon: the blob, blasting off.
+ * The tab icon: a firefly.
  *
- * Run with `npm run build:icons`. Reads the already-cut sprite rather than the
- * art sheet, so this stays independent of build-blob-sprites.ts and its cell
- * geometry — the frame is a finished, registered drawing by the time we see it.
+ * Run with `npm run build:icons`. Writes app/icon.png and app/favicon.ico.
  *
- * ── WHY IT IS COMPOSITED ON A GROUND ────────────────────────────────────────
- * The blob is painted near-white on transparency. That is right on the app's
- * navy, and invisible on a browser's LIGHT tab strip, which is where a favicon
- * spends most of its life. Chrome and Safari both draw tab favicons directly on
- * the strip with no plate of their own, so a transparent white blob on a default
- * light theme is a blank square.
+ * ── WHY A FIREFLY AND NOT THE ROBOT ─────────────────────────────────────────
+ * This used to crop `jump-3` — the blob at the apex of its leap, chosen because
+ * the starburst behind it was the only part of the character that survived the
+ * downscale. That is the tell: if a drawing only reads because of the light
+ * around it, ship the light.
  *
- * So the icon carries its own dark ground. That is not a workaround — it is what
- * every icon in a tab strip does, and it also gives the golden lift-off flare
- * something to read against. The ground is a rounded square rather than a circle
- * because at 32px a circle loses ~21% of its area to the corners, and this
- * drawing needs every pixel it can get.
+ * A firefly is already in this product's vocabulary rather than being invented
+ * for the tab strip. They are painted into the aurora plate, recovered and
+ * re-lit by .hero-fly in globals.css, drifting around the character's own
+ * button, and one is named in the landing's own captions. It is also the only
+ * mark here that survives 16px intact: a warm point of light in the dark is
+ * legible at any size, which a face with two eyes and a mouth is not.
  *
- * ── WHY THE FLARE IS THE POINT ──────────────────────────────────────────────
- * `jump-3` is the apex of the leap: the blob with a starburst behind it and a
- * sparkle trail below. At 32px the blob alone is a white oval — indistinguishable
- * from a hundred other icons. The starburst is what survives the downscale and
- * what makes the shape read as SPARK rather than as a blob, so the crop is
- * chosen around the flare, not around the character.
+ * ── WHY IT CARRIES ITS OWN GROUND ───────────────────────────────────────────
+ * Unchanged from the version before it, and the reason is worth keeping: Chrome
+ * and Safari draw favicons straight onto the tab strip with no plate of their
+ * own, so anything light-on-transparent is a blank square on a light theme. The
+ * ground is a rounded square rather than a circle because at 32px a circle
+ * loses ~21% of its area to the corners, and a glow needs room to fall off.
+ *
+ * The whole drawing is authored as ONE vector at a 100-unit scale and rendered
+ * at each size, so 16px and 180px are the same picture rather than two crops
+ * that drift apart.
  *
  * ── ABOUT THE .ico ──────────────────────────────────────────────────────────
  * sharp cannot write ICO, but ICO has permitted a whole PNG as its payload since
@@ -41,25 +43,78 @@ import sharp from "sharp";
 // `import.meta.dirname` nor top-level await exists.
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const SOURCE = path.join(ROOT, "public/sprites/blob/jump-3-right.webp");
 const APP = path.join(ROOT, "app");
 
 /** The app's ink-950. The icon's ground is the app's ground. */
-const INK = { r: 8, g: 12, b: 20 };
+const INK = "#080c14";
+/** --color-warn-400, the token .hero-fly is painted with. */
+const WARN = "#facc15";
+/** The hot centre. Warm rather than pure white, or it reads as a headlight. */
+const CORE = "#fffdf0";
 
 /**
- * How much of the source frame to keep, as fractions of its own box.
+ * The firefly, at a 100-unit scale.
  *
- * The cut sprite is 738x651 with a great deal of headroom — the frame has to
- * hold the apex flare AND leave the character on the same foot line as every
- * other pose, so the blob itself occupies the middle band. Measured off the
- * drawing: the flare's top ray starts around y 0.03 and the sparkle trail ends
- * around y 0.85, with the whole event between x 0.02 and x 0.75.
+ * Composition notes, since none of this is arbitrary:
+ *
+ * - The light sits BELOW and RIGHT of centre (54, 58). A glow dead-centre reads
+ *   as a button; offsetting it leaves room for the body above and makes the
+ *   thing look like it is flying rather than sitting.
+ * - Three nested falloffs, not one. A single radial gradient at this size goes
+ *   flat and grey at the edge; a wide dim halo, a tight bright one and a solid
+ *   core keep contrast in the middle where 16px sampling will land.
+ * - The body and wings are drawn in the SAME warm family as the glow, dimmed —
+ *   not in the ground colour. A dark body over a dark ground is a hole, and at
+ *   32px a hole in the light is what kills the shape.
+ * - Wings are barely there (0.22 alpha). They exist so the icon reads as an
+ *   insect at 180px on a desktop shortcut, and they vanish harmlessly at 16px
+ *   instead of turning into grey mud.
  */
-const CROP = { left: 0.02, top: 0.02, width: 0.73, height: 0.84 };
+function firefly(size: number): Buffer {
+  // 22% is close to the squircle every platform rounds app icons to, and it
+  // tracks the size so 32 and 180 look like the same icon.
+  const r = 22;
 
-/** Fraction of the icon's width left as breathing room around the drawing. */
-const PAD = 0.06;
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 100 100">
+       <defs>
+         <radialGradient id="halo">
+           <stop offset="0%"   stop-color="${WARN}" stop-opacity="0.55"/>
+           <stop offset="45%"  stop-color="${WARN}" stop-opacity="0.18"/>
+           <stop offset="100%" stop-color="${WARN}" stop-opacity="0"/>
+         </radialGradient>
+         <radialGradient id="lamp">
+           <stop offset="0%"   stop-color="${CORE}" stop-opacity="1"/>
+           <stop offset="55%"  stop-color="${WARN}" stop-opacity="0.92"/>
+           <stop offset="100%" stop-color="${WARN}" stop-opacity="0"/>
+         </radialGradient>
+       </defs>
+
+       <rect width="100" height="100" rx="${r}" ry="${r}" fill="${INK}"/>
+
+       <!-- Wings, swept up and back. WARM, not white: the first cut drew these
+            in the core colour at 0.22 and they rendered as a grey smudge over
+            the ground — a dark icon has no room for a neutral mid-tone, which
+            is precisely why the app's own .hero-fly is a bare radial gradient
+            with no body at all. Kept small, kept in the amber family, and left
+            faint enough to disappear cleanly at 16px rather than turn to mud. -->
+       <g fill="${WARN}" opacity="0.30">
+         <ellipse cx="41" cy="40" rx="10" ry="4" transform="rotate(-38 41 40)"/>
+         <ellipse cx="49" cy="35" rx="8" ry="3.4" transform="rotate(-14 49 35)"/>
+       </g>
+
+       <!-- The body: a short warm taper running down into the light, so the glow
+            belongs to something rather than floating free. -->
+       <ellipse cx="48" cy="46" rx="5" ry="8.5"
+                transform="rotate(20 48 46)" fill="${WARN}" opacity="0.5"/>
+
+       <!-- The lantern. Wide falloff first, then the lamp, then the hot core. -->
+       <circle cx="54" cy="58" r="40" fill="url(#halo)"/>
+       <circle cx="54" cy="58" r="19" fill="url(#lamp)"/>
+       <circle cx="54" cy="58" r="6.5" fill="${CORE}"/>
+     </svg>`,
+  );
+}
 
 /** ICO wrapping a PNG. `size` is written as 0 when it is 256, per the format. */
 function ico(png: Buffer, size: number): Buffer {
@@ -81,43 +136,7 @@ function ico(png: Buffer, size: number): Buffer {
   return Buffer.concat([header, entry, png]);
 }
 
-/** One square icon: dark rounded ground, drawing centred on it. */
-async function render(size: number): Promise<Buffer> {
-  const meta = await sharp(SOURCE).metadata();
-  const sw = meta.width!;
-  const sh = meta.height!;
-
-  const art = await sharp(SOURCE)
-    .extract({
-      left: Math.round(CROP.left * sw),
-      top: Math.round(CROP.top * sh),
-      width: Math.round(CROP.width * sw),
-      height: Math.round(CROP.height * sh),
-    })
-    // `contain` with a transparent background, so the drawing keeps its own
-    // proportions inside the padded square instead of being squashed to it.
-    .resize(Math.round(size * (1 - PAD * 2)), Math.round(size * (1 - PAD * 2)), {
-      fit: "contain",
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .png()
-    .toBuffer();
-
-  // The radius tracks the size so 32px and 180px look like the same icon: 22% is
-  // close to the squircle every platform rounds app icons to.
-  const r = Math.round(size * 0.22);
-  const ground = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-       <rect width="${size}" height="${size}" rx="${r}" ry="${r}"
-             fill="rgb(${INK.r},${INK.g},${INK.b})"/>
-     </svg>`,
-  );
-
-  return sharp(ground)
-    .composite([{ input: art, gravity: "center" }])
-    .png()
-    .toBuffer();
-}
+const render = (size: number) => sharp(firefly(size)).png().toBuffer();
 
 async function main() {
   const [small, large] = await Promise.all([render(32), render(180)]);

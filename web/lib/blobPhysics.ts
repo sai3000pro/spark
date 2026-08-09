@@ -101,6 +101,31 @@ export function releaseVelocity(samples: readonly Sample[]): { vx: number; vy: n
 export type BallisticResult = "flying" | "apex" | "bounce" | "landed";
 
 /**
+ * How fast it will meet the ground, in px/s. Drag is left out for the same
+ * reason `timeToGround` leaves it out: this is a lookahead of a tenth of a
+ * second, over which drag moves the answer by less than a frame.
+ */
+export function impactSpeed(m: Motion, env: Env): number {
+  if (m.y >= 0) return Math.abs(m.vy);
+  return Math.sqrt(m.vy * m.vy + 2 * GRAVITY * env.unit * -m.y);
+}
+
+/**
+ * Is the fall it is in now its LAST — does the next contact settle it rather
+ * than bounce it?
+ *
+ * This is what lets the character brace BEFORE it lands instead of after. The
+ * settle test inside `stepBallistic` can only be applied at the moment of
+ * contact, by which time the landing drawing has nothing left to anticipate; run
+ * against the predicted impact speed it answers the same question early. It has
+ * to be a prediction rather than a count of bounces because how many bounces
+ * remain is not knowable — it depends entirely on how hard it was thrown.
+ */
+export function isLastDescent(m: Motion, env: Env): boolean {
+  return m.vy > 0 && impactSpeed(m, env) <= SETTLE_VY * env.unit;
+}
+
+/**
  * How long until it hits the ground, in seconds, ignoring drag.
  *
  * This is what lets the character SEE THE GROUND COMING and brace for it. A
