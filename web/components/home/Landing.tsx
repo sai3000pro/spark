@@ -815,15 +815,9 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         </div>
 
         {/* The seam: the kept moments lapping like a ticker of the day — the
-            open album handing off to the journal that pressed it. */}
-        <div
-          aria-hidden
-          className="relative overflow-hidden border-t border-milk/10 bg-pine py-4"
-          style={{
-            maskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-            WebkitMaskImage: "linear-gradient(90deg, transparent, black 10%, black 90%, transparent)",
-          }}
-        >
+            open album handing off to the journal that pressed it. No edge
+            mask: the band stays solid pine all the way across. */}
+        <div aria-hidden className="relative overflow-hidden border-t border-milk/10 bg-pine py-4">
           <div className="marquee-track flex w-max whitespace-nowrap" style={{ "--marquee-dur": "46s" } as React.CSSProperties}>
             {[0, 1].map((dup) => (
               <span key={dup} className="fnote text-[12px] tracking-[0.18em] text-brass/70">
