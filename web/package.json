@@ -11,6 +11,7 @@
     "verify": "tsx scripts/verify-pipeline.ts",
     "build:sprites": "tsx scripts/build-blob-sprites.ts",
     "build:icons": "tsx scripts/build-icons.ts",
+    "build:frames": "tsx scripts/build-capture-frames.ts",
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/copy-maplibre-worker.mjs"
   },

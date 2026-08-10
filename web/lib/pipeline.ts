@@ -330,6 +330,15 @@ export interface MomentContent {
   vibe: Vibe;
   /** Hue for procedural keyframe placeholders. */
   hue?: number;
+  /**
+   * Real captured frames for this moment, in order, as public URLs.
+   *
+   * The i-th entry becomes `keyframes[i].url`, and any keyframe past the end of
+   * the list keeps its procedural stand-in — which is the honest result when a
+   * capture yielded fewer usable frames than the pipeline wants, and is why this
+   * is a sparse list rather than a required one.
+   */
+  frames?: string[];
 }
 
 export function promoteToMoment(
@@ -340,7 +349,13 @@ export function promoteToMoment(
   path: TrackPoint[] = [],
 ): Moment {
   const inSpan = detections.filter((d) => d.t >= candidate.tStart && d.t <= candidate.tEnd);
-  const keyframes = buildKeyframes(content.id, candidate.tStart, candidate.tEnd, content.hue);
+  const keyframes = buildKeyframes(
+    content.id,
+    candidate.tStart,
+    candidate.tEnd,
+    content.hue,
+    content.frames,
+  );
   const objects = collapseToSightings(inSpan, keyframes, path);
 
   return {
@@ -431,13 +446,24 @@ export function collapseToSightings(
   return sightings.sort((a, b) => b.confidence - a.confidence);
 }
 
-function buildKeyframes(momentId: string, tStart: number, tEnd: number, hue?: number): Keyframe[] {
+function buildKeyframes(
+  momentId: string,
+  tStart: number,
+  tEnd: number,
+  hue?: number,
+  frames?: string[],
+): Keyframe[] {
   const n = PIPELINE_CONFIG.keyframesPerMoment;
   return Array.from({ length: n }, (_, i) => {
     const t = tStart + ((i + 0.5) / n) * (tEnd - tStart);
     return {
       id: `${momentId}_kf${i}`,
       t: Number(t.toFixed(1)),
+      // A real frame when one exists for this index, and the procedural
+      // stand-in otherwise. The seed is computed either way so that dropping a
+      // frame from the list restores exactly the placeholder it replaced,
+      // rather than reshuffling every scene in the moment.
+      url: frames?.[i],
       placeholderSeed: hashString(`${momentId}_${i}`) % 100000,
       hue,
       width: 640,

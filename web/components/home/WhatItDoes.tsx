@@ -108,6 +108,48 @@ export function WhatItDoes() {
             </article>
           ))}
         </div>
+
+        {/*
+          THE EVIDENCE FOR BEAT 03.
+
+          The three columns above are claims, and the third one — "rooms you can
+          move around inside" — is the one a visitor has least reason to believe.
+          This is a frame straight out of the viewer: a real reconstruction of the
+          hackathon floor, cropped out of a screenshot in design/ by
+          scripts/build-capture-frames.ts.
+
+          It is deliberately NOT retouched. The smeared bloom around the edges,
+          the floaters, the faces that dissolve where the camera swept past too
+          fast — that is what a Gaussian splat of a room full of moving people
+          actually looks like, and cleaning it up would make it look like stock
+          photography, which would be both a lie and less interesting. The
+          caption carries the real numbers off that capture for the same reason.
+        */}
+        <figure className="lift mt-12" style={{ "--lift-start": "4%" } as React.CSSProperties}>
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-ink-900">
+            {/* A plain <img>: this is a pre-encoded webp cropped and quality-
+                tuned against the noise it carries, and next/image would re-encode
+                it at 75 and smear exactly the texture that makes it convincing.
+                Same argument as the hero plate and the blob sprites. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/mock/frames/showcase-wide.webp"
+              alt="A Gaussian splat reconstruction of the hackathon floor: people sitting on green astroturf with laptops and backpacks, sharp where the camera lingered and dissolving into smears at the edges of the capture."
+              width={1280}
+              height={720}
+              loading="lazy"
+              decoding="async"
+              className="block aspect-video w-full object-cover"
+            />
+          </div>
+          <figcaption className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[10.5px] text-fog-400">
+            <span className="text-machine-400">Real capture</span>
+            {/* Read off the viewer's own readout in the source screenshot. */}
+            <span className="tnum">818,115 gaussians</span>
+            <span className="tnum">445 frames</span>
+            <span>SummerHacks · Toronto</span>
+          </figcaption>
+        </figure>
       </div>
     </section>
   );

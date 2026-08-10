@@ -102,6 +102,16 @@ export interface MomentSpec {
   vibe: Vibe;
   laughterAt?: number[];
   keywords?: Array<[number, string]>; // [tOffset, phrase]
+  /**
+   * Real captured frames, in order, as public URLs under /mock/frames.
+   *
+   * Supply fewer than PIPELINE_CONFIG.keyframesPerMoment and the rest stay
+   * procedural — see the note on MomentContent.frames. Only moments whose
+   * capture actually exists should set this: a frame borrowed from another trip
+   * to make the grid look fuller is precisely the lie the SYNTHETIC badge and
+   * the "nothing was captured" card exist to avoid.
+   */
+  frames?: string[];
 }
 
 export interface TripSpec {
@@ -268,6 +278,7 @@ function contentFor(spec: MomentSpec): MomentContent {
     music: spec.music,
     vibe: spec.vibe,
     hue: spec.hue,
+    frames: spec.frames,
   };
 }
 

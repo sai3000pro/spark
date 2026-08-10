@@ -764,13 +764,17 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
               do I do here?". The walk is what the page has been arguing for, so
               it keeps the fill; starting a trip sits beside it in outline.
               Worded exactly as the blob and the record pill word it. */}
-          <Link
-            href="/live"
-            className="pill-ghost hidden px-3.5 py-2 text-[13px] text-milk/85 transition-colors hover:text-milk sm:inline-flex"
-          >
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-clay" />
-            Start a trip?
-          </Link>
+          {/* .pill-ghost sets display, so `hidden` must live on a wrapper —
+              same reason the walk screen wraps its Detector bench link. */}
+          <span className="hidden sm:block">
+            <Link
+              href="/live"
+              className="pill-ghost px-3.5 py-2 text-[13px] text-milk/85 transition-colors hover:text-milk"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-clay" />
+              Start a trip?
+            </Link>
+          </span>
           <Link href="/walk" className="pill-brass px-4 py-2 text-[13px]">
             <Plus size={14} strokeWidth={2} aria-hidden />
             Step into the walk
@@ -1807,7 +1811,17 @@ function PrintMat({ mo, index, ink }: { mo: LandingMoment; index: number; ink: s
       <div className="relative overflow-hidden">
         <KeyframeImg
           keyframe={{ placeholderSeed: mo.seed, hue: mo.hue, url: mo.url }}
-          alt={`Keyframe stand-in for “${mo.title}”`}
+          // The alt has to follow the image. This said "Keyframe stand-in for X"
+          // unconditionally, which was true while every frame was procedural and
+          // became a lie the moment real captures landed on some of them — a
+          // screen-reader user was told a genuine reconstruction was a
+          // placeholder. `mo.url` is exactly the flag KeyframeImg itself
+          // branches on, so the two can never disagree.
+          alt={
+            mo.url
+              ? `Reconstructed frame from “${mo.title}”`
+              : `Keyframe stand-in for “${mo.title}”`
+          }
           width={840}
           height={630}
           className="aspect-[4/3] w-full object-cover"

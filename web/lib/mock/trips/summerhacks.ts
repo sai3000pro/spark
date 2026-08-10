@@ -97,6 +97,20 @@ const MOMENTS: MomentSpec[] = [
       [41, "look at this"],
       [72, "badges first"],
     ],
+    // Real frames, cut from the viewer screenshots in design/ by
+    // scripts/build-capture-frames.ts. This is the trip they were actually shot
+    // on, which is the only reason they are here — see the note on
+    // MomentSpec.frames about not borrowing frames to fill a grid.
+    /*
+      NO FRAMES HERE, THOUGH THIS IS THE TRIP THEY WERE SHOT ON.
+
+      All five real captures went to the flagship instead, because that is the
+      trip the landing page renders as "Six moments, kept" — the prints you see
+      first — and the same picture appearing under two different trips on one
+      scrolling page is the tell that the library is dressed rather than
+      recorded. If more captures arrive, this trip is where the hackathon ones
+      belong; see lib/mock/trips/stackt-market.ts for the full note.
+    */
     tracks: [
       { trackId: "t_sh_cy_priya", label: "person", tStart: 240, tEnd: 342, worldPos: at(PLACES.courtyard, -1.3, 0.88, 0.9), peakConfidence: 0.94, hz: 2.4, baseDepthM: 2.5 },
       { trackId: "t_sh_cy_marcus", label: "person", tStart: 241, tEnd: 341, worldPos: at(PLACES.courtyard, 1.2, 0.9, 1.1), peakConfidence: 0.92, hz: 2.4, baseDepthM: 2.9 },
@@ -142,6 +156,8 @@ const MOMENTS: MomentSpec[] = [
       [58, "capture this"],
       [91, "that's the demo"],
     ],
+    // No frames — see the note on the courtyard moment above. The real .ply this
+    // moment already carries is untouched; it is the FRAME that moved.
     tracks: [
       { trackId: "t_sh_br_priya", label: "person", tStart: 1620, tEnd: 1725, worldPos: at(PLACES.buildRoom, -1.5, 0.86, 0.7), peakConfidence: 0.95, hz: 2.6, baseDepthM: 2.1 },
       { trackId: "t_sh_br_marcus", label: "person", tStart: 1621, tEnd: 1724, worldPos: at(PLACES.buildRoom, 1.4, 0.88, 0.9), peakConfidence: 0.93, hz: 2.6, baseDepthM: 2.4 },
@@ -200,6 +216,9 @@ const MOMENTS: MomentSpec[] = [
       [27, "show them"],
       [63, "on video"],
     ],
+    // No frames — see the note on the courtyard moment above. The point cloud
+    // that suited this "processing" moment went to the flagship's silos moment,
+    // which is also "processing" and is the one on the landing page.
     tracks: [
       { trackId: "t_sh_dm_priya", label: "person", tStart: 2880, tEnd: 2976, worldPos: at(PLACES.demo, -1.6, 0.88, 0.8), peakConfidence: 0.94, hz: 2.6, baseDepthM: 2.3 },
       { trackId: "t_sh_dm_marcus", label: "person", tStart: 2881, tEnd: 2975, worldPos: at(PLACES.demo, 1.0, 0.9, 1.0), peakConfidence: 0.92, hz: 2.6, baseDepthM: 2.6 },

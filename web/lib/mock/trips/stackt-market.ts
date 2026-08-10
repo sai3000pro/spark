@@ -122,6 +122,31 @@ const MOMENTS: MomentSpec[] = [
     ],
     laughterAt: [42, 90],
     keywords: [[39, "look at"]],
+    /*
+      ── REAL FRAMES ACROSS THIS TRIP, AND WHAT TO KNOW ABOUT THEM ─────────────
+      Cut from the viewer screenshots in design/ by
+      scripts/build-capture-frames.ts. All five are from ONE indoor hackathon:
+      people on astroturf with laptops, long blue tables, a meal, and a raw point
+      cloud. They are spread across this trip's moments at the owner's explicit
+      direction, after the mismatch below was raised and re-confirmed.
+
+      ONLY TWO OF THE FIVE ACTUALLY MATCH THEIR MOMENT:
+        · this one — tracks are person, laptop, backpack, dining table and cup,
+          tags are ["hackathon", "containers", "kickoff", "coffee"], and the
+          photograph is exactly that.
+        · the silos — status "processing", paired with the unconverged cloud.
+
+      The rest are placed on tone or on "least specific title wins": the ramparts
+      at closing, a dog intercepting a frisbee on Garrison Common, and golden
+      hour in the red canoe are all outdoor waterfront scenes, and none of these
+      pictures is one. If someone later reads a frisbee card sitting over a shot
+      of a room full of laptops as a bug, it is not — it is this decision. The
+      fix is new captures, not new code.
+
+      The geese moment is the sixth and keeps its procedural stand-in: there are
+      five frames and six moments.
+    */
+    frames: ["/mock/frames/sh-courtyard.webp"],
     tracks: [
       { trackId: "t_st_cy_jess", label: "person", tStart: 150, tEnd: 265, worldPos: at(PLACES.courtyard, -1.5, 0.88, 0.9), peakConfidence: 0.95, hz: 2.8, baseDepthM: 2.6 },
       { trackId: "t_st_cy_ravi", label: "person", tStart: 150, tEnd: 265, worldPos: at(PLACES.courtyard, 1.7, 0.9, 0.4), peakConfidence: 0.93, hz: 2.8, baseDepthM: 3.1 },
@@ -161,6 +186,7 @@ const MOMENTS: MomentSpec[] = [
     ],
     laughterAt: [24, 95],
     keywords: [[21, "look at"]],
+    frames: ["/mock/frames/sh-build-room-close.webp"],
     tracks: [
       { trackId: "t_st_rp_jess", label: "person", tStart: 990, tEnd: 1105, worldPos: at(PLACES.ramparts, -1.8, 0.9, 0.6), peakConfidence: 0.94, hz: 2.6, baseDepthM: 2.8 },
       { trackId: "t_st_rp_ravi", label: "person", tStart: 990, tEnd: 1105, worldPos: at(PLACES.ramparts, 1.4, 0.9, -0.8), peakConfidence: 0.92, hz: 2.6, baseDepthM: 3.2 },
@@ -199,6 +225,7 @@ const MOMENTS: MomentSpec[] = [
     ],
     laughterAt: [17, 55, 88],
     keywords: [[15, "are you seeing this"]],
+    frames: ["/mock/frames/sh-build-room.webp"],
     tracks: [
       { trackId: "t_st_cm_jess", label: "person", tStart: 1400, tEnd: 1515, worldPos: at(PLACES.common, -2.6, 0.9, 1.2), peakConfidence: 0.95, hz: 2.8, baseDepthM: 3.4 },
       { trackId: "t_st_cm_ravi", label: "person", tStart: 1400, tEnd: 1515, worldPos: at(PLACES.common, 3.1, 0.9, -1.4), peakConfidence: 0.93, hz: 2.8, baseDepthM: 4.2 },
@@ -292,6 +319,11 @@ const MOMENTS: MomentSpec[] = [
       [24, "look at"],
       [102, "one frame"],
     ],
+    // The best pairing in the set. This moment's splat status is "processing",
+    // and this frame is a raw point cloud floating in black — sparse, floaters
+    // everywhere, nowhere near converged. It is what an unfinished
+    // reconstruction genuinely looks like, so the picture and the status agree.
+    frames: ["/mock/frames/sh-demo-cloud.webp"],
     tracks: [
       { trackId: "t_st_sl_jess", label: "person", tStart: 3360, tEnd: 3480, worldPos: at(PLACES.silos, -1.4, 0.9, 0.7), peakConfidence: 0.94, hz: 2.6, baseDepthM: 2.7 },
       { trackId: "t_st_sl_ravi", label: "person", tStart: 3360, tEnd: 3480, worldPos: at(PLACES.silos, 1.6, 0.9, 0.3), peakConfidence: 0.92, hz: 2.6, baseDepthM: 3.0 },
@@ -342,6 +374,9 @@ const MOMENTS: MomentSpec[] = [
       [63, "look at"],
       [121, "remember this"],
     ],
+    // Chosen on TONE rather than subject: of the frames left, this is the warm
+    // one, and this moment is golden hour.
+    frames: ["/mock/frames/sh-courtyard-meal.webp"],
     tracks: [
       { trackId: "t_st_cn_jess", label: "person", tStart: 4500, tEnd: 4635, worldPos: at(PLACES.canoe, -1.2, 1.1, 0.4), peakConfidence: 0.95, hz: 2.8, baseDepthM: 2.4 },
       { trackId: "t_st_cn_ravi", label: "person", tStart: 4500, tEnd: 4635, worldPos: at(PLACES.canoe, 1.4, 1.1, 0.1), peakConfidence: 0.94, hz: 2.8, baseDepthM: 2.8 },

@@ -167,11 +167,21 @@ const SKID_CYCLE_UNITS = 0.8;
 /** Vertical speed below which the arc reads as weightless, in heights/s. */
 const APEX_VY = 1.2;
 /*
- * There is no brace lookahead any more. It anticipated the ground with the
- * jump sheet's landing drawing, which is a LEAP's drawing — on a throw it read
- * as the blob deciding to land rather than being dropped. The touchdown beat
- * still uses it, from its own phase and its own cell; the descent is just a
- * shocked face. `timeToGround` stays in lib/blobPhysics.ts for it.
+ * THE BRACE LOOKAHEAD IS BACK, BUT ONLY FOR THE LAST FALL.
+ *
+ * It was removed once, for a good reason worth keeping written down: it
+ * anticipated the ground with the jump sheet's landing drawing, which is a
+ * LEAP's drawing, and a blob that adopts it mid-throw reads as DECIDING to land
+ * rather than being dropped. Worse, it fired on every descent, so each bounce
+ * of a hard fling got the same knowing little landing pose.
+ *
+ * What makes it work now is `isLastDescent` (lib/blobPhysics.ts): the pose is
+ * reachable only on the fall that actually settles it, predicted from the
+ * impact speed rather than counted, because how many bounces remain depends
+ * entirely on how hard it was thrown. Every bounce before that still gets the
+ * shocked face, so "being dropped" is intact — the character only gathers
+ * itself for the touchdown it is about to make, which is the beat that used to
+ * arrive a bounce too late.
  */
 
 /** Frames fetched when it first stirs — the wake beat covers the round trip. */
