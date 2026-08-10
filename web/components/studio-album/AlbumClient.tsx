@@ -245,18 +245,39 @@ function TrainingStatus({ item }: { item: AlbumItem }) {
   const [etaSecs, setEtaSecs] = useState<number | null>(null);
   const [done, setDone] = useState(false);
   const sample = useRef<{ t: number; iter: number } | null>(null);
+  /** Whether the rough opening estimate has been laid down — see `poll`. */
+  const seeded = useRef(false);
 
   useEffect(() => {
     if (done) return;
     let live = true;
 
-    // Client-only seed (avoids SSR/client time mismatch): rough ETA from elapsed.
-    if (etaSecs === null && item.train?.started && item.train.latestIter && steps) {
-      const elapsed = Date.now() / 1000 - item.train.started;
-      if (item.train.latestIter > 0) setEtaSecs(elapsed * (steps / item.train.latestIter - 1));
-    }
-
     async function poll() {
+      /*
+        Client-only seed (avoids an SSR/client time mismatch): a rough ETA from
+        elapsed, so something is on screen before the first reading lands.
+
+        It used to sit in the effect body, which cost twice. A setState run
+        synchronously by an effect cascades an extra render — what the lint rule
+        is for — and this one ALSO fed back through the dependency list below,
+        so every sharpened estimate tore down the interval and rebuilt it, then
+        polled again immediately. An 8-second poll was not running every eight
+        seconds. Seeding from inside `poll` and remembering it in a ref keeps the
+        estimate and leaves the timer alone.
+      */
+      if (!seeded.current) {
+        seeded.current = true;
+        // The two fields, not the object they sit on: these are exactly what the
+        // dependency list below names, and reaching for `item.train` whole would
+        // make the effect depend on an identity that changes on every poll.
+        const started = item.train?.started;
+        const latestIter = item.train?.latestIter;
+        if (started && latestIter && latestIter > 0 && steps) {
+          const elapsed = Date.now() / 1000 - started;
+          setEtaSecs(elapsed * (steps / latestIter - 1));
+        }
+      }
+
       try {
         const res = await fetch("/api/album/runs", { cache: "no-store" });
         const data = (await res.json()) as { runs?: Array<Record<string, unknown>> };
@@ -287,7 +308,10 @@ function TrainingStatus({ item }: { item: AlbumItem }) {
       live = false;
       clearInterval(id);
     };
-  }, [item.id, item.train?.started, item.train?.latestIter, steps, etaSecs, done]);
+    // `etaSecs` is deliberately NOT a dependency: the effect no longer reads it
+    // (the seed guard is a ref), and listing it is what made the estimate
+    // restart its own poll loop.
+  }, [item.id, item.train?.started, item.train?.latestIter, steps, done]);
 
   if (done) {
     return <p className="fnote mt-1.5 truncate text-brass-deep">✓ Ready — refresh to enter</p>;

@@ -50,6 +50,7 @@ import { useLiveTrip } from "@/components/shell/LiveTripProvider";
 import { elapsedLabel } from "@/lib/useActiveTrip";
 import {
   BLOB_CLIPS,
+  BLOB_FRAMES,
   blobCell,
   blobSprite,
   type BlobClipName,
@@ -183,6 +184,28 @@ const APEX_VY = 1.2;
  * itself for the touchdown it is about to make, which is the beat that used to
  * arrive a bounce too late.
  */
+
+/**
+ * Pick a frame from a cycle by DISTANCE COVERED, and never return nothing.
+ *
+ * `frames[Math.floor(travelled / step) % frames.length]` is the obvious way to
+ * write this and it has a hole in it: `step` is derived from the character's
+ * measured height, and a height of zero — an element not laid out yet, or in a
+ * hidden subtree — makes `step` zero. Then `travelled / step` is NaN (0/0) or
+ * Infinity, `Math.floor(…) % n` is NaN either way, and the lookup yields
+ * `undefined`. That used to ship a request for `undefined-left.webp`; now that
+ * the box's geometry is read from the frame too, it throws and takes the whole
+ * landing down with it.
+ *
+ * So the arithmetic is guarded once, here, rather than at each of the two call
+ * sites — and it falls back to the cycle's first drawing, which is a standing
+ * pose rather than a mid-stride one.
+ */
+function cycleFrame(frames: readonly BlobFrame[], travelled: number, step: number): BlobFrame {
+  if (!(step > 0) || !Number.isFinite(travelled)) return frames[0];
+  const i = Math.floor(travelled / step) % frames.length;
+  return (i >= 0 ? frames[i] : undefined) ?? frames[0];
+}
 
 /** Frames fetched when it first stirs — the wake beat covers the round trip. */
 const WARM_WAKE: BlobFrame[] = [...BLOB_CLIPS.wake.frames];
@@ -498,13 +521,28 @@ export function HeroBlobButton() {
     const box = el?.parentElement;
     if (!el || !box) return null;
     const plate = box.getBoundingClientRect();
+    // The CELL is taller than the character and the two cells are taller by
+    // different amounts, so the fraction is read back off the element rather
+    // than assumed — during a jump this element is the big cell.
+    const unit =
+      el.getBoundingClientRect().height *
+      (parseFloat(getComputedStyle(el).getPropertyValue("--sprite-body-h")) || 1);
+
+    /*
+      UNIT IS THE YARDSTICK FOR EVERYTHING, so a zero one is not a small error —
+      it is division by zero throughout. Gravity, the walk's stride, the bob and
+      the stride-to-frame arithmetic are all multiples of it, so a blob measured
+      at zero height gets an infinite gait, a NaN bob painted into the DOM as
+      "NaNpx", and a frame index of NaN.
+      It measures zero whenever the element is not laid out: a hidden subtree, a
+      collapsed ancestor, or a call that lands before first layout. None of those
+      are states to animate through, so refuse the frame rather than run it with
+      poisoned numbers — the callers already treat null as "not now".
+    */
+    if (!(unit > 0) || !(plate.width > 0)) return null;
+
     return {
-      // The CELL is taller than the character and the two cells are taller by
-      // different amounts, so the fraction is read back off the element rather
-      // than assumed — during a jump this element is the big cell.
-      unit:
-        el.getBoundingClientRect().height *
-        (parseFloat(getComputedStyle(el).getPropertyValue("--sprite-body-h")) || 1),
+      unit,
       minX: -ROAM.left * plate.width,
       maxX: ROAM.right * plate.width,
       ceiling: -ROAM.ceiling * plate.height,
@@ -630,6 +668,17 @@ export function HeroBlobButton() {
         element, and the browser coalesces them into the one style recalc it was
         already doing for `src`.
       */
+      /*
+        A NET, NOT A FIX. `cycleFrame` above is what stops a bad index being
+        produced; this is what stops one being fatal if some other path ever
+        produces a frame the manifest does not have. The blob is a toy on a
+        landing page, and nothing it does should be able to throw during an
+        animation frame and take the page down — which is exactly what happened
+        once the box's geometry started being read from the frame as well as the
+        picture. Skipping a frame is invisible; a white screen is not.
+      */
+      if (!frame || !BLOB_FRAMES[frame]) return;
+
       const el = rootRef.current;
       if (el) {
         const c = blobCell(frame);
@@ -763,7 +812,7 @@ export function HeroBlobButton() {
           travelled += Math.abs(m.vx) * dt;
           const step = (SKID_CYCLE_UNITS * env.unit) / skid.length;
           if (travelled >= step) travelled -= step;
-          showFrame(skid[Math.floor(travelled / step) % skid.length], facing);
+          showFrame(cycleFrame(skid, travelled, step), facing);
         } else if (brace) {
           // The drawn touchdown, held through the last of the fall.
           showFrame(air[air.length - 1], facing);
@@ -804,13 +853,21 @@ export function HeroBlobButton() {
         travelled += moved;
         const cycle = WALK_CYCLE_UNITS * env.unit;
         const step = cycle / walk.length;
-        showFrame(walk[Math.floor(travelled / step) % walk.length], facing);
+        showFrame(cycleFrame(walk, travelled, step), facing);
         // Continuous between the drawings — see WALK_BOB.
         const bob = -WALK_BOB * env.unit * Math.abs(Math.sin((Math.PI * 2 * travelled) / cycle));
         paint(m.x, bob, 0, 0);
         if (arrived) {
           snapHome(); // clears the bob as well as the offset
-          showFrame(walk[0], REST_FACING); // both feet planted, not mid-stride
+          // AND ONLY HERE DOES IT SIT. Every drawing between the landing and
+          // this one is a stride, so the character walks the whole way home and
+          // settles at the end rather than sitting down every half cycle.
+          //
+          // The drawing is the WAKE CLIP'S OPENING one — the seated pose — and
+          // the phase set two lines down plays that same clip forward into the
+          // question. Landing on the clip's own first frame is what makes the
+          // two read as one movement instead of a swap.
+          showFrame(SEQUENCES.wake.frames[0], REST_FACING);
           setFacing(REST_FACING);
           // HOME, AND ONLY NOW DOES IT ASK. Being carried across the scene is
           // not a reason to want to ask you something, so the question is held

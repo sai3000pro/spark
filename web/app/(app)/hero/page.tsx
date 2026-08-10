@@ -1,5 +1,12 @@
 /**
- * The landing page: the scene, and only the scene.
+ * The aurora landing: the scene, and only the scene. Served at /hero.
+ *
+ * MOVED OFF `/`, WHICH IT COLLIDED WITH. This and app/page.tsx — the journal
+ * landing — both resolved to `/`, which Next refuses to build: two parallel
+ * pages cannot own one path. The journal keeps `/` because that is the design
+ * the companion work was built against (the sleeping mark beside the wordmark,
+ * the flingable blob on the kept-moments belt). Nothing here was deleted, so
+ * swapping the two is a rename if this scene should be the front door instead.
  *
  * This is now a separate thing from the app itself. The hero fills exactly one
  * viewport and the scroll cue leads OUT to /album — the library is its own route

@@ -35,14 +35,14 @@ export type BlobFrame =
   | "turn-6"
   | "turn-7"
   | "turn-8"
+  | "sit-0"
+  | "sit-1"
+  | "sit-2"
+  | "sit-3"
   | "walk-0"
   | "walk-1"
   | "walk-2"
   | "walk-3"
-  | "walk-4"
-  | "walk-5"
-  | "walk-6"
-  | "walk-7"
   | "sleep-0"
   | "sleep-1"
   | "sleep-2"
@@ -63,7 +63,7 @@ export type BlobCellName = "base" | "jump";
 
 /** Geometry per cell. The character is 300 px tall in all of them. */
 export const BLOB_CELLS = {
-  base: { width: 380, height: 413, cellAr: 0.920, footY: 0.908, bodyH: 0.7264, bodyW: 0.7560 },
+  base: { width: 380, height: 394, cellAr: 0.964, footY: 0.952, bodyH: 0.7614, bodyW: 0.7560 },
   jump: { width: 738, height: 651, cellAr: 1.134, footY: 0.891, bodyH: 0.4608, bodyW: 0.4214 },
 } as const;
 
@@ -88,14 +88,14 @@ export const BLOB_FRAMES = {
   "turn-6": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 13 },
   "turn-7": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 14 },
   "turn-8": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 15 },
-  "walk-0": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 16 },
-  "walk-1": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 17 },
-  "walk-2": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 18 },
-  "walk-3": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 19 },
-  "walk-4": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 20 },
-  "walk-5": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 21 },
-  "walk-6": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 22 },
-  "walk-7": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 23 },
+  "sit-0": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 16 },
+  "sit-1": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 17 },
+  "sit-2": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 18 },
+  "sit-3": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 19 },
+  "walk-0": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 20 },
+  "walk-1": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 21 },
+  "walk-2": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 22 },
+  "walk-3": { cell: "base", paintedFacing: "right", glyph: false, source: "MoreAnimationsSprites.png", sheetIndex: 23 },
   "sleep-0": { cell: "base", paintedFacing: "right", glyph: false, source: "Blob sleep-cycle strip.png", sheetIndex: 0 },
   "sleep-1": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 1 },
   "sleep-2": { cell: "base", paintedFacing: "right", glyph: true, source: "Blob sleep-cycle strip.png", sheetIndex: 2 },
@@ -151,11 +151,20 @@ export const BLOB_CLIPS = {
   walk: {
     note: "one full gait cycle, two footfalls",
     cell: "base",
-    frames: ["walk-0", "walk-1", "walk-2", "walk-3", "walk-4", "walk-5", "walk-6", "walk-7"],
+    frames: ["walk-0", "walk-1", "walk-2", "walk-3"],
     fps: 10,
     loop: true,
     rest: 0,
-    lift: [0.000, -0.004, -0.015, -0.015, -0.078, -0.078, -0.078, -0.075],
+    lift: [0.000, 0.000, 0.000, 0.004],
+  },
+  sit: {
+    note: "settling down onto the spot",
+    cell: "base",
+    frames: ["sit-0", "sit-1", "sit-2", "sit-3"],
+    fps: 8,
+    loop: false,
+    rest: 3,
+    lift: [0.000, -0.004, -0.015, -0.015],
   },
 } as const;
 

@@ -148,10 +148,23 @@ interface SheetSpec {
  * are cut and shipped so the set is complete, and the ASCII map in the report is
  * there so anyone can check a name by eye.
  */
+/*
+  THE BOTTOM ROW IS TWO ACTIONS, NOT ONE.
+
+  It was read as an eight-frame walk, which is what the row looks like at a
+  glance. It is not: the first four cells are the character SEATED — the same
+  low, round silhouette as the expression row above, feet tucked, no leg
+  extension anywhere — and only the last four extend a leg and lift the body.
+
+  Naming all eight `walk-*` put four sitting drawings inside the walk cycle, so
+  a blob trudging home sat down every half stride and got up again. The names
+  now say which is which, and the walk clip below is the four that actually
+  walk.
+*/
 const POSE_NAMES = [
   "smile", "wink", "delight", "surprised", "idle", "turn-0", "turn-1", "turn-2",
   "wave", "doze", "turn-3", "turn-4", "turn-5", "turn-6", "turn-7", "turn-8",
-  "walk-0", "walk-1", "walk-2", "walk-3", "walk-4", "walk-5", "walk-6", "walk-7",
+  "sit-0", "sit-1", "sit-2", "sit-3", "walk-0", "walk-1", "walk-2", "walk-3",
 ] as const;
 
 const SHEETS: SheetSpec[] = [
@@ -280,13 +293,35 @@ const CLIPS: ClipSpec[] = [
   },
   {
     name: "walk",
-    frames: ["walk-0", "walk-1", "walk-2", "walk-3", "walk-4", "walk-5", "walk-6", "walk-7"],
+    /*
+      FOUR, AND ALL FOUR WALK. This listed eight and half of them were the
+      seated `sit-*` drawings above, so the cycle read walk-walk-sit-sit. The
+      runtime derives its stride from `WALK_CYCLE_UNITS / frames.length`, so
+      dropping to four does not change how far a step carries the character —
+      only how many drawings that ground is divided between.
+    */
+    frames: ["walk-0", "walk-1", "walk-2", "walk-3"],
     cell: "base",
     groundRef: 0,
     fps: 10,
     loop: true,
     rest: 0,
     note: "one full gait cycle, two footfalls",
+  },
+  {
+    name: "sit",
+    /*
+      The settle. Not played as a clip yet — the walk home hands straight to the
+      wake beat, which opens on its own seated drawing — but named and measured
+      so the four drawings are findable rather than lurking inside a walk cycle.
+    */
+    frames: ["sit-0", "sit-1", "sit-2", "sit-3"],
+    cell: "base",
+    groundRef: 0,
+    fps: 8,
+    loop: false,
+    rest: 3,
+    note: "settling down onto the spot",
   },
 ];
 

@@ -131,7 +131,10 @@ export function LandingHero() {
         </p>
       </div>
 
-      <ScrollCue href="#journal" label="The journal" />
+      {/* No props any more. The cue used to take a target because the library was
+          a section stacked under this hero; it is its own route now, so ScrollCue
+          owns its destination (/album) and there is nothing left to pass. */}
+      <ScrollCue />
     </section>
   );
 }

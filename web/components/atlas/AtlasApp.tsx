@@ -17,9 +17,10 @@ import { NavBrandSwitch } from "@/components/shell/NavBrandSwitch";
 import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
-import { distance, duration, tripDate } from "@/lib/format";
+import { clockTime, distance, duration, tripDate } from "@/lib/format";
 import { makeGeo } from "@/lib/geo";
 import { formatGeo } from "@/lib/globe/geo";
+import type { GlobeView } from "@/lib/globeData";
 import type { AtlasView, TripView } from "@/lib/tripData";
 import type { Vec2 } from "@/lib/types";
 
@@ -29,6 +30,16 @@ const REPLAY_SPEED = 120;
 interface Props extends AtlasView {
   initialMomentId?: string | null;
   initialAnchor?: string | null;
+  /**
+   * Passed by AtlasScreen for the posting work, and deliberately not consumed
+   * here yet: the toggle these three feed — a walk reaches the shared globe only
+   * when its owner puts it there — is still being built. Declared rather than
+   * dropped from the call site so that wiring survives, and left undestructured
+   * so nothing here pretends to use them.
+   */
+  globe?: GlobeView;
+  mine?: boolean;
+  posted?: boolean;
 }
 
 export function AtlasApp({
@@ -111,11 +122,25 @@ export function AtlasApp({
     setPlaying(false);
   };
 
+  /**
+   * Wall-clock labels for the moments, one per moment and in their order — both
+   * the map's pins and the day bar index straight into this by position.
+   *
+   * Derived HERE rather than at the two call sites so they cannot drift into
+   * disagreeing about what time a moment happened, and computed once per trip
+   * because `clockTime` builds a Date and a formatter on every call.
+   */
+  const clocks = useMemo(
+    () => trip.moments.map((m) => clockTime(trip.startedAt, m.tStart)),
+    [trip.moments, trip.startedAt],
+  );
+
   return (
     <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
       <FieldMap
         path={trip.path}
         moments={trip.moments}
+        clocks={clocks}
         geo={geo}
         activeId={activeId}
         reachedT={playhead}
@@ -197,6 +222,7 @@ export function AtlasApp({
             playhead={playhead}
             playing={playing}
             moments={trip.moments}
+            clocks={clocks}
             activeId={activeId}
             replaySpeed={REPLAY_SPEED}
             onPlayToggle={() => {

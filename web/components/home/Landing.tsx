@@ -740,9 +740,6 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
           <a href="#albums" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk md:block">
             Albums
           </a>
-          <Link href="/walk" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
-            The walk
-          </Link>
           <Link href="/detect" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
             Detector bench
           </Link>
@@ -759,11 +756,17 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
             )}
             <span className="sr-only">{air.on ? "Turn night air off" : "Turn night air on"}</span>
           </button>
-          {/* Ghost, not a second brass pill. Both of these are primary-ish, and
-              two solid fills side by side make neither one the answer to "what
-              do I do here?". The walk is what the page has been arguing for, so
-              it keeps the fill; starting a trip sits beside it in outline.
-              Worded exactly as the blob and the record pill word it. */}
+          {/* Two actions, and only one fill.
+
+              "Step into the walk" and "Start a trip?" are the bar's two verbs —
+              relive a day that exists, or go make a new one. The walk keeps the
+              brass because it is what the whole page has been arguing for;
+              starting a trip sits beside it in outline. Two solid pills would
+              make neither one the answer to "what do I do here?".
+
+              There used to be a plain "The walk" link two slots to the left,
+              pointing at the same /walk as the brass pill. Same destination
+              worded two ways reads as two features. */}
           {/* .pill-ghost sets display, so `hidden` must live on a wrapper —
               same reason the walk screen wraps its Detector bench link. */}
           <span className="hidden sm:block">
@@ -1092,32 +1095,77 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
             </div>
           </div>
           <div className="mx-auto grid h-full w-full max-w-6xl grid-cols-[minmax(320px,5fr)_minmax(0,7fr)] items-center gap-12 px-8 pt-[9vh]">
-            <div className="relative z-10 h-[min(52vh,460px)]">
-              {moments.map((mo, i) => {
-                const ink = PAPER_INKS[i % PAPER_INKS.length];
-                return (
-                  <div
-                    key={mo.id}
-                    data-deck-text
-                    className={`absolute inset-0 flex flex-col justify-center ${i === 0 ? "" : "invisible opacity-0"}`}
-                  >
-                    <p className="fnote text-[11px] text-ink-faint">
-                      [ {String(i + 1).padStart(2, "0")} / {String(moments.length).padStart(2, "0")} · {mo.clock} ]
-                    </p>
-                    <h3 className="mt-4 text-[clamp(1.9rem,3.2vw,2.9rem)] leading-[1.06] text-ink">{mo.title}</h3>
-                    <p className="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-ink-soft">{mo.summary}</p>
-                    <p className="fnote mt-5 flex items-center gap-2 text-[10.5px] text-ink-faint">
-                      <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
-                      {mo.place} · {mo.length} · {mo.mood}
-                    </p>
-                    <Link href={`/walk?m=${mo.id}`} className="pill-ghost mt-7 w-fit px-5 py-2.5 text-[14px] text-ink">
-                      Step inside
-                      <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden />
-                    </Link>
-                  </div>
-                );
-              })}
-              <div aria-hidden className="absolute bottom-0 left-0 flex w-full max-w-[260px] items-center gap-3">
+            {/*
+              THE TIMELINE IS A FLOW SIBLING, NOT AN OVERLAY.
+
+              This column used to be one fixed-height box holding two absolutely
+              positioned children: the entry text at `inset-0`, vertically
+              centred, and the start→end rule pinned to `bottom-0`. Nothing
+              reserved space between them, and centred content grows in BOTH
+              directions — so as soon as a title wrapped to three lines, or the
+              window got short enough for `52vh` to bite, the "Step inside" pill
+              crossed the bottom edge and sat on top of the rule.
+
+              Making the rule a real sibling in a flex column fixes it by
+              construction rather than by tuning: the deck gets `flex-1`, the
+              rule takes the height it needs, and the two can no longer occupy
+              the same pixels at any title length or viewport size.
+
+              Safe for the GSAP deck above — it collects [data-deck-text] and
+              [data-deck-fill] with querySelectorAll from the SECTION root, so an
+              extra wrapper is invisible to it, and it only ever writes autoAlpha
+              and y on the entries.
+            */}
+            {/*
+              THE FLOOR IS MEASURED, NOT PICKED.
+
+              `min(52vh,460px)` alone was the other half of the overlap. At a
+              639px-tall window it resolves to 332px, which leaves the deck 299px
+              once the rule and its margin are out — and a two-line entry needs
+              351px. The content overflowed its box in both directions (it is
+              centred), and the bottom half of that overflow landed on the rule.
+              Making the rule a flow sibling stops it being *overlaid*; it cannot
+              conjure height that was never there.
+
+              351px is the tallest two-line entry, +46px buys the three-line case,
+              +33px is the rule and its margin: 430. Above a ~827px window 52vh
+              wins and nothing changes; below it, the column stops shrinking
+              instead of eating its own contents.
+            */}
+            <div className="relative z-10 flex h-[clamp(430px,52vh,460px)] flex-col">
+              <div className="relative flex-1">
+                {moments.map((mo, i) => {
+                  const ink = PAPER_INKS[i % PAPER_INKS.length];
+                  return (
+                    <div
+                      key={mo.id}
+                      data-deck-text
+                      className={`absolute inset-0 flex flex-col justify-center ${i === 0 ? "" : "invisible opacity-0"}`}
+                    >
+                      <p className="fnote text-[11px] text-ink-faint">
+                        [ {String(i + 1).padStart(2, "0")} / {String(moments.length).padStart(2, "0")} · {mo.clock} ]
+                      </p>
+                      {/* line-clamp-3 is a SAFETY NET, not a layout decision. The
+                          column's floor above is sized for a three-line title;
+                          bounding the title at three lines is what turns that
+                          from "tall enough for every title we currently have"
+                          into "tall enough by construction". It does not fire on
+                          any authored title — the longest is two lines. */}
+                      <h3 className="mt-4 line-clamp-3 text-[clamp(1.9rem,3.2vw,2.9rem)] leading-[1.06] text-ink">{mo.title}</h3>
+                      <p className="mt-4 max-w-[44ch] text-[15px] leading-relaxed text-ink-soft">{mo.summary}</p>
+                      <p className="fnote mt-5 flex items-center gap-2 text-[10.5px] text-ink-faint">
+                        <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: ink }} />
+                        {mo.place} · {mo.length} · {mo.mood}
+                      </p>
+                      <Link href={`/walk?m=${mo.id}`} className="pill-ghost mt-7 w-fit px-5 py-2.5 text-[14px] text-ink">
+                        Step inside
+                        <ArrowUpRight size={14} strokeWidth={1.75} aria-hidden />
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+              <div aria-hidden className="mt-4 flex w-full max-w-[260px] shrink-0 items-center gap-3">
                 <span className="fnote text-[10px] text-ink-faint">{moments[0]?.clock}</span>
                 <span className="relative h-[2px] flex-1 overflow-hidden rounded-full bg-ink/15">
                   <span

@@ -63,7 +63,20 @@ export async function POST(request: Request) {
   ensureDirs();
   // Keep the original extension so ffmpeg downstream needs no guessing.
   const ext = path.extname(file.name) || ".mp4";
-  const dest = path.join(UPLOAD_DIR, `${job.id}${ext}`);
+  /*
+    `turbopackIgnore` because the tracer cannot see what this build already
+    guarantees. It flags a dynamic path as "filesystem access that may reach
+    anywhere" and responds by tracing the WHOLE project into the server bundle —
+    every source file and all of public/ — which is a slow deploy at best and a
+    size-limit failure at worst.
+
+    Nothing dynamic escapes here: UPLOAD_DIR is a constant, `path.join(cwd(),
+    ".uploads")`, and the only variable part is a filename built from our own
+    generated job id plus an extension. The uploaded name is never used as a
+    path — `path.extname` takes the extension from it and nothing else — so a
+    caller cannot steer this out of the directory with "../".
+  */
+  const dest = path.join(/* turbopackIgnore: true */ UPLOAD_DIR, `${job.id}${ext}`);
   await writeFile(dest, Buffer.from(await file.arrayBuffer()));
 
   return NextResponse.json(
