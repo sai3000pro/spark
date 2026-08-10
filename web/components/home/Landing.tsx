@@ -775,7 +775,7 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
               className="pill-ghost px-3.5 py-2 text-[13px] text-milk/85 transition-colors hover:text-milk"
             >
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-clay" />
-              Start a trip?
+              Start a trip
             </Link>
           </span>
           <Link href="/walk" className="pill-brass px-4 py-2 text-[13px]">

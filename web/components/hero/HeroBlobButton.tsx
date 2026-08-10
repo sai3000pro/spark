@@ -43,7 +43,7 @@
  * link, not a button. A live trip is not draggable: the character is out working.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { preload } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useLiveTrip } from "@/components/shell/LiveTripProvider";
@@ -184,6 +184,42 @@ const APEX_VY = 1.2;
  * itself for the touchdown it is about to make, which is the beat that used to
  * arrive a bounce too late.
  */
+
+/**
+ * ── THE ONE PLACE THE BOX'S GEOMETRY IS WRITTEN ─────────────────────────────
+ *
+ * The element is a CELL and the sprite fills it with `object-fit: contain`, so
+ * the character's size on screen is decided by the cell geometry the box is
+ * wearing — NOT by the drawing inside it. Show a jump-cell drawing in a
+ * base-cell box and the character renders at 0.4608/0.7264 = 63% of itself; the
+ * other way round, 158%. That mismatch is the whole "it sometimes turns into a
+ * big size", and it is a mismatch, never a scale: nothing in this component
+ * scales the character on purpose.
+ */
+function applyCell(el: HTMLElement, frame: BlobFrame) {
+  const c = blobCell(frame);
+  el.style.setProperty("--sprite-cell-ar", String(c.cellAr));
+  el.style.setProperty("--sprite-foot-y", String(c.footY));
+  el.style.setProperty("--sprite-body-h", String(c.bodyH));
+  el.style.setProperty("--sprite-body-w", String(c.bodyW));
+}
+
+/**
+ * Before paint on the client, after render on the server.
+ *
+ * The guard below has to run BEFORE the browser paints or it is pointless — it
+ * exists to stop a wrong-sized frame reaching the screen, not to correct one
+ * afterwards. `useLayoutEffect` is the hook that does that, and it warns when
+ * called during server rendering, where there is no paint to be before. The
+ * choice is made once from the environment, so the hook order never varies.
+ */
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** Which frame a sprite URL is of — `/sprites/blob/<frame>-<facing>.webp`. */
+function frameOf(src: string | null): BlobFrame | null {
+  const name = src?.split("/").pop()?.replace(/-(left|right)\.webp.*$/, "");
+  return name && name in BLOB_FRAMES ? (name as BlobFrame) : null;
+}
 
 /**
  * Pick a frame from a cycle by DISTANCE COVERED, and never return nothing.
@@ -661,12 +697,12 @@ export function HeroBlobButton() {
         at least one painted frame, and the brace crosses exactly that seam:
         `tossed` is base-cell and the drawn touchdown is jump-cell.
 
-        Written BEFORE the unchanged-url early return, on purpose. The physics
-        clips call this every animation frame, so the geometry is re-asserted
-        ~60x a second and a stale React render cannot leave the box wrong for
-        longer than a frame. Cheap: these are four string writes to the same
-        element, and the browser coalesces them into the one style recalc it was
-        already doing for `src`.
+        Written BEFORE the unchanged-url early return, on purpose, so a frame
+        redrawn for any reason re-asserts its own geometry. Cheap: four string
+        writes to the element the browser was already recalculating for `src`.
+
+        This alone is NOT enough, which is why the guard below exists — see it
+        for the half of the problem this cannot reach.
       */
       /*
         A NET, NOT A FIX. `cycleFrame` above is what stops a bad index being
@@ -680,13 +716,7 @@ export function HeroBlobButton() {
       if (!frame || !BLOB_FRAMES[frame]) return;
 
       const el = rootRef.current;
-      if (el) {
-        const c = blobCell(frame);
-        el.style.setProperty("--sprite-cell-ar", String(c.cellAr));
-        el.style.setProperty("--sprite-foot-y", String(c.footY));
-        el.style.setProperty("--sprite-body-h", String(c.bodyH));
-        el.style.setProperty("--sprite-body-w", String(c.bodyW));
-      }
+      if (el) applyCell(el, frame);
 
       const url = blobSprite(frame, face);
       if (url === lastSrc.current) return;
@@ -695,6 +725,36 @@ export function HeroBlobButton() {
     },
     [],
   );
+
+  /*
+    ── THE BOX MATCHES THE DRAWING AT EVERY PAINT ────────────────────────────
+
+    TWO WRITERS OWN THE SAME FOUR VARIABLES, and that is the bug behind "it
+    sometimes turns into a big size". `showFrame` sets them imperatively for the
+    drawing it is putting up; React sets them from the POSTER's cell on every
+    render that changes them. When the driver has moved to a new sequence's cell
+    and React has not re-rendered yet — the brace crosses exactly that seam,
+    base-cell `tossed` to jump-cell `air` — a render landing in between writes
+    the old cell over the new drawing. One painted frame at 158%, then the next
+    animation frame puts it right. Occasional, and impossible to catch by
+    reading either writer alone, because each is correct by itself.
+
+    So the invariant is enforced where it actually matters: after every render,
+    before the browser paints. It is derived from the `src` the element is
+    ACTUALLY carrying rather than from the poster or a ref, because that is the
+    thing about to be shown, and it does not care which writer put it there.
+
+    No dependency array on purpose — "every render" is the point. The body is a
+    string split and four style writes on one element, which is far cheaper than
+    the layout the render already caused.
+  */
+  useBeforePaint(() => {
+    const el = rootRef.current;
+    const img = spriteRef.current;
+    if (!el || !img) return;
+    const frame = frameOf(img.getAttribute("src"));
+    if (frame) applyCell(el, frame);
+  });
 
   // ── The clip driver ────────────────────────────────────────────────────────
   // Timed sequences only. Physics sequences arm no timer at all — their frames
