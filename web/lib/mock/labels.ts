@@ -18,7 +18,30 @@ export const LABEL_FAMILIES = {
     "cup",
   ],
   sport: ["frisbee", "sports ball", "kite", "skateboard", "tennis racket"],
-  food: ["banana", "apple", "sandwich", "cake", "donut"],
+  // COCO splits these across its `food` and `kitchen` supercategories, but the
+  // distinction is not one this app makes anywhere — a bowl on a table is part
+  // of the meal, and the timeline wants one colour for the whole scene. The
+  // kitchen half is listed in full rather than as-needed because `familyOf`
+  // falls back to "furniture" for anything unknown, which mis-colours silently;
+  // the only thing that catches it is the label-coverage check in
+  // scripts/verify-pipeline.ts, and that only sees labels the mock trips use.
+  food: [
+    "banana",
+    "apple",
+    "sandwich",
+    "cake",
+    "donut",
+    "orange",
+    "broccoli",
+    "carrot",
+    "hot dog",
+    "pizza",
+    "bowl",
+    "spoon",
+    "fork",
+    "knife",
+    "wine glass",
+  ],
 } as const;
 
 export type LabelFamily = keyof typeof LABEL_FAMILIES;

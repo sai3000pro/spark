@@ -40,6 +40,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     seed: mo.thumbnailSeed,
     hue: mo.thumbnailHue,
     url: mo.thumbnailUrl,
+    // The sieve circles one of these per moment, so the circled word is
+    // something the robot really detected in that minute.
+    topLabels: mo.topLabels,
   }));
 
   // The intro storm — everything the cameras and mics noticed, as words. Real

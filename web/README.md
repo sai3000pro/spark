@@ -435,9 +435,12 @@ app* below for where the seam is.
   390px. An iframe has its own viewport, so every existing `sm:`/`md:` rule resolves correctly.
 - The 4 `npm audit` highs are all inside `onnxruntime-node`/`sharp` — the **Node-side** backends of
   Transformers.js, which never execute since we run in-browser on WASM/WebGPU.
-- `onnx-community/rtdetr_v2_r18vd` does **not** exist (401). Don't "fix" the detector default to it.
-  Verified working (re-checked): `Xenova/yolos-tiny` (default), `Xenova/yolos-small`,
-  `Xenova/detr-resnet-50`, `Xenova/detr-resnet-101`.
+- `onnx-community/rtdetr_v2_r18vd` really does 401 — but the repo is published under an **`-ONNX`
+  suffix**, and `onnx-community/rtdetr_v2_r18vd-ONNX` returns 200. That model is now the **default**:
+  47.9 COCO AP against YOLOS-tiny's 28.7, and faster, being NMS-free. Check the suffix before
+  concluding an `onnx-community` model is missing. Verified working: `rtdetr_v2_r18vd-ONNX` (default),
+  `rfdetr_nano-ONNX`, `Xenova/detr-resnet-50`, `Xenova/detr-resnet-101`, `Xenova/yolos-small`,
+  `Xenova/yolos-tiny`.
 - **Transformers.js defaults to int8 weights on the WASM backend** (`DEFAULT_DEVICE_DTYPE_MAPPING`
   in its source), and fp32 on WebGPU. So the same model gives visibly looser boxes on a laptop with
   no WebGPU, which for a long time read as "the detector is flaky" rather than as a config default.

@@ -190,10 +190,10 @@ export function VideoWalkPanel() {
   };
 
   return (
-    <section className="plate-vellum rise-in relative p-5 sm:p-6" style={{ "--i": 2 } as React.CSSProperties}>
+    <section className="plate-vellum rise-in relative p-5 sm:p-6" style={{ "--i": 3 } as React.CSSProperties}>
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <span className="fnote text-[10px] text-ink-faint">[ 02 ]</span>
+          <span className="fnote text-[10px] text-ink-faint">[ 03 ]</span>
           <h2 className="mt-1 text-[20px] leading-tight text-ink">Or bring your own footage</h2>
           <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-ink-soft">
             A video has a real timeline, so the scorer can do real work on it. The frames are read

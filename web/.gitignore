@@ -34,6 +34,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...and we do opt in for the template, which holds no values — only the names,
+# and the reasoning about which of them may carry the NEXT_PUBLIC_ prefix.
+!.env.example
 
 # vercel
 .vercel

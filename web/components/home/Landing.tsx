@@ -66,6 +66,12 @@ export interface LandingMoment {
   seed: number;
   hue?: number;
   url?: string;
+  /**
+   * What this moment was actually "of" — its most-confident distinct labels,
+   * highest first. The sieve circles one of these rather than whatever word
+   * happened to fall at the right spot; see `wall` below.
+   */
+  topLabels: string[];
 }
 
 export interface LandingDiscard {
@@ -255,26 +261,73 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
   const [note, setNote] = useState(0);
   const air = useNightAir();
 
-  // The day, typeset — the noticed words set as one block of text. Six of
-  // them, spread through the block, are the keepers: each wears its moment's
-  // pressed ink and clock. Deterministic, so server and client agree.
+  /**
+   * The day, typeset — the noticed words as one block, six of them circled in
+   * their moment's ink with its clock above. Deterministic, so SSR and the
+   * client agree.
+   *
+   * ── THE CIRCLED WORD IS THE MOMENT'S OWN LABEL ──────────────────────────────
+   * It used to be whichever word happened to sit at a stride position, which
+   * made the claim on screen false: "6:20 PM" over `bird` when that moment is a
+   * room filling up with laptops. The circles are the whole argument of this
+   * section — this is what it kept, and this is what it kept it FOR — so the
+   * word has to be something the robot actually detected in that minute.
+   *
+   * TWO THINGS MAKE THAT LESS TRIVIAL THAN IT SOUNDS.
+   *
+   * 1. EVERY MOMENT'S TOP LABEL IS THE SAME WORD. `person` leads all six here,
+   *    and the block is deduplicated, so it exists exactly once — five moments
+   *    would have nowhere to point. So each moment claims the highest-confidence
+   *    label still unclaimed, walking down its own list: person, then dining
+   *    table, then laptop, then bowl… Earlier moments get first refusal, which
+   *    is the right bias — the opening moment really is the one that is about a
+   *    room full of people.
+   *
+   * 2. THE LABELS ALL LIVE AT THE FRONT OF THE BLOCK. `noticed` is built
+   *    moment-labels-first, so circling them where they naturally fall would
+   *    bunch all six into the first row and a half. The stride that spread them
+   *    out is kept and the chosen labels are WOVEN INTO those positions instead,
+   *    with the remaining words filling around them. Same rhythm on the page,
+   *    true words in the circles.
+   *
+   * A moment whose labels are all claimed keeps a plain word from the pool and
+   * is still circled, so the section can never render fewer than six keepers.
+   */
   const wall = useMemo(() => {
     const rand = mulberry32(0x40bd5);
     const r3 = (v: number) => Math.round(v * 1000) / 1000;
-    const words = noticed.slice(0, 48);
+    const SIZE = 48;
+
+    // Which label each moment gets to circle. Order matters: first come, first
+    // served down each moment's own confidence-ranked list.
+    const claimed = new Set<string>();
+    const chosen = moments.map((mo) => {
+      const label = mo.topLabels?.find((l) => !claimed.has(l));
+      if (label) claimed.add(label);
+      return label;
+    });
+
+    // Everything else, in its original order, minus the words now spoken for.
+    const pool = noticed.filter((w) => !claimed.has(w));
+    const total = Math.min(SIZE, pool.length + claimed.size);
+
+    // Where the circles go — the original rhythm, untouched.
     const keptAt = new Map<number, number>();
-    const stride = words.length / (moments.length + 0.5);
+    const stride = total / (moments.length + 0.5);
     moments.forEach((_, m) => {
-      let idx = Math.min(words.length - 1, Math.round(stride * (m + 0.7) + rand() * 3) - 1);
-      while (keptAt.has(idx)) idx = (idx + 1) % words.length;
+      let idx = Math.min(total - 1, Math.round(stride * (m + 0.7) + rand() * 3) - 1);
+      while (keptAt.has(idx)) idx = (idx + 1) % total;
       keptAt.set(idx, m);
     });
-    return words.map((word, i) => ({
-      word,
-      kept: keptAt.get(i),
-      tilt: r3((rand() - 0.5) * 9),
-      order: r3(rand()),
-    }));
+
+    let next = 0;
+    return Array.from({ length: total }, (_, i) => {
+      const m = keptAt.get(i);
+      // `chosen[m]` is undefined only if every one of that moment's labels was
+      // already taken; it then falls through to the pool like any other word.
+      const word = (m != null ? chosen[m] : undefined) ?? pool[next++];
+      return { word, kept: m, tilt: r3((rand() - 0.5) * 9), order: r3(rand()) };
+    });
   }, [noticed, moments]);
 
   useEffect(() => {

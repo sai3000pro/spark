@@ -48,8 +48,9 @@ export default function LivePage() {
         <span className="fnote text-[10.5px] text-moss">[ stage 1 → stage 3 · a walk, from scratch ]</span>
         <h1 className="mt-2 text-[32px] leading-[1.02] text-ink sm:text-[38px]">Start a walk</h1>
         <p className="mt-2.5 text-[14px] leading-relaxed text-ink-soft">
-          Two ways in. Send the robot out and watch the stages fill, or hand over a video you
-          already have and let the same pipeline find the moments in it.
+          Record with the phone in your pocket, or hand over a video you already have — the
+          same pipeline finds the moments either way. A rover can carry the camera instead,
+          once you have one.
         </p>
       </header>
 

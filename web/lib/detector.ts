@@ -56,8 +56,26 @@ export { QUALITY_PRESETS, passCountFor, type QualityMode } from "./detect/tta";
 /**
  * Model choices, verified to exist with ONNX weights on the Hub.
  *
- * NB: `onnx-community/rtdetr_v2_r18vd` (a tempting first guess for RT-DETR) does
- * NOT resolve — checked again, still returns 401. Do not "fix" the default to it.
+ * NB: `onnx-community/rtdetr_v2_r18vd` really does 401 — that part of the old
+ * note here was right. What it missed is that the repo is published under an
+ * `-ONNX` suffix: `onnx-community/rtdetr_v2_r18vd-ONNX` returns 200, declares
+ * `library_name: transformers.js` and `pipeline_tag: object-detection`, and ships
+ * eight dtype variants. The installed runtime (4.2.0) knows the architecture —
+ * `RtDetrV2ForObjectDetection` / `rt_detr_v2` are both in its bundle. So RT-DETR
+ * is reachable, and it is now the default. Check the suffix before concluding a
+ * model is missing.
+ *
+ * Why it displaced YOLOS-tiny as the default: 47.9 COCO AP against 28.7, while
+ * being FASTER — RT-DETR is NMS-free and decodes in a single pass, so this is not
+ * the usual accuracy-for-latency trade. Nearly everything the multi-pass
+ * machinery in ./detect/* does is compensation for a weak first look, and six
+ * passes of a 28.7 AP model do not add up to one pass of a 47.9 AP one.
+ *
+ * One behavioural difference worth knowing: RT-DETR preprocesses to a fixed
+ * 640×640 (`RTDetrImageProcessor`, `do_pad: false`) rather than resizing to an
+ * ~800 px short edge. The tile passes in ./detect/tta.ts still help on small
+ * objects, but the cost/benefit of `thorough`'s 3×3 has not been re-measured
+ * against this model — see web/eval when it lands.
  */
 export interface DetectorModel {
   id: string;
@@ -69,34 +87,49 @@ export interface DetectorModel {
   tier: "onboard" | "balanced" | "cloud";
 }
 
+/** The first entry is the default — both callers use `DETECTOR_MODELS[0].id`. */
 export const DETECTOR_MODELS: DetectorModel[] = [
   {
-    id: "Xenova/yolos-tiny",
-    label: "YOLOS-tiny",
-    note: "Small and quick — closest to what would actually run on the robot.",
-    approxMb: 26,
+    id: "onnx-community/rtdetr_v2_r18vd-ONNX",
+    label: "RT-DETRv2 R18",
+    note: "47.9 AP and NMS-free, so it is both the most accurate small model here and the fastest. The default.",
+    approxMb: 77,
     tier: "onboard",
   },
   {
-    id: "Xenova/yolos-small",
-    label: "YOLOS-small",
-    note: "Same family, ~5× the weights. Much steadier on small objects.",
-    approxMb: 120,
+    id: "onnx-community/rfdetr_nano-ONNX",
+    label: "RF-DETR nano",
+    note: "Roughly RT-DETRv2's accuracy from a different lineage — useful as a second opinion when a box looks wrong.",
+    approxMb: 103,
     tier: "balanced",
   },
   {
     id: "Xenova/detr-resnet-50",
     label: "DETR ResNet-50",
-    note: "Slower, noticeably better. Stands in for the cloud-side pass.",
+    note: "The known-good baseline. Kept so eval runs have something stable to compare against.",
     approxMb: 43,
     tier: "balanced",
   },
   {
     id: "Xenova/detr-resnet-101",
     label: "DETR ResNet-101",
-    note: "The most accurate of the four, and the slowest. Worth it on a still.",
+    note: "Slowest and, before RT-DETR arrived, the most accurate. Still worth it on a single still.",
     approxMb: 77,
     tier: "cloud",
+  },
+  {
+    id: "Xenova/yolos-small",
+    label: "YOLOS-small",
+    note: "Legacy. Superseded by RT-DETRv2 on both accuracy and speed.",
+    approxMb: 120,
+    tier: "balanced",
+  },
+  {
+    id: "Xenova/yolos-tiny",
+    label: "YOLOS-tiny",
+    note: "Legacy, and the smallest download at 26 MB. 28.7 AP — kept only for slow connections.",
+    approxMb: 26,
+    tier: "onboard",
   },
 ];
 
