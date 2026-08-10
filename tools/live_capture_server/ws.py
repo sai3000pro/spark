@@ -13,7 +13,7 @@ import hashlib
 import os
 import socket
 import struct
-from typing import Optional, Tuple
+from typing import Tuple
 
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 

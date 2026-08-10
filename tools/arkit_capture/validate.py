@@ -21,7 +21,6 @@ from .formats import (
     DEPTH_DTYPE,
     CaptureReader,
     FormatError,
-    JsonlIssue,
 )
 
 ERROR = "ERROR"

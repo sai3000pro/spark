@@ -8,6 +8,10 @@ public enum PayloadType: String {
     case depth
     case confidence
     case frameMetadata = "frame_metadata"
+    // Live microphone audio, streamed as sequential 16 kHz mono s16le PCM chunks
+    // (frame_id == chunk sequence). Additive: the server derives the on-disk
+    // audio/ layout from this; older servers simply never receive it.
+    case audio
 }
 
 public enum NetworkProtocol {
@@ -25,11 +29,19 @@ public enum NetworkProtocol {
     }
 
     public static func beginSession(deviceSessionID: String,
-                                    sessionID: String? = nil) -> [String: Any] {
+                                    sessionID: String? = nil,
+                                    latitude: Double? = nil,
+                                    longitude: Double? = nil,
+                                    placeName: String? = nil) -> [String: Any] {
         var m: [String: Any] = ["type": "begin_session",
                                 "protocol_version": version,
                                 "device_session_id": deviceSessionID]
         if let s = sessionID { m["session_id"] = s }
+        // Additive + omitted when nil so the wire stays protocol-v1 compatible;
+        // older servers simply ignore keys they don't read.
+        if let lat = latitude { m["latitude"] = lat }
+        if let lng = longitude { m["longitude"] = lng }
+        if let name = placeName { m["place_name"] = name }
         return m
     }
 
@@ -40,15 +52,22 @@ public enum NetworkProtocol {
 
     public static func bulkHeader(sessionID: String, frameID: Int,
                                   payloadType: PayloadType, sequence: Int,
-                                  byteLength: Int, sha256: String) -> [String: Any] {
-        ["type": "bulk_header",
-         "protocol_version": version,
-         "session_id": sessionID,
-         "frame_id": frameID,
-         "payload_type": payloadType.rawValue,
-         "sequence": sequence,
-         "byte_length": byteLength,
-         "sha256": sha256]
+                                  byteLength: Int, sha256: String,
+                                  keyframe: Bool? = nil,
+                                  trigger: String? = nil) -> [String: Any] {
+        var m: [String: Any] = [
+            "type": "bulk_header",
+            "protocol_version": version,
+            "session_id": sessionID,
+            "frame_id": frameID,
+            "payload_type": payloadType.rawValue,
+            "sequence": sequence,
+            "byte_length": byteLength,
+            "sha256": sha256]
+        // Additive + omitted when nil -> older servers ignore, wire stays v1-compatible.
+        if let kf = keyframe { m["keyframe"] = kf }
+        if let t = trigger { m["trigger"] = t }
+        return m
     }
 
     public static func endSession(sessionID: String,

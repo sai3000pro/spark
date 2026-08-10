@@ -25,6 +25,12 @@
     <key>NSCameraUsageDescription</key>
     <string>Gauzensplat Capture uses the camera and LiDAR scanner to record RGB, camera poses, and depth for 3D reconstruction. All data stays on your device unless you explicitly export or mirror it.</string>
 
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Gauzensplat Capture can record audio during a scan so the narration/conversation can be transcribed and used to describe the scene. Audio stays on your device unless you explicitly mirror or export it.</string>
+
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Gauzensplat Capture can tag your scans with their location and place name so they appear on the album map. Location is only read while you record and stays on your device unless you explicitly mirror or export it.</string>
+
     <!-- Direct LAN communication with the laptop capture server -->
     <key>NSLocalNetworkUsageDescription</key>
     <string>Gauzensplat Capture connects to a capture server running on your laptop over your local Wi-Fi to mirror recordings live. No internet or cloud is used.</string>

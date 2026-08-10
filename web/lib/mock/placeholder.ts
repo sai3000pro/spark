@@ -10,7 +10,6 @@
  *
  * Pure string generation — safe on server and client, no network, no canvas.
  */
-import { INK } from "../theme";
 import { makeRng, rngRange } from "./rng";
 
 export interface PlaceholderOptions {

@@ -34,11 +34,10 @@ serializers cannot drift):
 from __future__ import annotations
 
 import json
-import struct
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 

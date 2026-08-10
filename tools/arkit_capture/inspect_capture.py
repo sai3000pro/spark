@@ -32,7 +32,6 @@ import numpy as np
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.arkit_capture import formats  # noqa: E402
 from tools.arkit_capture.formats import (  # noqa: E402
     CONFIDENCE_HIGH,
     CONFIDENCE_LOW,

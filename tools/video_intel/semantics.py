@@ -49,7 +49,11 @@ INSTRUCTION = (
     "a 3D Gaussian splat? high = camera translates around static structure with "
     "parallax; low = pure panning, motion blur, crowds, or featureless.\n"
     "  splat_reason: brief why for the feasibility rating.\n"
-    "Also return an 'overall' one-sentence summary of the whole video."
+    "Also return an 'overall' one-sentence summary of the whole video.\n"
+    "If a SPEECH transcript is provided for a moment (what was said/narrated while "
+    "filming it), use it to sharpen the label, description and tags and to reflect "
+    "what is being discussed — the words often name the place, people or intent the "
+    "images alone can't show."
 )
 
 
@@ -84,14 +88,64 @@ def _moment_lines(manifest: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Speech transcript (optional) — produced by the live-capture faster-whisper
+# sidecar (transcript.json / transcript.jsonl). Fused in when present so the VLM
+# understands what was being said, and stored per-moment for searchability.
+# --------------------------------------------------------------------------- #
+def _load_transcript(out_dir: Path) -> List[dict]:
+    """Return [{start,end,text}] from transcript.json (preferred) or .jsonl, or []."""
+    j = out_dir / "transcript.json"
+    if j.is_file():
+        try:
+            return json.loads(j.read_text()).get("segments", []) or []
+        except (json.JSONDecodeError, OSError):
+            pass
+    jl = out_dir / "transcript.jsonl"
+    if jl.is_file():
+        segs: List[dict] = []
+        try:
+            for line in jl.read_text().splitlines():
+                line = line.strip()
+                if line:
+                    segs.append(json.loads(line))
+        except (json.JSONDecodeError, OSError):
+            return []
+        return segs
+    return []
+
+
+def _speech_for_span(transcript: List[dict], start: float, end: float) -> str:
+    """Concatenate transcript segments overlapping [start, end]."""
+    words = [str(s.get("text", "")).strip()
+             for s in transcript
+             if s.get("start") is not None and s.get("end") is not None
+             and s["start"] < end and s["end"] > start]
+    return " ".join(w for w in words if w).strip()
+
+
+def _speech_block(manifest: dict, transcript: List[dict]) -> str:
+    """A prompt block giving the speech heard during each moment (only non-empty)."""
+    if not transcript:
+        return ""
+    lines = []
+    for s in manifest["segments"]:
+        said = _speech_for_span(transcript, s["start"], s["end"])
+        if said:
+            lines.append(f'  moment {s["index"]} ({s["start"]:.0f}-{s["end"]:.0f}s): "{said}"')
+    if not lines:
+        return ""
+    return "\n\nSPEECH transcript by moment:\n" + "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # Gemini backend
 # --------------------------------------------------------------------------- #
-def _gemini(manifest: dict, out_dir: Path, model: str) -> dict:
+def _gemini(manifest: dict, out_dir: Path, model: str, speech_block: str = "") -> dict:
     key = _read_key("GEMINI_API_KEY", "gemini.key")
     if not key:
         raise RuntimeError("no Gemini key")
     parts: List[dict] = [{"text": INSTRUCTION + "\n\nMoments and time spans:\n"
-                          + _moment_lines(manifest)}]
+                          + _moment_lines(manifest) + speech_block}]
     for f in _keyframes(manifest):
         parts.append({"text": f"moment {f['segment']} @ {f['t']:.0f}s:"})
         parts.append({"inline_data": {"mime_type": "image/jpeg",
@@ -133,12 +187,13 @@ def _gemini(manifest: dict, out_dir: Path, model: str) -> dict:
 # --------------------------------------------------------------------------- #
 # OpenAI backend (fallback)
 # --------------------------------------------------------------------------- #
-def _openai(manifest: dict, out_dir: Path, model: str) -> dict:
+def _openai(manifest: dict, out_dir: Path, model: str, speech_block: str = "") -> dict:
     key = _read_key("OPENAI_API_KEY", "openai.key")
     if not key:
         raise RuntimeError("no OpenAI key")
     content: List[dict] = [{"type": "text", "text": INSTRUCTION
                             + "\n\nMoments and time spans:\n" + _moment_lines(manifest)
+                            + speech_block
                             + "\n\nReturn a JSON object {overall, moments:[...]}."}]
     for f in _keyframes(manifest):
         content.append({"type": "text", "text": f"moment {f['segment']} @ {f['t']:.0f}s:"})
@@ -177,12 +232,15 @@ def _cost(usage: dict) -> Optional[float]:
 
 def label(out_dir: Path, backend: str, model: str) -> dict:
     manifest = json.loads((out_dir / "manifest.json").read_text())
+    transcript = _load_transcript(out_dir)
+    speech_block = _speech_block(manifest, transcript)
     fn = {"gemini": _gemini, "openai": _openai}[backend]
     t0 = time.time()
-    ctx, usage = fn(manifest, out_dir, model)
+    ctx, usage = fn(manifest, out_dir, model, speech_block)
     usage["seconds"] = round(time.time() - t0, 1)
     usage["n_keyframes"] = len(_keyframes(manifest))
     usage["n_moments"] = len(manifest["segments"])
+    usage["has_transcript"] = bool(transcript)
     usage["est_cost_usd"] = _cost(usage)
     # merge time spans back in for convenience
     spans = {s["index"]: s for s in manifest["segments"]}
@@ -190,6 +248,16 @@ def label(out_dir: Path, backend: str, model: str) -> dict:
         s = spans.get(m.get("index"))
         if s:
             m["start"], m["end"] = s["start"], s["end"]
+            # attach the raw speech heard during this moment (searchable record)
+            if transcript:
+                said = _speech_for_span(transcript, s["start"], s["end"])
+                if said:
+                    m["speech"] = said
+    if transcript:
+        # top-level full transcript so a session is searchable by what was said
+        ctx["transcript"] = " ".join(
+            str(s.get("text", "")).strip() for s in transcript
+            if str(s.get("text", "")).strip())
     (out_dir / "context.json").write_text(json.dumps(ctx, indent=2))
     (out_dir / "semantics_analytics.json").write_text(json.dumps(usage, indent=2))
     ctx["_usage"] = usage

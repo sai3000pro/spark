@@ -68,12 +68,17 @@ class SessionStore:
         self.rover_dir = self.root / "rover"
         self.sync_dir = self.root / "sync"
         self.meta_raw_dir = self.phone_dir / "metadata_raw"
+        self.audio_dir = self.phone_dir / "audio"
         for d in (self.phone_dir / "frames", self.phone_dir / "depth",
                   self.phone_dir / "confidence", self.meta_raw_dir,
-                  self.rover_dir, self.sync_dir):
+                  self.audio_dir, self.rover_dir, self.sync_dir):
             d.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.RLock()
+        # optional capture location (set later via set_place from begin_session)
+        self._latitude: Optional[float] = None
+        self._longitude: Optional[float] = None
+        self._place_name: Optional[str] = None
         # idempotency index: (frame_id, payload_type) -> sha256
         self._payloads: Dict[Tuple[int, str], str] = {}
         self._metadata: Dict[int, dict] = {}
@@ -119,6 +124,21 @@ class SessionStore:
                     pass
 
     # ------------------------------------------------------------------ #
+    def _place_dict(self) -> dict:
+        """Optional capture-location keys, only present when explicitly set.
+
+        Omitted entirely when unset so the json files are byte-identical to the
+        pre-GPS behavior for clients that never send coords.
+        """
+        d = {}
+        if self._latitude is not None:
+            d["latitude"] = self._latitude
+        if self._longitude is not None:
+            d["longitude"] = self._longitude
+        if self._place_name is not None:
+            d["place_name"] = self._place_name
+        return d
+
     def _write_server_session(self):
         info = {
             "session_id": self.session_id,
@@ -126,16 +146,48 @@ class SessionStore:
             "protocol_version": protocol.PROTOCOL_VERSION,
             "capture_format_version": formats.CAPTURE_FORMAT_VERSION,
         }
+        info.update(self._place_dict())
         (self.root / "server_session.json").write_text(json.dumps(info, indent=2))
         # phone/session.json makes the phone/ dir a valid capture for the inspector.
         sess = formats.SessionInfo(
             session_id=self.session_id,
             format_version=formats.CAPTURE_FORMAT_VERSION,
             device_model="live-mirror",
+            extra=self._place_dict(),
         )
         (self.phone_dir / "session.json").write_text(
             json.dumps(formats.session_to_dict(sess), indent=2)
         )
+
+    def set_place(self, latitude=None, longitude=None, place_name=None):
+        """Persist an optional capture location from the begin_session handshake.
+
+        Additive + defensive: invalid/absent values are ignored, and the two
+        session json files are RE-WRITTEN (they were first written at
+        construction, before coords arrive). Safe to call once per session.
+        """
+        with self._lock:
+            changed = False
+            if latitude is not None:
+                try:
+                    self._latitude = float(latitude)
+                    changed = True
+                except (TypeError, ValueError):
+                    pass
+            if longitude is not None:
+                try:
+                    self._longitude = float(longitude)
+                    changed = True
+                except (TypeError, ValueError):
+                    pass
+            if place_name is not None:
+                try:
+                    self._place_name = str(place_name)
+                    changed = True
+                except (TypeError, ValueError):
+                    pass
+            if changed:
+                self._write_server_session()
 
     def _atomic_write(self, dest: Path, data: bytes):
         tmp_fd, tmp_path = tempfile.mkstemp(dir=str(dest.parent), suffix=".part")
@@ -154,10 +206,13 @@ class SessionStore:
 
     # ------------------------------------------------------------------ #
     def store_payload(self, frame_id: int, payload_type: str, sha256: str,
-                      data: bytes) -> str:
+                      data: bytes, meta: Optional[dict] = None) -> str:
         """Store a bulk payload idempotently. Returns "stored" | "duplicate".
 
         Raises StorageError on size/checksum mismatch (caller NACKs).
+
+        ``meta`` carries the bulk_header ``meta`` dict (only used today by audio
+        payloads, to persist the PCM format once on the first chunk).
         """
         with self._lock:
             actual_sha = formats.sha256_hex(data)
@@ -179,9 +234,30 @@ class SessionStore:
                 dest = self.phone_dir / rel
                 self._atomic_write(dest, data)
                 self._bytes_written += len(data)
+                if payload_type == protocol.PT_AUDIO:
+                    self._note_audio_format(meta)
 
             self._payloads[key] = sha256
             return "stored"
+
+    def _note_audio_format(self, meta: Optional[dict]):
+        """Persist the live-audio PCM format once (phone/audio.json).
+
+        The transcription sidecar reads this to know the sample rate / dtype.
+        Per-chunk PCM files (audio/NNNNNN.pcm) remain the source of truth and
+        are concatenated in numeric (== chunk-sequence) order by the worker.
+        """
+        dest = self.phone_dir / "audio.json"
+        if dest.exists():
+            return
+        m = meta or {}
+        info = {
+            "sample_rate": int(m.get("sample_rate", protocol.AUDIO_SAMPLE_RATE)),
+            "channels": int(m.get("channels", protocol.AUDIO_CHANNELS)),
+            "codec": str(m.get("codec", protocol.AUDIO_CODEC)),
+            "start_session_time": m.get("start_session_time"),
+        }
+        self._atomic_write(dest, json.dumps(info, indent=2).encode("utf-8"))
 
     def _store_metadata(self, frame_id: int, data: bytes):
         # Persist the raw bytes so a restarted server can rebuild the index and

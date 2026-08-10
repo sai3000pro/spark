@@ -19,7 +19,6 @@ actor WiFiLaptopTransport: CaptureTransport {
     private var seq = 0
     private var backlog: [MirrorItem] = []
     private var manifest: [String: [String: String]] = [:]
-    private var acked = Set<PayloadIdentity>()
     private let clock = ClockSyncEstimator()
 
     // telemetry for UI
@@ -54,10 +53,25 @@ actor WiFiLaptopTransport: CaptureTransport {
         stateBox.value = .connected
     }
 
-    func beginSession(deviceSessionID: String) async throws -> String {
+    /// The server session id currently mirrored to, if any. Lets the app persist
+    /// the local-dir → server-run mapping so a later "continue session" can rejoin
+    /// the same run.
+    func currentServerSessionID() -> String? { serverSessionID }
+
+    /// Begin — or RESUME — a server session. Passing `resumeServerSessionID` makes
+    /// the server `get_or_create` that exact run (see live_capture_server), so a
+    /// continued capture appends to the SAME live splat instead of minting a new
+    /// one. Omitting it preserves the original behaviour exactly.
+    func beginSession(deviceSessionID: String, resumeServerSessionID: String? = nil,
+                      latitude: Double? = nil, longitude: Double? = nil,
+                      placeName: String? = nil) async throws -> String {
         self.deviceSessionID = deviceSessionID
+        if let resume = resumeServerSessionID { serverSessionID = resume }
         try await send(NetworkProtocol.beginSession(deviceSessionID: deviceSessionID,
-                                                    sessionID: serverSessionID))
+                                                    sessionID: serverSessionID,
+                                                    latitude: latitude,
+                                                    longitude: longitude,
+                                                    placeName: placeName))
         let ack = try await receiveJSON()
         guard let sid = ack["session_id"] as? String else { throw TransportError.protocolError }
         serverSessionID = sid
@@ -74,8 +88,9 @@ actor WiFiLaptopTransport: CaptureTransport {
             let t3 = Int64(Date().timeIntervalSince1970 * 1e9)
             clock.add(t0: t0, t1: t1, t2: t2, t3: t3)
         }
-        telemetry.rttMs = clock.bestRttNs.map { Double($0) / 1e6 }
-        telemetry.offsetMs = clock.bestOffsetNs.map { $0 / 1e6 }
+        let rtt = clock.bestRttNs.map { Double($0) / 1e6 }
+        let off = clock.bestOffsetNs.map { $0 / 1e6 }
+        telemetry.onMain { $0.rttMs = rtt; $0.offsetMs = off }
     }
 
     // MARK: mirroring
@@ -87,24 +102,35 @@ actor WiFiLaptopTransport: CaptureTransport {
     private func appendAndDrain(_ item: MirrorItem) async {
         manifest[String(item.identity.frameID), default: [:]][item.identity.payloadType.rawValue] = item.sha256
         backlog.append(item)
-        telemetry.pending = backlog.count
+        let pending = backlog.count
+        telemetry.onMain { $0.pending = pending }
         await drain()
     }
 
+    private var draining = false
     private func drain() async {
+        // Actors are RE-ENTRANT across `await`: while one drain() is suspended at
+        // `await sendPayload`, a second enqueue's drain() can run, and both loops read
+        // backlog[0] and call removeFirst() on the same single item -> crash
+        // ("Can't remove first element from an empty collection"). Guard so only ONE
+        // drain loop runs; a concurrent caller returns (its item is already queued and
+        // this loop picks it up on its next iteration).
+        if draining { return }
         guard state == .connected || state == .degraded else { return }
+        draining = true
+        defer { draining = false }
         while !backlog.isEmpty {
             let item = backlog[0]
             do {
                 try await sendPayload(item)
-                backlog.removeFirst()
-                telemetry.pending = backlog.count
-                telemetry.sent += 1
+                if !backlog.isEmpty { backlog.removeFirst() }   // belt-and-suspenders
+                let pending = backlog.count
+                telemetry.onMain { $0.pending = pending; $0.sent += 1 }
             } catch {
                 stateBox.value = .reconnecting
                 if await reconnect() { stateBox.value = .connected; continue }
                 stateBox.value = .offline
-                return   // keep backlog on disk-referenced items; retry late er
+                return   // keep backlog on disk-referenced items; retry later
             }
         }
     }
@@ -121,10 +147,9 @@ actor WiFiLaptopTransport: CaptureTransport {
         try await task?.send(.data(data))
         let ack = try await receiveJSON()
         if ack["type"] as? String == "ack" {
-            acked.insert(item.identity)
-            telemetry.acked += 1
+            telemetry.onMain { $0.acked += 1 }
         } else {
-            telemetry.retries += 1
+            telemetry.onMain { $0.retries += 1 }
             throw TransportError.nack(String(describing: ack["reason"] ?? ""))
         }
     }
@@ -227,5 +252,13 @@ actor WiFiLaptopTransport: CaptureTransport {
         @Published var retries = 0
         @Published var rttMs: Double?
         @Published var offsetMs: Double?
+
+        /// `@Published` MUST be mutated on the main thread — these values are
+        /// written from the transport actor's background executor, so route
+        /// every mutation through here to avoid a SwiftUI background-publish crash.
+        func onMain(_ block: @escaping (Telemetry) -> Void) {
+            if Thread.isMainThread { block(self) }
+            else { DispatchQueue.main.async { block(self) } }
+        }
     }
 }

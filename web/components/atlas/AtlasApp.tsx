@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The walk screen is one surface: the real park, printed on the journal's page.
+ * The walk screen is one surface: the real place, printed on the journal's page.
  *
  * Owns every piece of cross-cutting state — which pin is hot, where the
  * replay playhead is, which moment is expanded into its splat, and the ⌘K find
@@ -10,43 +10,23 @@
  * clicking a search result land inside the right splat.
  */
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
+import { NavBrandSwitch } from "@/components/shell/NavBrandSwitch";
 import { DayBar } from "@/components/atlas/DayBar";
-import { LedgerOverlay } from "@/components/atlas/LedgerOverlay";
 import { FindPalette } from "@/components/find/FindPalette";
 import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
-import { clockShort, distance, duration, tripDate } from "@/lib/format";
+import { distance, duration, tripDate } from "@/lib/format";
 import { makeGeo } from "@/lib/geo";
 import { formatGeo } from "@/lib/globe/geo";
-import type { GlobeView } from "@/lib/globeData";
 import type { AtlasView, TripView } from "@/lib/tripData";
 import type { Vec2 } from "@/lib/types";
-
-// The globes are WebGL and mean nothing to the server — loaded lazily so the
-// map is interactive before three.js ever crosses the wire.
-const PocketGlobe = dynamic(
-  () => import("@/components/atlas/PocketGlobe").then((m) => m.PocketGlobe),
-  { ssr: false },
-);
-const GlobeOverlay = dynamic(
-  () => import("@/components/atlas/GlobeOverlay").then((m) => m.GlobeOverlay),
-  { ssr: false },
-);
 
 /** A 95-minute walk replays in ~48 seconds. */
 const REPLAY_SPEED = 120;
 
 interface Props extends AtlasView {
-  /** Every walk pinned on the Earth — what the pocket globe opens into. */
-  globe: GlobeView;
-  /** Whether THIS walk is the user's own — only your walks take the toggle. */
-  mine: boolean;
-  /** Whether THIS walk is on the shared globe. Toggled from the ground plate. */
-  posted: boolean;
   initialMomentId?: string | null;
   initialAnchor?: string | null;
 }
@@ -57,10 +37,6 @@ export function AtlasApp({
   entries,
   navTargets,
   geo,
-  globe,
-  ledger,
-  mine,
-  posted: postedFromServer,
   initialMomentId,
   initialAnchor,
 }: Props) {
@@ -70,36 +46,6 @@ export function AtlasApp({
   );
   const [anchor, setAnchor] = useState<string | null>(initialAnchor ?? null);
   const [findOpen, setFindOpen] = useState(false);
-  const [globeOpen, setGlobeOpen] = useState(false);
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-
-  // ── Posting to the globe ───────────────────────────────────────────────
-  // Optimistic: the footnote flips at once, the server flag follows, and
-  // router.refresh() re-derives the globe view so the sphere agrees. When the
-  // refreshed server value arrives it wins — state adjusted during render, the
-  // way React's docs reconcile a prop change without an effect.
-  const router = useRouter();
-  const [posted, setPosted] = useState(postedFromServer);
-  const [seenFromServer, setSeenFromServer] = useState(postedFromServer);
-  if (postedFromServer !== seenFromServer) {
-    setSeenFromServer(postedFromServer);
-    setPosted(postedFromServer);
-  }
-  const togglePosted = async () => {
-    const next = !posted;
-    setPosted(next);
-    try {
-      const res = await fetch(`/api/trips/${trip.id}/posted`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ posted: next }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      router.refresh();
-    } catch {
-      setPosted(!next);
-    }
-  };
 
   // ── The replay ─────────────────────────────────────────────────────────
   const [playhead, setPlayhead] = useState<number | null>(null);
@@ -145,12 +91,6 @@ export function AtlasApp({
     [trip.path, playhead],
   );
 
-  // The banners fly each moment's wall clock — computed once, in trip time.
-  const clocks = useMemo(
-    () => trip.moments.map((m) => clockShort(trip.startedAt, m.tStart)),
-    [trip.moments, trip.startedAt],
-  );
-
   // The moment whose window the playhead is inside — the replay's own highlight.
   const replayMoment = useMemo(
     () =>
@@ -174,85 +114,9 @@ export function AtlasApp({
   return (
     <div className="relative h-dvh min-h-[480px] w-full overflow-hidden bg-paper text-ink">
       <FieldMap
-        geo={geo}
-        plate={
-          // No card: the title block is survey lettering laid on the ground,
-          // haloed in milk the way the map's own labels are.
-          <div
-            className="rise-in"
-            style={{
-              textShadow:
-                "0 0 5px rgb(255 251 240 / 0.95), 0 0 10px rgb(255 251 240 / 0.85), 0 0 18px rgb(255 251 240 / 0.7)",
-            }}
-          >
-            <Link href="/" className="flex items-baseline gap-2.5" aria-label="Back to the landing">
-              <span className="font-display text-[24px] leading-none" style={{ fontWeight: 580 }}>
-                Spark<span className="text-clay">.</span>
-              </span>
-              <span className="fnote text-[10px] text-ink-soft">[ the walk ]</span>
-            </Link>
-            <p className="tag tnum mt-1.5 text-[12.5px] text-ink">
-              {tripDate(trip.startedAt)} · {trip.placeLabel}
-            </p>
-            {/* The summary IS the door: clicking the day's totals opens the
-                full ledger, the way clicking a banner opens its splat. */}
-            <button
-              type="button"
-              onClick={() => {
-                setPlaying(false);
-                setLedgerOpen(true);
-              }}
-              aria-label="Open the walk's ledger — the full dashboard of this walk"
-              className="group block text-left"
-            >
-              <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
-                {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
-                {duration(trip.stats.durationSec)}
-              </p>
-              <p className="tag tnum mt-0.5 text-[12px] text-ink-soft">
-                {ledger.company.people.length} companions · {ledger.company.laughT.length} laughs ·{" "}
-                {trip.stats.distinctObjectCount} kinds of thing
-              </p>
-              <p className="fnote mt-1 text-[8.5px] text-ink-faint transition-colors duration-300 group-hover:text-clay">
-                [ open the ledger ]
-              </p>
-            </button>
-            {/* Posting is the one act here that leaves the page: it sets this
-                walk onto everybody's globe. Hidden walks stay yours alone —
-                and only YOUR walks offer the choice; someone else's shared
-                walk is theirs to keep up or take down. */}
-            {mine && (
-            <button
-              type="button"
-              onClick={togglePosted}
-              aria-pressed={posted}
-              aria-label={
-                posted
-                  ? "Hide this walk from the shared globe"
-                  : "Post this walk to the shared globe, where everyone can see it"
-              }
-              className="block text-left"
-            >
-              <p
-                className={`fnote mt-1 text-[8.5px] transition-colors duration-300 hover:text-clay ${
-                  posted ? "text-moss" : "text-ink-faint"
-                }`}
-              >
-                {posted ? "[ on the globe · hide ]" : "[ post to the globe ]"}
-              </p>
-            </button>
-            )}
-            <p className="fnote mt-1.5 text-[8.5px] text-ink-soft">
-              {(() => {
-                const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);
-                return `[ ${formatGeo({ lat, lng })} ]`;
-              })()}
-            </p>
-          </div>
-        }
         path={trip.path}
         moments={trip.moments}
-        clocks={clocks}
+        geo={geo}
         activeId={activeId}
         reachedT={playhead}
         robotPos={robotPos}
@@ -260,8 +124,28 @@ export function AtlasApp({
         onOpen={(id) => open(id)}
       />
 
-      {/* ── Floating chrome ──────────────────────────────────────────────── */}
-      <header className="pointer-events-none absolute right-0 top-0 z-20 p-4 sm:p-5">
+      {/* ── Floating chrome — vellum slips pinned over the page. ─────────── */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+        <div className="plate-vellum papergrain rise-in pointer-events-auto relative overflow-hidden px-4 py-3">
+          <NavBrandSwitch tone="paper" />
+          <p className="tag tnum mt-2.5 text-[12px] text-ink-soft">
+            {tripDate(trip.startedAt)} · {trip.placeLabel}
+          </p>
+          <p className="tag tnum mt-0.5 text-[12px] text-ink-faint">
+            {trip.stats.momentCount} moments · {distance(trip.stats.distanceM)} ·{" "}
+            {duration(trip.stats.durationSec)}
+          </p>
+          <p className="fnote mt-2 text-[8.5px] text-ink-faint">
+            {(() => {
+              // formatGeo carries the hemisphere. The old inline template said
+              // N/W unconditionally, which was fine while the only trip was in
+              // Ontario and wrong for Cape Town and Kyoto.
+              const [lng, lat] = makeGeo(geo).localToLngLat(trip.path[0].pos);
+              return `[ ${formatGeo({ lat, lng })} ]`;
+            })()}
+          </p>
+        </div>
+
         <div className="rise-in pointer-events-auto flex items-center gap-2" style={{ "--i": 2 } as React.CSSProperties}>
           <button
             type="button"
@@ -270,7 +154,7 @@ export function AtlasApp({
           >
             <Search size={14} strokeWidth={1.75} aria-hidden />
             <span className="hidden sm:inline">Where&apos;s my…</span>
-            <kbd className="fnote rounded-[3px] px-1.5 py-0.5 text-[10px] text-ink-faint" style={{ boxShadow: "var(--ring-ink)" }}>
+            <kbd className="fnote rounded-[4px] px-1.5 py-0.5 text-[10px] text-ink-faint" style={{ boxShadow: "var(--ring-ink)" }}>
               ⌘K
             </kbd>
           </button>
@@ -281,24 +165,28 @@ export function AtlasApp({
               Detector bench
             </Link>
           </span>
+
+          <span className="hidden sm:block">
+            <span
+              className="chip chip-live fnote pointer-events-auto whitespace-nowrap py-2 text-[10px]"
+              title="Follow mode. Mock telemetry — no robot is connected yet."
+            >
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-moss" aria-hidden />
+              [ following · 78% ]
+            </span>
+          </span>
         </div>
       </header>
 
-      {/* ── The pocket globe — the door to the plate, tucked in the corner.
-             It clears the day bar on narrow screens and settles into the true
-             corner once the viewport is wide enough to spare it. ──────────── */}
-      {!openMoment && !globeOpen && (
+      {/* Hint — only until something has been touched. */}
+      {playhead === null && !openId && !hoveredId && (
         <div
-          className="rise-in pointer-events-none absolute bottom-28 right-4 z-20 lg:bottom-4 lg:right-4"
-          style={{ "--i": 5 } as React.CSSProperties}
+          className="rise-in pointer-events-none absolute left-1/2 top-20 z-10 hidden -translate-x-1/2 sm:block"
+          style={{ "--i": 6 } as React.CSSProperties}
         >
-          <PocketGlobe
-            stops={globe.pins.map((p) => p.origin)}
-            onOpen={() => {
-              setPlaying(false);
-              setGlobeOpen(true);
-            }}
-          />
+          <span className="tag rounded-[6px] bg-vellum/85 px-3 py-1.5 text-[12px] text-ink-soft" style={{ boxShadow: "var(--ring-ink)" }}>
+            Every pin is a kept moment — click one to step inside
+          </span>
         </div>
       )}
 
@@ -309,7 +197,6 @@ export function AtlasApp({
             playhead={playhead}
             playing={playing}
             moments={trip.moments}
-            clocks={clocks}
             activeId={activeId}
             replaySpeed={REPLAY_SPEED}
             onPlayToggle={() => {
@@ -329,28 +216,6 @@ export function AtlasApp({
           />
         </div>
       </footer>
-
-      {/* ── The globe plate: the pocket globe, opened to a full page ─────── */}
-      {globeOpen && (
-        <GlobeOverlay
-          view={globe}
-          currentTripId={trip.id}
-          onClose={() => setGlobeOpen(false)}
-        />
-      )}
-
-      {/* ── The ledger: the plate's summary, opened to a full page ───────── */}
-      {ledgerOpen && (
-        <LedgerOverlay
-          trip={trip}
-          ledger={ledger}
-          onClose={() => setLedgerOpen(false)}
-          onOpenMoment={(id) => {
-            setLedgerOpen(false);
-            open(id);
-          }}
-        />
-      )}
 
       {/* ── The takeover: a marker expands into its splat ────────────────── */}
       {openMoment && (

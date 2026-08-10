@@ -154,6 +154,109 @@ do {
     check((try Data(contentsOf: dURL)).count == 48 * 4, "depth file byte length")
 }
 
+print("== CaptureFileStore resume/append (continue session) ==")
+do {
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("gz_rc_\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    let name = FileNaming.sessionDirName()
+    let K = simd_float3x3(columns: (SIMD3<Float>(1000, 0, 0), SIMD3<Float>(0, 1000, 0), SIMD3<Float>(960, 720, 1)))
+    func writeFrames(_ store: CaptureFileStore, _ ids: [Int]) throws {
+        for i in ids {
+            let meta = FrameMetadata(frameID: i, timestamp: Double(i) * 0.2, sessionTime: Double(i) * 0.2,
+                                     transform: matrix_identity_float4x4, intrinsics: K,
+                                     imageWidth: 1920, imageHeight: 1440, trackingState: .normal)
+            try store.writeFrame(meta, rgbJPEG: Data([0xff, 0xd8, 0xff, 0xd9]), depth: nil, confidence: nil)
+        }
+    }
+    // First segment: frames 0..2.
+    let s1 = try CaptureFileStore(baseDirectory: tmp, sessionDirName: name)
+    try s1.writeSessionInfo(SessionInfo(sessionID: name, deviceModel: "cc", appVersion: "1", sampleRateHz: 5))
+    try writeFrames(s1, [0, 1, 2])
+    s1.close()
+    check(CaptureFileStore.maxFrameID(baseDirectory: tmp, sessionDirName: name) == 2, "maxFrameID after first segment == 2")
+
+    // Resume: reopen and append frames 3..4 without truncating.
+    let next = CaptureFileStore.maxFrameID(baseDirectory: tmp, sessionDirName: name) + 1
+    check(next == 3, "resume starts at maxFrameID + 1")
+    let s2 = try CaptureFileStore(resuming: tmp, sessionDirName: name)
+    try writeFrames(s2, [next, next + 1])
+    s2.close()
+
+    let metaURL = tmp.appendingPathComponent(name).appendingPathComponent("metadata.jsonl")
+    let lines = try String(contentsOf: metaURL, encoding: .utf8).split(separator: "\n")
+    check(lines.count == 5, "metadata.jsonl appended (5 lines, not truncated)")
+    let firstID = (try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as! [String: Any])["frame_id"] as? Int
+    let lastID = (try JSONSerialization.jsonObject(with: Data(lines[4].utf8)) as! [String: Any])["frame_id"] as? Int
+    check(firstID == 0 && lastID == 4, "original + resumed records both present (0..4)")
+    check(CaptureFileStore.maxFrameID(baseDirectory: tmp, sessionDirName: name) == 4, "maxFrameID after resume == 4")
+
+    // Resuming a non-existent session must throw (not silently create a new one).
+    var threw = false
+    do { _ = try CaptureFileStore(resuming: tmp, sessionDirName: "capture_nope_00000000") }
+    catch { threw = true }
+    check(threw, "resuming a missing session throws")
+}
+
+print("== KeyframeCoverage (Phase 3) ==")
+do {
+    // T3.1 — threshold-crossing fires exactly ONCE per voxel
+    let kc = KeyframeCoverage(azBuckets: 12, cellSize: 0.12, enoughAngles: 5)
+    var fires = 0
+    for b in 0..<4 { if kc.observe(x: 0, y: 0, z: 0, bucket: b) { fires += 1 } }
+    check(fires == 0, "no crossing before enoughAngles")
+    let crossed = kc.observe(x: 0, y: 0, z: 0, bucket: 4)   // 5th distinct angle
+    check(crossed, "crosses on the 5th distinct angle")
+    var again = false
+    for b in 5..<12 { if kc.observe(x: 0, y: 0, z: 0, bucket: b) { again = true } }
+    check(!again, "never fires again for the same voxel")
+    check(kc.observe(x: 0, y: 0, z: 0, bucket: 3) == false, "re-observing a filled bucket: no fire")
+    check(kc.greenCount == 1 && kc.voxelCount == 1, "one green voxel tracked")
+
+    // T3.2 — pose-novelty dedup: stationary emits 1, orbiting emits ~1 per step
+    let kc2 = KeyframeCoverage(minTranslation: 0.15, minRotation: 0.26)
+    func pose(tx: Float, angle: Float) -> simd_float4x4 {
+        var m = simd_float4x4(simd_quatf(angle: angle, axis: SIMD3<Float>(0, 1, 0)))
+        m.columns.3 = SIMD4<Float>(tx, 0, 0, 1); return m
+    }
+    check(kc2.acceptPoseNovelty(pose(tx: 0, angle: 0)), "first pose accepted")
+    var stationary = 0
+    for _ in 0..<10 { if kc2.acceptPoseNovelty(pose(tx: 0.01, angle: 0.01)) { stationary += 1 } }
+    check(stationary == 0, "stationary camera emits no extra keyframes")
+    var orbit = 0
+    for i in 1...6 { if kc2.acceptPoseNovelty(pose(tx: 0, angle: Float(i) * 0.30)) { orbit += 1 } }
+    check(orbit >= 5, "orbiting emits ~1 keyframe per angular step (got \(orbit))")
+
+    // T3.3 — keyframe tag round-trips through the Core encoder/decoder
+    var meta = FrameMetadata(frameID: 7, timestamp: 1.0, sessionTime: 0.0,
+                             transform: matrix_identity_float4x4,
+                             intrinsics: matrix_identity_float3x3,
+                             imageWidth: 1920, imageHeight: 1440,
+                             trackingState: .normal)
+    meta.keyframe = true; meta.trigger = "threshold_crossing"
+    let line = try meta.jsonLine()
+    check(line.contains("\"keyframe\":true") && line.contains("\"threshold_crossing\""),
+          "metadata jsonLine includes keyframe tag")
+    let back = try JSONDecoder().decode(FrameMetadata.self, from: Data(line.utf8))
+    check(back.keyframe == true && back.trigger == "threshold_crossing", "keyframe round-trips")
+    // nil keyframe is OMITTED (backward-compatible wire format)
+    let plain = FrameMetadata(frameID: 8, timestamp: 1.0, sessionTime: 0.0,
+                              transform: matrix_identity_float4x4,
+                              intrinsics: matrix_identity_float3x3,
+                              imageWidth: 1920, imageHeight: 1440, trackingState: .normal)
+    check(!(try plain.jsonLine()).contains("keyframe"), "nil keyframe omitted from JSON")
+
+    // bulk_header carries the tag when present, omits when nil
+    let hdr = NetworkProtocol.bulkHeader(sessionID: "s", frameID: 7, payloadType: .frameMetadata,
+                                         sequence: 1, byteLength: 10, sha256: "ab",
+                                         keyframe: true, trigger: "threshold_crossing")
+    check((hdr["keyframe"] as? Bool) == true && (hdr["trigger"] as? String) == "threshold_crossing",
+          "bulk_header includes keyframe tag")
+    let hdr2 = NetworkProtocol.bulkHeader(sessionID: "s", frameID: 8, payloadType: .rgb,
+                                          sequence: 2, byteLength: 10, sha256: "cd")
+    check(hdr2["keyframe"] == nil, "bulk_header omits keyframe when nil")
+}
+
 print("")
 if failures == 0 { print("ALL CORE CHECKS PASSED") }
 else { print("\(failures) CHECK(S) FAILED"); exit(1) }

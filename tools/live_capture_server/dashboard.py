@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Dict
 
 from tools.live_capture_server.session_manager import SessionManager
 

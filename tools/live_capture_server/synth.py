@@ -7,9 +7,8 @@ byte-identical to a local capture.
 from __future__ import annotations
 
 import io
-import json
 import math
-from typing import Iterator, List
+from typing import List
 
 import numpy as np
 

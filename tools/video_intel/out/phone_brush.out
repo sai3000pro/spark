@@ -2,3 +2,6 @@
 ✓ Saved 3D Gaussians: /Users/notjackl3/Programming/hunyuanworld-mirror/ComfyUI/studio/runs/phone_fast_10k_1280/result.ply (1190938 Gaussians)
 RUN_DONE phone_fast_10k_1280 done
 === phone_bal_30k_1600 (30000 steps, 1600px) ===
+✓ Saved 3D Gaussians: /Users/notjackl3/Programming/hunyuanworld-mirror/ComfyUI/studio/runs/phone_bal_30k_1600/result.ply (2500000 Gaussians)
+RUN_DONE phone_bal_30k_1600 done
+=== phone_hi_50k_1920 (50000 steps, 1920px) ===

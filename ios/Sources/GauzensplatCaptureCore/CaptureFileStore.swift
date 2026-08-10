@@ -26,6 +26,49 @@ public final class CaptureFileStore {
         self.metadataHandle = try FileHandle(forWritingTo: metaURL)
     }
 
+    /// Reopen an EXISTING session directory to CONTINUE it: keeps its frames,
+    /// `session.json`, and `metadata.jsonl`, seeking the metadata handle to the
+    /// end so new records append instead of truncating. Powers "continue session".
+    /// The caller resumes frame numbering at `maxFrameID(...) + 1` so existing
+    /// frame files are never overwritten.
+    public init(resuming baseDirectory: URL, sessionDirName: String) throws {
+        self.root = baseDirectory.appendingPathComponent(sessionDirName, isDirectory: true)
+        self.sessionID = sessionDirName
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        // createDirectory(withIntermediateDirectories:) is idempotent — it neither
+        // errors nor clears an existing subdir, so this only fills in any gaps.
+        for sub in ["frames", "depth", "confidence", "diagnostics"] {
+            try fm.createDirectory(at: root.appendingPathComponent(sub),
+                                   withIntermediateDirectories: true)
+        }
+        let metaURL = root.appendingPathComponent("metadata.jsonl")
+        if !fm.fileExists(atPath: metaURL.path) {
+            fm.createFile(atPath: metaURL.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: metaURL)
+        try handle.seekToEnd()   // append, never truncate
+        self.metadataHandle = handle
+    }
+
+    /// Highest frame id already written for a session (by scanning `frames/`), or
+    /// `-1` when none exist. A resumed recording starts at this + 1.
+    public static func maxFrameID(baseDirectory: URL, sessionDirName: String) -> Int {
+        let framesDir = baseDirectory
+            .appendingPathComponent(sessionDirName, isDirectory: true)
+            .appendingPathComponent("frames", isDirectory: true)
+        guard let names = try? FileManager.default
+            .contentsOfDirectory(atPath: framesDir.path) else { return -1 }
+        var maxID = -1
+        for name in names {
+            let stem = (name as NSString).deletingPathExtension   // "000123.jpg" -> "000123"
+            if let id = Int(stem) { maxID = max(maxID, id) }
+        }
+        return maxID
+    }
+
     public func writeSessionInfo(_ info: SessionInfo) throws {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]

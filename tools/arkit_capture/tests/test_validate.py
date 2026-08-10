@@ -4,10 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import numpy as np
 
 from tools.arkit_capture.fixtures import make_synthetic_session
-from tools.arkit_capture.validate import ERROR, RECOVERABLE, WARNING, validate_capture
+from tools.arkit_capture.validate import RECOVERABLE, validate_capture
 
 
 class TestValidation(unittest.TestCase):

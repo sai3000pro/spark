@@ -20,7 +20,6 @@ final class CaptureCoordinator: ObservableObject {
         var framesConsidered = 0
         var framesSaved = 0
         var framesDropped = 0
-        var framesWithoutDepth = 0
         var writerQueueDepth = 0
         var writerQueueCapacity = 0
         var storageFreeBytes: Int64 = 0
@@ -33,17 +32,42 @@ final class CaptureCoordinator: ObservableObject {
 
     @Published private(set) var stats = Stats()
 
+    /// Called on the main thread when recording stops for a reason OTHER than the
+    /// user tapping STOP (low storage, interruption, session failure). Lets the
+    /// UI explain why a capture ended on its own instead of failing silently.
+    var onAutoStop: ((String) -> Void)?
+
+    /// Called on the main thread the FIRST time a frame fails to write to disk.
+    /// Write failures are otherwise skipped silently, which looks like recording
+    /// mysteriously stalling (e.g. disk full → every write after the first throws).
+    var onWriteError: ((String) -> Void)?
+    private var reportedWriteError = false
+
     private var machine = CaptureStateMachine()
+    /// Synchronous current state (the state machine is mutated only on the main
+    /// thread). Gate start/resume on THIS, not the async-published `stats.state`,
+    /// so a fast second tap can't slip past the guard while stats still reads .idle
+    /// and call start() on an already-recording machine (CaptureStateError).
+    var currentState: CaptureState { machine.state }
     private let sampler: FrameSampler
     private let baseDir: URL
     private let transport: CaptureTransport
     private let deviceModel: String
     private let appVersion: String
 
-    private struct QueuedFrame { let frameID: Int; let frame: ExtractedFrame }
+    // Optional capture-location tags stamped into session.json at start(). Set via
+    // `setLocation` from the VM's one-shot GPS fetch; all nil = record with no coords.
+    // Additive & fail-open: nothing in the frame/write path depends on these.
+    private var latitude: Double?
+    private var longitude: Double?
+    private var placeName: String?
+
+    private struct QueuedFrame { let frameID: Int; let frame: ExtractedFrame
+                                 var keyframe: Bool = false; var trigger: String? = nil }
     private let queue: BoundedFrameQueue<QueuedFrame>
     private var writerThread: Thread?
     private var store: CaptureFileStore?
+    private var audio: AudioCapture?            // isolated mic capture; nil when off/denied
     private var startTime: TimeInterval = 0
     private var frameID = 0
     private var summary = SessionSummary(sessionID: "")
@@ -81,6 +105,16 @@ final class CaptureCoordinator: ObservableObject {
 
     var sampleRateHz: Double { (sampler as? FixedRateSampler)?.rateHz ?? 0 }
 
+    /// Provide optional capture-location tags to be written into session.json at
+    /// the next `start()`. Called from the VM once its one-shot GPS fetch resolves;
+    /// safe to call with nils (leaves session.json location-free). Applies only to
+    /// `start()` — `resume()` deliberately does NOT rewrite session.json.
+    func setLocation(latitude: Double?, longitude: Double?, placeName: String?) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.placeName = placeName
+    }
+
     // MARK: control
 
     func start() throws {
@@ -91,7 +125,9 @@ final class CaptureCoordinator: ObservableObject {
             let store = try CaptureFileStore(baseDirectory: baseDir, sessionDirName: dirName)
             try store.writeSessionInfo(SessionInfo(sessionID: dirName, deviceModel: deviceModel,
                                                    appVersion: appVersion, sampleRateHz: sampleRateHz,
-                                                   createdAt: ISO8601DateFormatter().string(from: Date())))
+                                                   createdAt: ISO8601DateFormatter().string(from: Date()),
+                                                   latitude: latitude, longitude: longitude,
+                                                   placeName: placeName))
             self.store = store
         } catch {
             try? machine.apply(.preparationFailed); publishState()
@@ -103,6 +139,39 @@ final class CaptureCoordinator: ObservableObject {
         summary = SessionSummary(sessionID: dirName)
         startTime = ProcessInfo.processInfo.systemUptime
         startWriter()
+        if let root = self.store?.root { startAudio(sessionRoot: root) }  // best-effort; never blocks recording
+        try machine.apply(.preparationSucceeded)
+        setAccepting(true)
+        publishState()
+    }
+
+    /// Continue an EXISTING on-disk session instead of starting a fresh one:
+    /// reopen its store in append mode and resume frame numbering at the last
+    /// saved frame + 1, so the recording extends the same capture (same session
+    /// dir, same frames) rather than creating a new run. Otherwise identical to
+    /// `start()` — writer thread, audio, gate, and state transitions all match —
+    /// and it deliberately does NOT rewrite `session.json`, preserving the
+    /// original createdAt / sample rate.
+    func resume(sessionDirName: String) throws {
+        try machine.apply(.start)
+        publishState()
+        let next = CaptureFileStore.maxFrameID(baseDirectory: baseDir,
+                                               sessionDirName: sessionDirName) + 1
+        let resumedStore: CaptureFileStore
+        do {
+            resumedStore = try CaptureFileStore(resuming: baseDir, sessionDirName: sessionDirName)
+            self.store = resumedStore
+        } catch {
+            try? machine.apply(.preparationFailed); publishState()
+            throw error
+        }
+        sampler.reset()
+        frameID = next
+        considered = 0
+        summary = SessionSummary(sessionID: sessionDirName)
+        startTime = ProcessInfo.processInfo.systemUptime
+        startWriter()
+        startAudio(sessionRoot: resumedStore.root)   // best-effort; never blocks recording
         try machine.apply(.preparationSucceeded)
         setAccepting(true)
         publishState()
@@ -111,7 +180,7 @@ final class CaptureCoordinator: ObservableObject {
     /// Called on the AR capture queue for each frame. Does the MINIMUM work and
     /// only touches the main thread at the (throttled) sample rate — never on
     /// every ~60 Hz ARFrame.
-    func ingest(_ frame: ARFrame) {
+    func ingest(_ frame: ARFrame, keyframe: Bool = false, trigger: String? = nil) {
         guard accepting else { return }
         considered += 1
         guard sampler.shouldSample(timestamp: frame.timestamp) else { return }
@@ -124,7 +193,8 @@ final class CaptureCoordinator: ObservableObject {
         }
         guard let extracted = ARFrameExtractor.extract(frame) else { return }
         let fid = frameID; frameID += 1
-        let accepted = queue.enqueue(QueuedFrame(frameID: fid, frame: extracted))
+        let accepted = queue.enqueue(QueuedFrame(frameID: fid, frame: extracted,
+                                                 keyframe: keyframe, trigger: trigger))
         let qDepth = queue.count
         let dropped = queue.droppedCount
         let dur = ProcessInfo.processInfo.systemUptime - startTime
@@ -161,7 +231,7 @@ final class CaptureCoordinator: ObservableObject {
             let fid = job.frameID
             let extracted = job.frame
             let hasDepth = extracted.depthBytes != nil
-            let meta = FrameMetadata(
+            var meta = FrameMetadata(
                 frameID: fid,
                 timestamp: extracted.timestamp,
                 sessionTime: extracted.timestamp - startTime,
@@ -173,13 +243,21 @@ final class CaptureCoordinator: ObservableObject {
                 trackingReason: extracted.trackingReason,
                 depth: hasDepth ? .init(width: extracted.depthWidth ?? 0,
                                         height: extracted.depthHeight ?? 0) : nil)
+            if job.keyframe { meta.keyframe = true; meta.trigger = job.trigger }
             do {
                 let urls = try store.writeFrame(meta, rgbJPEG: extracted.rgbJPEG,
                                                 depth: extracted.depthBytes,
                                                 confidence: extracted.confidenceBytes)
                 enqueueMirror(fid: fid, meta: meta, urls: urls)
             } catch {
-                // Non-fatal: skip this frame, keep recording.
+                // Non-fatal: skip this frame, keep recording — but surface the
+                // FIRST failure so a persistent problem (e.g. disk full) is visible
+                // instead of silently stalling frame saves.
+                if !reportedWriteError {
+                    reportedWriteError = true
+                    let desc = error.localizedDescription
+                    DispatchQueue.main.async { self.onWriteError?(desc) }
+                }
                 continue
             }
             saved += 1
@@ -240,6 +318,30 @@ final class CaptureCoordinator: ObservableObject {
         }
     }
 
+    // MARK: audio (isolated; never affects the frame path)
+
+    /// Start microphone capture for this session. Best-effort: does nothing if the
+    /// mic is denied or the engine fails, so recording is unaffected.
+    private func startAudio(sessionRoot: URL) {
+        guard AudioCapture.isAuthorized, let a = AudioCapture(sessionRoot: sessionRoot) else { return }
+        a.onChunk = { [weak self] seq, url, data in
+            self?.handleAudioChunk(seq: seq, url: url, data: data)
+        }
+        a.onError = { [weak self] msg in
+            DispatchQueue.main.async { self?.onWriteError?("audio: \(msg)") }
+        }
+        if a.start() { self.audio = a }
+    }
+
+    /// AudioCapture already wrote the PCM chunk to disk (source of truth); only
+    /// mirror it when a live transport is attached. frame_id == chunk sequence.
+    private func handleAudioChunk(seq: Int, url: URL, data: Data) {
+        if transport is OfflineTransport { return }
+        transport.enqueue(MirrorItem(identity: .init(frameID: seq, payloadType: .audio),
+                                     fileURL: url, sha256: Checksum.sha256Hex(data),
+                                     byteLength: data.count))
+    }
+
     private func tempWrite(_ data: Data, name: String) -> URL {
         let u = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try? data.write(to: u)
@@ -269,10 +371,14 @@ final class CaptureCoordinator: ObservableObject {
         guard machine.isRecording else { return }
         stopReason = reason
         setAccepting(false)                 // stop the capture queue enqueuing first
+        audio?.stop(); audio = nil          // flush trailing audio chunk, release the mic
         try? machine.apply(.stop); publishState()
         summary.interruptionCount = stats.interruptions
         queue.close()                       // wake writer -> it drains + finalizes
         writerThread = nil
+        if reason != "completed" {
+            DispatchQueue.main.async { self.onAutoStop?(reason) }
+        }
     }
 
     var lastSessionURL: URL? { store?.root }
