@@ -6,23 +6,41 @@
  * Switches purely on `moment.splat`, which is the seam that lets a real
  * reconstruction land without touching the rest of the app:
  *
- *   ready + file present  → GS3DStage — @mkkellogg/gaussian-splats-3d (the real thing)
+ *   ready + file present  → a real engine (Spark, or mkkellogg — see below)
  *   anything else         → synthetic Gaussian cloud, badged honestly
  *
- * The two are mutually exclusive subtrees running on two different three.js
- * builds — the bundled 0.185 under React Three Fiber for the preview, an
- * isolated CDN 0.160.1 for the real renderer (lib/splat/gs3d.ts explains why).
- * They never share an object, and only one is mounted at a time.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TWO ENGINES, AND WHY THE TREE LOOKS ASYMMETRIC
  *
- * Object anchors are identical in both, so the find → "step inside" →
- * camera-fly handoff behaves the same whether or not a capture exists yet.
+ * Spark runs on the bundled three 0.185, so it mounts INSIDE this file's own
+ * Canvas as one more child — sharing the anchors, the orbit controls and the
+ * camera rig with the synthetic preview. mkkellogg needs an isolated CDN three
+ * 0.160.1 whose objects are not instances of the bundled classes, so it takes
+ * over as its own subtree with its own canvas and its own copy of all of that
+ * (lib/splat/gs3d.ts, components/relive/GS3DStage.tsx).
+ *
+ * Which one runs is the reader's preference (lib/splat/renderer.ts), overridden
+ * only when the preferred engine cannot read the file — mkkellogg cannot open
+ * SPZ. The chip names whichever actually drew, never the preference.
+ *
+ * Object anchors are identical in all three modes, so the find → "step inside"
+ * → camera-fly handoff behaves the same whether or not a capture exists yet.
  */
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GS3DStage } from "@/components/relive/GS3DStage";
+import { SparkScene } from "@/components/relive/SparkScene";
 import { buildSyntheticCloud } from "@/lib/splat/syntheticCloud";
+import {
+  RENDERER_INFO,
+  canOpen,
+  formatOf,
+  rendererFor,
+  type SplatRenderer,
+} from "@/lib/splat/renderer";
+import { setSplatRenderer, useSplatRenderer } from "@/lib/splat/useSplatRenderer";
 import { colorForLabel } from "@/lib/mock/labels";
 import { compactNumber } from "@/lib/format";
 import { CANVAS_BG, type MomentInk } from "@/lib/theme";
@@ -42,11 +60,16 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   const [mode, setMode] = useState<Mode>(() =>
     moment.splat.status === "ready" && moment.splat.url ? "checking" : "synthetic",
   );
+  const preference = useSplatRenderer();
+
   // Two numbers, because a big capture has two slow phases and conflating them
   // parks the chip at "100%" for minutes: `progress` is the download, `ready` is
   // the scene actually drawing.
-  const [progress, setProgress] = useState(0);
-  const [ready, setReady] = useState(false);
+  //
+  // Stamped with WHICH load they describe, so switching engine or moment does
+  // not need an effect to clear them — a stale stamp simply reads as zero. The
+  // effect version of this was a cascading render on every switch.
+  const [load, setLoad] = useState({ key: "", progress: 0, ready: false });
 
   // Probe for the asset instead of letting the renderer fail: a 404 deep inside
   // a splat loader is a worse failure than never starting it.
@@ -72,29 +95,53 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
     [moment],
   );
 
+  // Which engine will actually draw. `rendererFor` is what makes the preference
+  // safe to hold: choosing mkkellogg and then opening an SPZ quietly uses Spark
+  // rather than failing.
+  const engine = moment.splat.url ? rendererFor(preference, moment.splat.url) : null;
+  const useReal = mode === "real" && Boolean(moment.splat.url) && engine !== null;
+
+  // One load = one engine on one file. Both numbers below are read through it.
+  const loadKey = `${engine ?? ""}:${moment.splat.url ?? ""}`;
+  const progress = load.key === loadKey ? load.progress : 0;
+  const ready = load.key === loadKey ? load.ready : false;
+
   // Stable across renders so a hover never re-mounts the splat scene.
   const fallBack = useCallback(() => setMode("synthetic"), []);
-  const markReady = useCallback(() => setReady(true), []);
+  const onProgress = useCallback(
+    (percent: number) =>
+      setLoad((prev) =>
+        prev.key === loadKey
+          ? { ...prev, progress: percent }
+          : { key: loadKey, progress: percent, ready: false },
+      ),
+    [loadKey],
+  );
+  const markReady = useCallback(
+    () => setLoad({ key: loadKey, progress: 100, ready: true }),
+    [loadKey],
+  );
 
-  const loading = mode === "real" && !ready;
+  const loading = useReal && !ready;
 
   return (
     // Definite size from the parent; neither renderer initialises on a zero box.
     <div className="absolute inset-0">
-      {mode === "real" && moment.splat.url ? (
+      {useReal && engine === "gs3d" && moment.splat.url ? (
         <GS3DStage
           url={moment.splat.url}
           view={moment.splat.view}
           anchors={cloud.anchors}
           focusTrackId={focusTrackId}
           onSelectObject={onSelectObject}
-          onProgress={setProgress}
+          onProgress={onProgress}
           onReady={markReady}
           onFail={fallBack}
         />
       ) : (
         <Canvas
-          // antialias off — costs a lot, buys nothing for a point/splat cloud.
+          // antialias off — costs a lot, buys nothing for a point/splat cloud,
+          // and Spark asks for it off explicitly.
           gl={{ antialias: false }}
           dpr={[1, 1.75]}
           camera={{ position: [0, 1.9, 5.6], fov: 52, near: 0.05, far: 260 }}
@@ -102,9 +149,22 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
           <color attach="background" args={[CANVAS_BG]} />
           <ambientLight intensity={0.6} />
 
-          <Suspense fallback={null}>
-            <PointCloud cloud={cloud} />
-          </Suspense>
+          {/* The real capture and the stand-in are alternatives, but everything
+              around them — markers, controls, camera flight — is shared, which
+              is the whole benefit of Spark being on the bundled three. */}
+          {useReal && engine === "spark" && moment.splat.url ? (
+            <SparkScene
+              url={moment.splat.url}
+              view={moment.splat.view}
+              onProgress={onProgress}
+              onReady={markReady}
+              onFail={fallBack}
+            />
+          ) : (
+            <Suspense fallback={null}>
+              <PointCloud cloud={cloud} />
+            </Suspense>
+          )}
 
           <Anchors anchors={cloud.anchors} focusTrackId={focusTrackId} onSelect={onSelectObject} />
 
@@ -123,9 +183,10 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
 
       {/* ── Provenance chips over the stage ─────────────────────────────── */}
       <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap items-center gap-1.5">
-        {mode === "real" ? (
+        {useReal && engine ? (
           <StageChip variant="live">
-            [ splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians ]
+            [ splat · {moment.splat.pointCount ? compactNumber(moment.splat.pointCount) : "?"} gaussians ·{" "}
+            {RENDERER_INFO[engine].label.toLowerCase()} ]
           </StageChip>
         ) : (
           <StageChip variant="synth">[ synthetic preview · {compactNumber(cloud.count)} pts ]</StageChip>
@@ -142,9 +203,101 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
         {moment.splat.status === "failed" && <StageChip variant="synth">[ reconstruction failed ]</StageChip>}
       </div>
 
-      <p className="fnote pointer-events-none absolute bottom-3 right-3 text-[9px] text-mist">
-        drag to orbit · scroll to zoom · click a dot to inspect
-      </p>
+      {/* ── The bottom bar: the engine on the left, how to drive on the right
+             ──────────────────────────────────────────────────────────────────
+             One flex row rather than two independently-positioned absolutes.
+             Positioned separately they overlapped the moment both were showing
+             — the hint is long and right-aligned, so it ran straight under the
+             toggle at every stage width worth having. */}
+      <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
+        {useReal && engine ? (
+          <RendererToggle
+            engine={engine}
+            preference={preference}
+            url={moment.splat.url ?? ""}
+            onChoose={setSplatRenderer}
+          />
+        ) : (
+          <span />
+        )}
+        <p className="fnote shrink-0 text-right text-[9px] text-mist">
+          drag to orbit · scroll to zoom · click a dot to inspect
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Two buttons, bottom-left, only while a real capture is on screen — there is
+ * nothing to choose between while the stand-in is showing.
+ *
+ * The copy is careful about one thing above all: an engine that cannot open a
+ * file is a FORMAT limit, and compression is a STORAGE limit. Neither costs
+ * anyone detail they cannot get back — the full-detail PLY is theirs to keep,
+ * it simply counts against their quota (lib/storage/reclaim.ts is the only
+ * thing in the app that ever trades one for the other, and it shows both
+ * renders first). Nothing here may imply otherwise.
+ */
+function RendererToggle({
+  engine,
+  preference,
+  url,
+  onChoose,
+}: {
+  engine: SplatRenderer;
+  preference: SplatRenderer;
+  url: string;
+  onChoose: (r: SplatRenderer) => void;
+}) {
+  const overridden = engine !== preference;
+  const format = formatOf(url);
+
+  return (
+    // Re-enables pointer events the bottom bar switches off, so the hint next
+    // to it stays click-through.
+    <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-1">
+      <div className="flex items-center gap-1">
+        {(["spark", "gs3d"] as const).map((id) => {
+          const info = RENDERER_INFO[id];
+          const opens = canOpen(id, url);
+          const on = engine === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChoose(id)}
+              // Never disabled: picking it is still a valid preference for every
+              // other capture, and `rendererFor` keeps this one rendering.
+              title={
+                opens
+                  ? `${info.library} — ${info.note}`
+                  : `${info.library} cannot open ${format ?? "this format"}. ` +
+                    `Choosing it still applies everywhere it can.`
+              }
+              className={`fnote chip chip-plate text-[9.5px] ${
+                on ? "text-ink" : "text-ink-faint"
+              } ${opens ? "" : "line-through decoration-ink-faint/60"}`}
+            >
+              {on && (
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: "var(--color-brass)" }}
+                />
+              )}
+              {info.label.toLowerCase()}
+            </button>
+          );
+        })}
+      </div>
+      {overridden && (
+        <p className="fnote max-w-[15rem] text-[9px] leading-relaxed text-mist">
+          {RENDERER_INFO[preference].label.toLowerCase()} cannot read{" "}
+          {format ? `.${format}` : "this format"} — drawn with{" "}
+          {RENDERER_INFO[engine].label.toLowerCase()}. Your choice still stands elsewhere.
+        </p>
+      )}
     </div>
   );
 }

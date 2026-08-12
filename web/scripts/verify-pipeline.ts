@@ -60,6 +60,15 @@ import {
   type Projection,
   type Vec3,
 } from "../lib/coverage";
+import {
+  DEFAULT_SPLAT_RENDERER,
+  RENDERER_INFO,
+  SPLAT_RENDERERS,
+  canOpen,
+  formatOf,
+  readRendererPreference,
+  rendererFor,
+} from "../lib/splat/renderer";
 import { PointTracker, toGray } from "../lib/tracking";
 import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
 import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
@@ -1611,6 +1620,60 @@ function verifyCoverage() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The renderer choice
+//
+// Small, pure, and worth asserting because the failure it prevents is silent:
+// a reader whose preference is mkkellogg opening an SPZ gets a black rectangle
+// and no error anywhere. `rendererFor` is the only thing standing between the
+// preference and that, so it is checked in both directions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function verifyRendererChoice() {
+  heading("Renderer choice");
+
+  section("Reading the format off a URL");
+  check("a plain path", formatOf("/mock/park.spz") === "spz");
+  check("a query string is not part of it", formatOf("https://x/y.ply?sig=abc.def") === "ply");
+  check("a fragment is not either", formatOf("/a/b.splat#frag") === "splat");
+  check("case does not matter", formatOf("/A/B.PLY") === "ply");
+  // A dot in a directory name is not an extension, and treating it as one would
+  // route the file to whichever engine happens to claim "com".
+  check("a dot above the last slash is not an extension",
+    formatOf("https://cdn.example.com/capture") === null);
+  check("no extension at all", formatOf("/api/splat/stream") === null);
+
+  section("What each engine opens");
+  check("spark reads spz", canOpen("spark", "/a.spz"));
+  check("mkkellogg does not", !canOpen("gs3d", "/a.spz"));
+  check("both read ply", canOpen("spark", "/a.ply") && canOpen("gs3d", "/a.ply"));
+  // Deliberate: refusing to attempt an unknown file is worse than attempting it,
+  // because the synthetic fallback already exists and is already honest.
+  check("an unknown format is attempted, not refused",
+    canOpen("spark", "/a") && canOpen("gs3d", "/a"));
+
+  section("Routing one capture");
+  check("the preference wins when it can read the file",
+    rendererFor("gs3d", "/a.ply") === "gs3d" && rendererFor("spark", "/a.ply") === "spark");
+  check("and is overridden when it cannot", rendererFor("gs3d", "/a.spz") === "spark");
+  check("the override never changes the stored preference itself",
+    readRendererPreference() === DEFAULT_SPLAT_RENDERER);
+  // The property that matters: every engine, every format we produce, always
+  // lands on something that can open it.
+  const produced = ["/a.ply", "/a.spz", "/a.splat", "/a.ksplat"];
+  check("no capture is ever routed to an engine that cannot read it",
+    SPLAT_RENDERERS.every((r) => produced.every((u) => canOpen(rendererFor(r, u), u))));
+
+  section("The default");
+  check("is an engine that opens everything we make",
+    produced.every((u) => canOpen(DEFAULT_SPLAT_RENDERER, u)),
+    DEFAULT_SPLAT_RENDERER);
+  check("every engine describes itself", SPLAT_RENDERERS.every((r) => {
+    const info = RENDERER_INFO[r];
+    return info.id === r && info.label.length > 0 && info.library.length > 0 && info.note.length > 20;
+  }));
+}
+
 verifyWaterlooPark();
 verifyEveryTrip();
 verifyGeoAndGlobalIndex();
@@ -1618,6 +1681,7 @@ verifyGlobe();
 verifyLiveTrip();
 verifyDetectionQuality();
 verifyCoverage();
+verifyRendererChoice();
 
 console.log(
   failures === 0
