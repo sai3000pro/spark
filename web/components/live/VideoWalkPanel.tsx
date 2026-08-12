@@ -24,6 +24,7 @@ import { useRouter } from "next/navigation";
 import { SaveToAlbum } from "@/components/album/SaveToAlbum";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
 import { DETECTOR_MODELS, formatBytes, type ProgressInfo } from "@/lib/detector";
+import { WHISPER_APPROX_MB } from "@/lib/audio/transcribe";
 import { buildWalkFromVideo, type BuiltWalk, type WalkPhase } from "@/lib/video/buildWalk";
 
 type Phase = "idle" | WalkPhase | "done" | "error";
@@ -39,6 +40,7 @@ export function VideoWalkPanel() {
 
   const [modelId, setModelId] = useState(DETECTOR_MODELS[0].id);
   const [reconstruct, setReconstruct] = useState(false);
+  const [transcribe, setTranscribe] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState<ProgressInfo | null>(null);
   const [step, setStep] = useState({ done: 0, total: 0 });
@@ -46,8 +48,7 @@ export function VideoWalkPanel() {
   const [found, setFound] = useState<Found | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const busy =
-    phase === "loading-model" || phase === "sampling" || phase === "detecting" || phase === "building";
+  const busy = phase !== "idle" && phase !== "done" && phase !== "error";
 
   const run = useCallback(
     async (video: File) => {
@@ -81,6 +82,7 @@ export function VideoWalkPanel() {
           video,
           modelId,
           splatJobId,
+          transcribe,
           signal: controller.signal,
           onProgress: (p) => {
             setPhase(p.phase);
@@ -102,7 +104,7 @@ export function VideoWalkPanel() {
         abortRef.current = null;
       }
     },
-    [modelId, reconstruct],
+    [modelId, reconstruct, transcribe],
   );
 
   const onFile = (f: File | undefined) => {
@@ -161,6 +163,23 @@ export function VideoWalkPanel() {
             className="accent-clay"
           />
           [ also reconstruct a splat · uploads the video ]
+        </label>
+
+        <label
+          className={`fnote flex w-full cursor-pointer items-center gap-2 text-[10px] ${
+            transcribe ? "text-lagoon" : "text-ink-faint"
+          }`}
+          title="Whisper runs in this tab, like the detector. The audio never leaves the machine."
+        >
+          <input
+            type="checkbox"
+            checked={transcribe}
+            disabled={busy}
+            onChange={(e) => setTranscribe(e.target.checked)}
+            className="accent-lagoon"
+          />
+          [ listen too · unlocks the speech and laughter triggers · +{WHISPER_APPROX_MB}MB, stays
+          in this tab ]
         </label>
       </div>
 

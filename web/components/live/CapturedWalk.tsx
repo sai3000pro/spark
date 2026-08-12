@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 
 import { SaveToAlbum } from "@/components/album/SaveToAlbum";
 import { DETECTOR_MODELS } from "@/lib/detector";
+import { WHISPER_APPROX_MB } from "@/lib/audio/transcribe";
 import {
   buildWalkFromVideo,
   describeProgress,
@@ -59,6 +60,10 @@ export function CapturedWalk({
 }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ k: "idle" });
+  // Same option the dropped-file panel offers, and off for the same reason: a
+  // second model and a second pass over the clip. Offered here too because a
+  // phone clip is the one most likely to have someone talking in it.
+  const [transcribe, setTranscribe] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(async () => {
@@ -90,6 +95,7 @@ export function CapturedWalk({
         // The reconstruction opened at upload time — hand the walk its id so
         // the moments know what they are waiting for.
         splatJobId: jobId,
+        transcribe,
         signal: controller.signal,
         onProgress: (progress) => setState({ k: "working", progress }),
       });
@@ -107,7 +113,7 @@ export function CapturedWalk({
     } finally {
       abortRef.current = null;
     }
-  }, [jobId, sourceName, router]);
+  }, [jobId, sourceName, transcribe, router]);
 
   if (state.k === "done") {
     const { walk } = state;
@@ -183,6 +189,20 @@ export function CapturedWalk({
       >
         Find the moments
       </button>
+      <label
+        className={`fnote flex cursor-pointer items-center gap-2 text-[10px] ${
+          transcribe ? "text-lagoon" : "text-ink-faint"
+        }`}
+        title="Whisper runs in this tab, like the detector. The audio never leaves the machine."
+      >
+        <input
+          type="checkbox"
+          checked={transcribe}
+          onChange={(e) => setTranscribe(e.target.checked)}
+          className="accent-lagoon"
+        />
+        [ listen too · unlocks the speech and laughter triggers · +{WHISPER_APPROX_MB}MB ]
+      </label>
       <p className="fnote text-[10px] leading-relaxed text-ink-faint">
         [ runs the detector in this tab · the clip is already saved either way ]
       </p>

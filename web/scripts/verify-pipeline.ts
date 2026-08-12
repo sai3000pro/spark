@@ -27,7 +27,7 @@ import { assignTracks } from "../lib/detect/track";
 import { mapPassBoxes, passCountFor, planPasses, QUALITY_PRESETS } from "../lib/detect/tta";
 import { bestViewpoint, scoreView } from "../lib/detect/viewQuality";
 import { collapseToSightings } from "../lib/pipeline";
-import type { Detection, TrackPoint } from "../lib/types";
+import type { Detection, TrackPoint, TranscriptSegment } from "../lib/types";
 import { makeGeo, type GeoRef } from "../lib/geo";
 import { TRIP_SPECS } from "../lib/mock/trips";
 import { waterlooPark } from "../lib/mock/trips/waterloo-park";
@@ -63,6 +63,12 @@ import {
 import { PointTracker, toGray } from "../lib/tracking";
 import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
 import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
+import {
+  audioEventsFrom,
+  cleanSegments,
+  keywordHitsFrom,
+  rmsOver,
+} from "../lib/audio/events";
 import {
   __resetAlbums,
   addToAlbum,
@@ -1530,6 +1536,78 @@ function verifyCoverage() {
     })());
 
     __resetAlbums();
+  }
+
+  // The audio pass. Three of the scorer's trigger kinds were unreachable until
+  // this existed, so what it emits goes straight into TRIGGER_WEIGHTS — a
+  // fabricated energy or a hallucinated segment promotes a window that nothing
+  // happened in.
+  section("Audio — what the scorer is handed");
+  {
+    const RATE = 16000;
+    const seg = (t: number, durationSec: number, text: string): TranscriptSegment => ({
+      id: `s_${t}`, t, durationSec, speaker: "unknown", text, confidence: 0.7,
+    });
+    /** Two seconds of constant amplitude starting at `from`. */
+    const tone = (spans: [number, number, number][]): Float32Array => {
+      const out = new Float32Array(RATE * 20);
+      for (const [from, dur, amp] of spans) {
+        for (let i = from * RATE; i < (from + dur) * RATE; i++) out[i] = amp;
+      }
+      return out;
+    };
+
+    const samples = tone([[0, 2, 0.1], [4, 2, 0.5]]);
+    check("RMS reads the quiet stretch", Math.abs(rmsOver(samples, RATE, 0, 2) - 0.1) < 0.01,
+      rmsOver(samples, RATE, 0, 2).toFixed(3));
+    check("RMS reads the loud one", Math.abs(rmsOver(samples, RATE, 4, 2) - 0.5) < 0.01);
+    check("RMS of silence is zero", rmsOver(samples, RATE, 10, 2) === 0);
+    check("a window past the end does not throw", rmsOver(samples, RATE, 999, 2) === 0);
+
+    const events = audioEventsFrom(
+      [seg(0, 2, "walking along"), seg(4, 2, "wow look at that")],
+      samples, RATE,
+    );
+    check("one speech event per segment",
+      events.filter((e) => e.kind === "speech").length === 2);
+    // Normalised WITHIN the clip: the trigger is "louder than the rest of this
+    // recording", because absolute loudness is a property of the microphone.
+    check("energy is relative to the loudest moment",
+      events[1].energy === 1 && events[0].energy > 0 && events[0].energy < 0.3,
+      `${events[0].energy} then ${events[1].energy}`);
+    check("energy never leaves 0..1", events.every((e) => e.energy >= 0 && e.energy <= 1));
+
+    const laughs = audioEventsFrom([seg(0, 2, "[laughter] oh no")], samples, RATE);
+    check("Whisper's laughter annotation becomes a laughter event",
+      laughs.some((e) => e.kind === "laughter"));
+    check("ordinary speech does not",
+      !audioEventsFrom([seg(0, 2, "we are walking")], samples, RATE)
+        .some((e) => e.kind === "laughter"));
+
+    const hits = keywordHitsFrom([
+      seg(0, 2, "just walking"),
+      seg(4, 2, "wow, look at that, so cool"),
+    ]);
+    check("an attention phrase is found", hits.length === 1 && hits[0].t === 4,
+      JSON.stringify(hits));
+    // Three phrases in one sentence is one person excited once. Counting each
+    // would let a single sentence outscore a whole minute of walking.
+    check("one hit per segment, however excited", hits.length === 1);
+
+    // Whisper on silence invents, most reliably a subtitle credit it saw
+    // thousands of in training. Those would be fake speech at real timestamps.
+    const cleaned = cleanSegments([
+      seg(0, 2, "Thanks for watching!"),
+      seg(2, 2, "Subtitles by the Amara.org community"),
+      seg(4, 2, "  "),
+      seg(6, 0.1, "a"),
+      seg(8, 2, "look at the fountain"),
+    ]);
+    check("hallucinated captions are dropped", cleaned.length === 1, `${cleaned.length} kept`);
+    check("the real line survives", cleaned[0]?.text === "look at the fountain");
+
+    check("no segments means no events and no hits",
+      audioEventsFrom([], samples, RATE).length === 0 && keywordHitsFrom([]).length === 0);
   }
 }
 

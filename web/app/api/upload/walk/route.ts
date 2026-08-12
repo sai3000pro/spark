@@ -16,6 +16,8 @@ import { NextResponse } from "next/server";
 import { linkJobToTrip } from "@/lib/splatJobs";
 import { createUploadedWalk } from "@/lib/uploadedTrips";
 import { validateDetections } from "@/lib/validate";
+import type { KeywordHit } from "@/lib/pipeline";
+import type { AudioEvent, TranscriptSegment } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // The audio pass, when the browser ran one. Shape-checked rather than
+  // trusted: these feed TRIGGER_WEIGHTS directly, so a malformed event would
+  // promote a window on a number nobody measured. Anything that fails the check
+  // is dropped and the walk is built from the pictures, which is exactly what
+  // happened before this stage existed.
+  const audioEvents = validAudioEvents(body.audioEvents, durationSec);
+  const keywordHits = validKeywordHits(body.keywordHits, durationSec);
+  const transcript = validTranscript(body.transcript, durationSec);
+
   const walk = createUploadedWalk({
     detections: result.value,
     durationSec,
@@ -53,6 +64,9 @@ export async function POST(request: Request) {
     region: str(body.region),
     country: str(body.country),
     splatJobId: str(body.splatJobId),
+    audioEvents,
+    keywordHits,
+    transcript,
   });
 
   if (walk.splatJobId) linkJobToTrip(walk.splatJobId, walk.id);
@@ -79,11 +93,19 @@ export async function POST(request: Request) {
         "moments",
         "object sightings",
         "camera motion (median box displacement — this is what makes dwell fire)",
+        // Only claimed when it happened. This list is a ledger, and a ledger
+        // that says "transcript" for a silent clip is worth nothing.
+        ...(transcript.length
+          ? [`transcript (${transcript.length} segments, Whisper in the browser)`]
+          : []),
+        ...(audioEvents.length ? ["speech energy (RMS over the real waveform)"] : []),
       ],
       synthesized: [
         "distance scale (monocular, from the depth proxy — an order of magnitude)",
         "direction (not estimated at all — the trace runs along one axis)",
-        "no transcript — there was no audio pass",
+        ...(transcript.length
+          ? ["speaker labels — Whisper does not diarise, everyone is 'unknown'"]
+          : ["no transcript — the audio pass did not run or found nothing"]),
       ],
       persisted: false,
       note: "In memory only. Restarting the server forgets this walk.",
@@ -110,3 +132,83 @@ export function GET() {
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The audio pass, checked before it is believed
+//
+// These three arrive from a browser and go straight into scoreCandidates, where
+// they can promote a window. A hand-rolled POST with `energy: 1e9` and a
+// thousand laughter events must not be able to manufacture moments — so every
+// field is range-checked and anything outside it is dropped rather than
+// clamped. Dropping is the safer failure: a missing trigger under-reports, a
+// clamped one silently reports something nobody measured.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Beyond this a clip is not being transcribed, it is being flooded. */
+const MAX_AUDIO_EVENTS = 2000;
+
+const inClip = (t: unknown, durationSec: number): t is number =>
+  typeof t === "number" && Number.isFinite(t) && t >= 0 && t <= durationSec + 1;
+
+function validAudioEvents(raw: unknown, durationSec: number): AudioEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const kinds = new Set(["speech", "laughter", "music", "ambient"]);
+
+  return raw
+    .slice(0, MAX_AUDIO_EVENTS)
+    .filter((e): e is AudioEvent => {
+      if (!e || typeof e !== "object") return false;
+      const v = e as Record<string, unknown>;
+      return (
+        inClip(v.t, durationSec) &&
+        typeof v.durationSec === "number" &&
+        Number.isFinite(v.durationSec) &&
+        v.durationSec > 0 &&
+        v.durationSec <= durationSec + 1 &&
+        typeof v.kind === "string" &&
+        kinds.has(v.kind) &&
+        typeof v.energy === "number" &&
+        Number.isFinite(v.energy) &&
+        v.energy >= 0 &&
+        v.energy <= 1
+      );
+    });
+}
+
+function validKeywordHits(raw: unknown, durationSec: number): KeywordHit[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_AUDIO_EVENTS)
+    .filter((h): h is KeywordHit => {
+      if (!h || typeof h !== "object") return false;
+      const v = h as Record<string, unknown>;
+      return (
+        inClip(v.t, durationSec) &&
+        typeof v.phrase === "string" &&
+        v.phrase.length > 0 &&
+        v.phrase.length <= 80
+      );
+    });
+}
+
+function validTranscript(raw: unknown, durationSec: number): TranscriptSegment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_AUDIO_EVENTS)
+    .filter((s): s is TranscriptSegment => {
+      if (!s || typeof s !== "object") return false;
+      const v = s as Record<string, unknown>;
+      return (
+        typeof v.id === "string" &&
+        inClip(v.t, durationSec) &&
+        typeof v.durationSec === "number" &&
+        Number.isFinite(v.durationSec) &&
+        v.durationSec >= 0 &&
+        typeof v.text === "string" &&
+        // Long enough to be a sentence, short enough not to be a payload.
+        v.text.length <= 2000 &&
+        typeof v.speaker === "string" &&
+        typeof v.confidence === "number"
+      );
+    });
+}

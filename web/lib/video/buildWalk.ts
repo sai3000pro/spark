@@ -30,6 +30,8 @@
 import { loadDetector, type ProgressInfo } from "@/lib/detector";
 import { probeVideo, sampleFrames } from "@/lib/video/sampleFrames";
 import { trackDetections, type FrameDetections } from "@/lib/video/trackFrames";
+import type { KeywordHit } from "@/lib/pipeline";
+import type { AudioEvent, TranscriptSegment } from "@/lib/types";
 
 /** Detector confidence floor. Below this a frame is mostly furniture hallucination. */
 export const THRESHOLD = 0.5;
@@ -37,7 +39,12 @@ export const THRESHOLD = 0.5;
 /** The scorer's window is 8 s; a shorter clip cannot contain one. */
 export const MIN_DURATION_SEC = 4;
 
-export type WalkPhase = "loading-model" | "sampling" | "detecting" | "building";
+export type WalkPhase =
+  | "loading-model"
+  | "sampling"
+  | "detecting"
+  | "listening"
+  | "building";
 
 export interface WalkProgress {
   phase: WalkPhase;
@@ -61,6 +68,11 @@ export interface BuildWalkInput {
   modelId: string;
   /** Attaches the reconstruction to the walk, when one is already in flight. */
   splatJobId?: string | null;
+  /**
+   * Listen to the clip as well as look at it. Off by default: it is a second
+   * ~145 MB model and a second pass, and the walk is worth building without it.
+   */
+  transcribe?: boolean;
   signal?: AbortSignal;
   onProgress?: (p: WalkProgress) => void;
 }
@@ -70,7 +82,14 @@ export interface BuildWalkInput {
  * caller passed in. Callers distinguish the two — cancelling is not a failure.
  */
 export async function buildWalkFromVideo(input: BuildWalkInput): Promise<BuiltWalk> {
-  const { video, modelId, splatJobId = null, signal, onProgress } = input;
+  const {
+    video,
+    modelId,
+    splatJobId = null,
+    transcribe = false,
+    signal,
+    onProgress,
+  } = input;
   const report = (p: WalkProgress) => onProgress?.(p);
 
   const info = await probeVideo(video);
@@ -119,7 +138,45 @@ export async function buildWalkFromVideo(input: BuildWalkInput): Promise<BuiltWa
     );
   }
 
-  // 5 · the pipeline, on the server, on real detections.
+  // 5 · listen, if asked.
+  //
+  // Best-effort by construction: a clip with no audio track, a codec this
+  // browser cannot decode, or a model that fails to load all end the same way —
+  // no transcript, and the walk is built from the pictures alone, exactly as it
+  // was before this stage existed. Audio makes a walk better; it must never be
+  // able to make one fail.
+  let transcript: TranscriptSegment[] = [];
+  let audioEvents: AudioEvent[] = [];
+  let keywordHits: KeywordHit[] = [];
+
+  if (transcribe) {
+    report({ phase: "listening" });
+    try {
+      const { extractAudio, hasAudibleContent } = await import("@/lib/audio/extract");
+      const audio = await extractAudio(video);
+
+      // Whisper on silence invents — most reliably a subtitle credit it saw
+      // thousands of in training. Not asking is cheaper than filtering after.
+      if (hasAudibleContent(audio.samples)) {
+        const { transcribeAudio } = await import("@/lib/audio/transcribe");
+        const { audioEventsFrom, keywordHitsFrom } = await import("@/lib/audio/events");
+
+        transcript = await transcribeAudio(audio.samples, {
+          signal,
+          onProgress: (d) => report({ phase: "listening", download: d as ProgressInfo }),
+        });
+        audioEvents = audioEventsFrom(transcript, audio.samples, audio.sampleRate);
+        keywordHits = keywordHitsFrom(transcript);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      // Named rather than swallowed silently, so a missing transcript is
+      // debuggable without being fatal.
+      console.warn("[walk] audio pass skipped:", err);
+    }
+  }
+
+  // 6 · the pipeline, on the server, on real detections.
   report({ phase: "building" });
   const res = await fetch("/api/upload/walk", {
     method: "POST",
@@ -129,6 +186,9 @@ export async function buildWalkFromVideo(input: BuildWalkInput): Promise<BuiltWa
       durationSec: info.durationSec,
       sourceName: video.name,
       splatJobId,
+      audioEvents,
+      keywordHits,
+      transcript,
     }),
     signal,
   });
@@ -168,6 +228,10 @@ export function describeProgress(p: WalkProgress): string {
       return p.step?.total
         ? `Looking at frames · ${p.step.done} of ${p.step.total}`
         : "Looking at frames";
+    case "listening":
+      return p.download?.progress
+        ? `Loading the transcriber · ${Math.round(p.download.progress)}%`
+        : "Listening to the audio";
     case "building":
       return "Scoring the moments";
   }

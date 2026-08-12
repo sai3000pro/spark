@@ -233,6 +233,114 @@ async function main(): Promise<void> {
   check("no KIRI key is ever echoed back",
     !("key" in menu.kiri) && (menu.kiri.tail === null || menu.kiri.tail.length <= 4));
 
+  // ── 7 · the audio pass, at the route ───────────────────────────────────────
+  //
+  // verify-pipeline.ts already asserts the pure functions that turn a waveform
+  // into events. What it cannot assert is the part that matters here: that the
+  // ROUTE believes real events and disbelieves invented ones. Those numbers go
+  // straight into TRIGGER_WEIGHTS, so a POST that gets to set them is a POST
+  // that gets to manufacture memories.
+  //
+  // The fixture is deliberately one where the pictures alone find nothing: a
+  // single stationary object, novel once, over a span too short to promote. So
+  // any moment that appears afterwards came from the audio and nowhere else.
+  section("The audio pass, at the route");
+
+  const AUDIO_DURATION = 40;
+  const fixture = Array.from({ length: 16 }, (_, i) => ({
+    id: `det_audio_${i}`,
+    tripId: "trip_upload_pending",
+    frameId: `f${i}`,
+    t: 0.5 + i * 2,
+    label: "chair",
+    confidence: 0.6,
+    bbox: [0.4, 0.4, 0.2, 0.2],
+    trackId: "trk_chair",
+    source: "onboard",
+  }));
+
+  const postWalk = async (extra: Record<string, unknown>) => {
+    const res = await fetch(`${BASE}/api/upload/walk`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        detections: fixture,
+        durationSec: AUDIO_DURATION,
+        sourceName: "verify-flow.mp4",
+        ...extra,
+      }),
+    });
+    return {
+      status: res.status,
+      body: (await res.json()) as {
+        found?: { moments: number; candidates: number };
+        measured?: string[];
+        synthesized?: string[];
+      },
+    };
+  };
+
+  const silent = await postWalk({});
+  check("a walk builds from pictures alone", silent.status === 201, `HTTP ${silent.status}`);
+  check("and this fixture finds nothing without audio",
+    silent.body.found?.moments === 0,
+    `${silent.body.found?.moments} moment(s)`);
+  check("a silent walk does not claim a transcript",
+    !(silent.body.measured ?? []).some((m) => m.startsWith("transcript")),
+    (silent.body.measured ?? []).join(" · "));
+
+  const heard = await postWalk({
+    audioEvents: [
+      { t: 10, durationSec: 10, kind: "speech", energy: 0.9 },
+      { t: 12, durationSec: 2, kind: "laughter", energy: 0.7 },
+    ],
+    keywordHits: [{ t: 15, phrase: "look at that" }],
+    transcript: [
+      {
+        id: "seg_0",
+        t: 10,
+        durationSec: 10,
+        text: "look at that",
+        speaker: "unknown",
+        confidence: 0.9,
+      },
+    ],
+  });
+  check("the same footage with audio builds too", heard.status === 201, `HTTP ${heard.status}`);
+  // The whole point of the stage: three trigger kinds that were unreachable
+  // while these arrays were always empty.
+  check("the audio triggers reach the scorer",
+    (heard.body.found?.moments ?? 0) > 0,
+    `${heard.body.found?.moments} moment(s)`);
+  check("and the walk says so, in the ledger",
+    (heard.body.measured ?? []).some((m) => m.startsWith("transcript")) &&
+      (heard.body.measured ?? []).some((m) => m.includes("speech energy")),
+    (heard.body.measured ?? []).join(" · "));
+  check("it also admits Whisper does not diarise",
+    (heard.body.synthesized ?? []).some((s) => s.includes("speaker labels")));
+
+  // The one that is actually a security check. Every field here is out of
+  // range, so a route that clamps instead of dropping would happily promote a
+  // window on numbers nobody measured.
+  const poisoned = await postWalk({
+    audioEvents: [
+      { t: 12, durationSec: 2, kind: "laughter", energy: 1e9 },
+      { t: 9999, durationSec: 2, kind: "laughter", energy: 0.9 },
+      { t: 12, durationSec: 2, kind: "applause", energy: 0.9 },
+    ],
+    keywordHits: [{ t: 15, phrase: "x".repeat(500) }],
+    transcript: [{ id: "seg_0", t: 15, durationSec: 1, text: "hi" }],
+  });
+  check("a poisoned payload is still a 201", poisoned.status === 201, `HTTP ${poisoned.status}`);
+  check("but every bad event is dropped, not clamped",
+    poisoned.body.found?.moments === 0,
+    `${poisoned.body.found?.moments} moment(s)`);
+  check("and nothing unmeasured is claimed as measured",
+    !(poisoned.body.measured ?? []).some(
+      (m) => m.startsWith("transcript") || m.includes("speech energy"),
+    ),
+    (poisoned.body.measured ?? []).join(" · "));
+
   // ── clean up after ourselves ───────────────────────────────────────────────
   //
   // The upload path deliberately keeps clips for a week (see UPLOAD_RETENTION_MS),

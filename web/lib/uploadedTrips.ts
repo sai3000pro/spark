@@ -17,9 +17,13 @@
  *     straight transect in the order they happened, so the map has something
  *     truthful-in-time to draw; it is a timeline wearing a map's clothes, and
  *     `synthetic: true` on the trip is what says so in the UI.
- *   · the transcript. No audio pass yet, so there is none — rather than invent
- *     one. The audio triggers therefore never fire, which is the honest result
- *     and is why an uploaded walk finds fewer moments than an authored one.
+ *   · the transcript, WHEN one was made. There is a real audio pass now —
+ *     Whisper in the browser, lib/audio/ — so `audioEvents` and `keywordHits`
+ *     arrive measured and the audio triggers finally fire. It is optional and
+ *     often absent (a silent clip, an undecodable codec, or simply not asked
+ *     for), and when it is absent this is empty rather than invented, exactly
+ *     as it always was. What is still NOT measured is who spoke: Whisper does
+ *     not diarise, so every speaker is "unknown".
  *   · the title and summary, which are assembled from the labels actually seen
  *     in the window. Plain description, not an LLM pretending to be one.
  *
@@ -38,7 +42,8 @@ import { SCENE_HUES } from "./mock/placeholder";
 import { estimateCameraPath } from "./video/estimateMotion";
 import { estimateWorldPos } from "./video/trackFrames";
 import type { BuiltTrip } from "./mock/buildTrip";
-import type { Detection, GeoPoint, Moment, TrackPoint, Trip, Vec2 } from "./types";
+import type { KeywordHit } from "./pipeline";
+import type { AudioEvent, Detection, GeoPoint, Moment, TrackPoint, TranscriptSegment, Trip, Vec2 } from "./types";
 
 import { forgetJourney } from "./albums";
 
@@ -54,6 +59,15 @@ export interface UploadedWalkInput {
   sourceName?: string;
   /** The reconstruction job this walk is waiting on, if one was started. */
   splatJobId?: string;
+  /**
+   * The audio pass, when the browser ran one. Absent for a silent clip, a
+   * codec the browser could not decode, or a user who did not ask for it —
+   * all of which are ordinary, so every one of these defaults to empty and the
+   * walk is built from the pictures alone.
+   */
+  audioEvents?: AudioEvent[];
+  keywordHits?: KeywordHit[];
+  transcript?: TranscriptSegment[];
 }
 
 export interface UploadedWalk {
@@ -180,11 +194,17 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
   // Stage 2, for real. Still no audio, so the speech triggers cannot fire —
   // which is why an uploaded walk finds fewer moments than an authored one, and
   // that is the correct outcome rather than a shortfall to paper over.
+  // The audio triggers finally have something to fire on. Three of the
+  // scorer's kinds — audio_energy, laughter, speech_keyword — were unreachable
+  // while these were hardcoded empty, which is why an uploaded walk used to
+  // find fewer moments than an authored one. Still empty when there was no
+  // audio pass, and the result is then exactly what it was before.
   const candidates = scoreCandidates({
     tripId,
     durationSec,
     detections,
-    audioEvents: [],
+    audioEvents: input.audioEvents ?? [],
+    keywordHits: input.keywordHits ?? [],
     path,
   });
 
@@ -216,9 +236,12 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
       summary: summaryFor(labels, candidate.tEnd - candidate.tStart),
       place: { label: `${fmtClock(candidate.tStart)}–${fmtClock(candidate.tEnd)}`, pos },
       people: [],
-      // No audio pass, so no transcript. An invented one would be the single
-      // most dishonest thing this file could do.
-      transcript: [],
+      // The real transcript, clipped to this moment's own window. Still empty
+      // when no audio pass ran — and an INVENTED one would be the single most
+      // dishonest thing this file could do, which is why it never was.
+      transcript: (input.transcript ?? []).filter(
+        (s) => s.t < candidate.tEnd && s.t + s.durationSec > candidate.tStart,
+      ),
       splat: {
         status: "processing",
         note: input.splatJobId
