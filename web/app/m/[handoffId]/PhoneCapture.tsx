@@ -42,14 +42,34 @@ interface Props {
   handoffId: string;
 }
 
+/**
+ * Two decisions, in the order they can honestly be made.
+ *
+ * HOW you capture has to come first, because it decides which control you are
+ * handed. WHERE it reconstructs comes after, because until the clip exists
+ * there is nothing to send and — more to the point — because the destinations
+ * are probed live, and the studio being up when you started filming is not
+ * evidence it is up three minutes later.
+ */
 type Phase =
   | { k: "claiming" }
-  | { k: "ready" }
+  | { k: "choose-capture" }
+  | { k: "capturing"; mode: CaptureMode }
+  | { k: "choose-target"; file: File }
   | { k: "uploading"; pct: number; sentBytes: number; totalBytes: number }
-  | { k: "done"; bytes: number }
+  | { k: "done"; bytes: number; note: string }
   | { k: "error"; message: string; recoverable: boolean };
 
 const MAX_BYTES = 512 * 1024 * 1024;
+
+/** What the server offers, from /api/reconstruction/targets. */
+interface TargetOption {
+  id: string;
+  label: string;
+  detail: string;
+  available: boolean;
+  blockedBecause: string | null;
+}
 
 export function PhoneCapture({ handoffId }: Props) {
   // Detected on the client, after mount — `isSecureContext` and `MediaRecorder`
@@ -105,7 +125,18 @@ export function PhoneCapture({ handoffId }: Props) {
           }),
         });
         if (res.ok) {
-          setPhase({ k: "ready" });
+          // The laptop may have already answered the first question. A code
+          // drawn under "the video is on my phone" opens the file picker
+          // directly — asking "record or upload?" after someone pressed
+          // "upload" is the app forgetting what it was just told.
+          const body = (await res.json().catch(() => ({}))) as {
+            handoff?: { intent?: string };
+          };
+          setPhase(
+            body.handoff?.intent === "upload"
+              ? { k: "capturing", mode: "camera-app" }
+              : { k: "choose-capture" },
+          );
           return;
         }
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -132,14 +163,13 @@ export function PhoneCapture({ handoffId }: Props) {
     () => SERVER_CAPTURE_SUPPORT,
   );
 
-  // Null means "not chosen yet", so `support.best` wins until the user picks.
-  // Derived at render rather than synced in an effect.
-  const [chosenMode, setChosenMode] = useState<CaptureMode | null>(null);
-  const mode: CaptureMode = chosenMode ?? support.best;
+  // The mode is no longer inferred from `support.best` and then offered as a
+  // toggle — it is now an explicit first question, so `support` is consulted
+  // only to decide whether "Record live" can be pressed at all.
 
   // ── Upload ─────────────────────────────────────────────────────────────────
   const upload = useCallback(
-    (f: File) => {
+    (f: File, target: string) => {
       if (f.size > MAX_BYTES) {
         setPhase({
           k: "error",
@@ -153,6 +183,9 @@ export function PhoneCapture({ handoffId }: Props) {
       xhr.open("POST", `/api/capture/handoff/${handoffId}/upload`);
       xhr.setRequestHeader("x-handoff-token", tokenRef.current);
       xhr.setRequestHeader("x-file-name", f.name);
+      // A header, not a query string: the destination sits beside the token
+      // rather than in a URL that lands in an access log.
+      xhr.setRequestHeader("x-reconstruct-target", target);
       // The browser will not set content-type for a raw File body, and the
       // server needs it to pick a safe extension.
       xhr.setRequestHeader("content-type", f.type || "video/mp4");
@@ -168,7 +201,15 @@ export function PhoneCapture({ handoffId }: Props) {
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          setPhase({ k: "done", bytes: f.size });
+          // The server's own sentence about where it went — including "nowhere,
+          // and here is why", which is a success for the upload and a failure
+          // for the dispatch. Those are different facts and it reports both.
+          const body = safeJson(xhr.responseText) as { note?: string } | null;
+          setPhase({
+            k: "done",
+            bytes: f.size,
+            note: body?.note ?? "Your laptop has it.",
+          });
         } else {
           const body = safeJson(xhr.responseText);
           setPhase({
@@ -212,7 +253,7 @@ export function PhoneCapture({ handoffId }: Props) {
           {phase.recoverable && file && (
             <button
               type="button"
-              onClick={() => upload(file)}
+              onClick={() => setPhase({ k: "choose-target", file })}
               className="rounded-lg border border-current/25 px-4 py-2.5 text-sm font-medium"
             >
               Try that upload again
@@ -221,13 +262,56 @@ export function PhoneCapture({ handoffId }: Props) {
         </div>
       )}
 
-      {phase.k === "ready" && (
+      {/* ── Step 1 · how ──────────────────────────────────────────────────── */}
+      {phase.k === "choose-capture" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm leading-relaxed opacity-70">
+            Recording here is the better capture — it watches your angles as you go and
+            your laptop sees the framing live. Uploading works on any phone.
+          </p>
+
+          <button
+            type="button"
+            disabled={!support.available.includes("guided")}
+            onClick={() => setPhase({ k: "capturing", mode: "guided" })}
+            className="flex flex-col items-start gap-1 rounded-xl border border-current/25 px-5 py-4 text-left disabled:opacity-35"
+          >
+            <span className="text-base font-medium">Record live</span>
+            <span className="text-xs leading-relaxed opacity-60">
+              In this page, with coverage guidance. Your laptop watches as you film.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPhase({ k: "capturing", mode: "camera-app" })}
+            className="flex flex-col items-start gap-1 rounded-xl border border-current/25 px-5 py-4 text-left"
+          >
+            <span className="text-base font-medium">Upload a video</span>
+            <span className="text-xs leading-relaxed opacity-60">
+              Use your phone&rsquo;s own camera app, or pick a clip you already have.
+            </span>
+          </button>
+
+          {support.guidedBlockedBecause && (
+            <p className="text-xs leading-relaxed opacity-50">
+              {support.guidedBlockedBecause}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── Capture ───────────────────────────────────────────────────────── */}
+      {phase.k === "capturing" && (
         <div className="flex flex-col gap-5">
-          {mode === "guided" ? (
+          {phase.k === "capturing" && phase.mode === "guided" ? (
             <GuidedRecorder
               handoffId={handoffId}
               token={token}
-              onRecorded={(f) => { setFile(f); upload(f); }}
+              onRecorded={(f) => {
+                setFile(f);
+                setPhase({ k: "choose-target", file: f });
+              }}
             />
           ) : (
             <>
@@ -251,49 +335,44 @@ export function PhoneCapture({ handoffId }: Props) {
                     const f = e.target.files?.[0];
                     if (!f) return;
                     setFile(f);
-                    upload(f);
+                    setPhase({ k: "choose-target", file: f });
+                  }}
+                />
+              </label>
+
+              <label className="cursor-pointer text-center text-sm underline underline-offset-4 opacity-70">
+                or choose a video you already have
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setFile(f);
+                    setPhase({ k: "choose-target", file: f });
                   }}
                 />
               </label>
             </>
           )}
 
-          {/* The other mode is always reachable. Guided recording is better for
-              coverage; the camera app is better for image quality and never
-              fails. Neither is strictly superior, so neither is hidden. */}
-          {support.available.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setChosenMode(mode === "guided" ? "camera-app" : "guided")}
-              className="text-center text-sm underline underline-offset-4 opacity-70"
-            >
-              {mode === "guided"
-                ? "or use your camera app instead"
-                : "or record here with coverage guidance"}
-            </button>
-          )}
-
-          <label className="cursor-pointer text-center text-sm underline underline-offset-4 opacity-70">
-            or choose a video you already have
-            <input
-              type="file"
-              accept="video/*"
-              className="sr-only"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                setFile(f);
-                upload(f);
-              }}
-            />
-          </label>
-
-          {support.guidedBlockedBecause && (
-            <p className="text-xs leading-relaxed opacity-50">
-              {support.guidedBlockedBecause}
-            </p>
-          )}
+          <button
+            type="button"
+            onClick={() => setPhase({ k: "choose-capture" })}
+            className="text-center text-sm underline underline-offset-4 opacity-55"
+          >
+            back
+          </button>
         </div>
+      )}
+
+      {/* ── Step 2 · where ────────────────────────────────────────────────── */}
+      {phase.k === "choose-target" && (
+        <TargetPicker
+          bytes={phase.file.size}
+          onPick={(target) => upload(phase.file, target)}
+        />
       )}
 
       {phase.k === "uploading" && (
@@ -316,15 +395,109 @@ export function PhoneCapture({ handoffId }: Props) {
       {phase.k === "done" && (
         <div className="flex flex-col gap-2">
           <p className="text-sm leading-relaxed">
-            {fmtMb(phase.bytes)} received. Your laptop has it — you can put the phone
-            down.
+            {fmtMb(phase.bytes)} received and saved. You can put the phone down.
           </p>
-          <p className="text-xs opacity-50">
-            Reconstruction takes a few minutes and happens on the laptop.
-          </p>
+          <p className="text-xs leading-relaxed opacity-55">{phase.note}</p>
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Where it goes — asked after the clip exists, and probed rather than declared.
+ *
+ * Nothing here decides whether the recording survives. It is already on its way
+ * to disk by the time any of these is contacted, and the server stores it before
+ * it dispatches, so an unreachable studio or a dead KIRI key costs a
+ * reconstruction and never a capture. That is why an unavailable option is shown
+ * greyed with its reason instead of hidden: "no studio running" and "no key yet"
+ * are both things someone can go and fix, and then send this same clip again.
+ */
+function TargetPicker({
+  bytes,
+  onPick,
+}: {
+  bytes: number;
+  onPick: (target: string) => void;
+}) {
+  const [options, setOptions] = useState<TargetOption[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/reconstruction/targets", { cache: "no-store" });
+        if (!alive) return;
+        if (!res.ok) {
+          setFailed(true);
+          return;
+        }
+        const body = (await res.json()) as { options: TargetOption[] };
+        if (alive) setOptions(body.options);
+      } catch {
+        if (alive) setFailed(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (failed) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm leading-relaxed">
+          Couldn&rsquo;t ask the laptop what it can do right now.
+        </p>
+        <button
+          type="button"
+          onClick={() => onPick("studio-batch")}
+          className="rounded-xl border border-current/25 px-5 py-4 text-base font-medium"
+        >
+          Send it anyway &middot; {fmtMb(bytes)}
+        </button>
+        <p className="text-xs leading-relaxed opacity-50">
+          It will be saved on the laptop either way.
+        </p>
+      </div>
+    );
+  }
+
+  if (!options) return <Muted>Checking what&rsquo;s available…</Muted>;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm leading-relaxed opacity-70">
+        {fmtMb(bytes)} recorded. Where should it be reconstructed?
+      </p>
+
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          disabled={!o.available}
+          onClick={() => onPick(o.id)}
+          className="flex flex-col items-start gap-1 rounded-xl border border-current/25 px-5 py-4 text-left disabled:opacity-35"
+        >
+          <span className="text-base font-medium">{o.label}</span>
+          <span className="text-xs leading-relaxed opacity-60">
+            {o.available ? o.detail : o.blockedBecause}
+          </span>
+        </button>
+      ))}
+
+      {/* Always reachable, even with nothing available: keeping the clip IS a
+          worthwhile outcome, and it is the one this app can always deliver. */}
+      <button
+        type="button"
+        onClick={() => onPick("studio-batch")}
+        className="text-center text-sm underline underline-offset-4 opacity-60"
+      >
+        just save it for now
+      </button>
+    </div>
   );
 }
 

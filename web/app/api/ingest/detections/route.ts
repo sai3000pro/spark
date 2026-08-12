@@ -6,7 +6,7 @@
  * section for a DB insert and the client contract does not change.
  */
 import { NextResponse } from "next/server";
-import { noteIngest } from "@/lib/liveTrip";
+import { noteIngest, openTripForIngest } from "@/lib/liveTrip";
 import { scoreCandidates } from "@/lib/pipeline";
 import { validateDetections } from "@/lib/validate";
 
@@ -51,9 +51,11 @@ export async function POST(request: Request) {
 
   // ── TODO(day 2): persist here. `await db.detections.insertMany(detections)` ──
 
-  // If this batch belongs to the trip currently recording, the toolbar's counters
-  // stop being extrapolated and become measured. That is the entire seam: no
-  // other code changes when a real robot starts reporting.
+  // This batch IS the start. A rover does not have to call /api/trip/start
+  // first — the first detections to arrive open the session under the rover's
+  // own trip id, and the toolbar goes live on its own. Nothing else in the app
+  // can open one, which is why every counter on screen was measured.
+  openTripForIngest(detections[0].tripId);
   const attachedToActiveTrip = noteIngest(detections[0].tripId, {
     detections: detections.length,
     candidates: candidates.length,

@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server";
 
-import { createHandoff } from "@/lib/handoff";
+import { createHandoff, type HandoffIntent } from "@/lib/handoff";
 import { captureCapabilities, phoneOrigin } from "@/lib/net";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +15,13 @@ export const runtime = "nodejs"; // node:os and node:crypto
 
 export async function POST(request: Request) {
   let tripId: string | null = null;
+  let intent: HandoffIntent = "record";
   try {
-    const body = (await request.json()) as { tripId?: string } | null;
+    const body = (await request.json()) as { tripId?: string; intent?: string } | null;
     tripId = body?.tripId ?? null;
+    // Validated, not trusted: an unknown value lands on the path that asks the
+    // phone what it wants rather than guessing on its behalf.
+    if (body?.intent === "upload") intent = "upload";
   } catch {
     // No body is fine — a handoff can be opened before a trip exists.
   }
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { handoff, token } = createHandoff({ tripId });
+  const { handoff, token } = createHandoff({ tripId, intent });
   const url = `${origin}/m/${handoff.id}#${token}`;
 
   return NextResponse.json(

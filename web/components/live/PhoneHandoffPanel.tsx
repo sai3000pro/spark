@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CapturedWalk } from "@/components/live/CapturedWalk";
 import { LiveViewfinder } from "@/components/live/LiveViewfinder";
 
 interface Handoff {
@@ -39,7 +40,16 @@ type State =
   | { k: "live"; opened: Opened; svg: string }
   | { k: "unavailable"; detail: string };
 
-export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
+export function PhoneHandoffPanel({
+  tripId,
+  intent = "record",
+  label,
+}: {
+  tripId?: string | null;
+  /** Which screen the phone lands on. See HandoffIntent in lib/handoff.ts. */
+  intent?: "record" | "upload";
+  label?: string;
+}) {
   const [state, setState] = useState<State>({ k: "idle" });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,7 +93,7 @@ export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
       const res = await fetch("/api/capture/handoff", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tripId: tripId ?? null }),
+        body: JSON.stringify({ tripId: tripId ?? null, intent }),
       });
 
       if (res.status === 503) {
@@ -122,7 +132,7 @@ export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
         detail: err instanceof Error ? err.message : "Could not open a handoff.",
       });
     }
-  }, [tripId, poll]);
+  }, [tripId, intent, poll]);
 
   if (state.k === "idle") {
     return (
@@ -131,7 +141,7 @@ export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
         onClick={() => void open()}
         className="rounded-lg border border-current/25 px-4 py-2.5 text-sm font-medium"
       >
-        Use my phone to record
+        {label ?? (intent === "upload" ? "Send one from my phone" : "Use my phone to record")}
       </button>
     );
   }
@@ -172,6 +182,11 @@ export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
           <p className="text-center text-sm">
             Point your phone&rsquo;s camera at this
           </p>
+          {intent === "upload" && (
+            <p className="text-center text-xs leading-relaxed opacity-60">
+              It opens straight on your phone&rsquo;s video picker — no recording, no app.
+            </p>
+          )}
         </>
       )}
 
@@ -204,10 +219,17 @@ export function PhoneHandoffPanel({ tripId }: { tripId?: string | null }) {
       )}
 
       {done && handoff.upload && (
-        <p className="text-sm">
-          {(handoff.upload.receivedBytes / 1_048_576).toFixed(1)} MB arrived from your
-          phone.
-        </p>
+        <>
+          <p className="text-sm">
+            {(handoff.upload.receivedBytes / 1_048_576).toFixed(1)} MB arrived from your
+            phone.
+          </p>
+          {/* The join that used to be missing: the clip is here, so it can
+              become a walk. See components/live/CapturedWalk.tsx. */}
+          {handoff.jobId && (
+            <CapturedWalk jobId={handoff.jobId} sourceName={handoff.upload.name} />
+          )}
+        </>
       )}
 
       {dead && (

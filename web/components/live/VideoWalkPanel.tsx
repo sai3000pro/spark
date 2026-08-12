@@ -21,36 +21,15 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  DETECTOR_MODELS,
-  formatBytes,
-  loadDetector,
-  type ProgressInfo,
-} from "@/lib/detector";
-import { probeVideo, sampleFrames } from "@/lib/video/sampleFrames";
-import { trackDetections, type FrameDetections } from "@/lib/video/trackFrames";
+import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
+import { DETECTOR_MODELS, formatBytes, type ProgressInfo } from "@/lib/detector";
+import { buildWalkFromVideo, type BuiltWalk, type WalkPhase } from "@/lib/video/buildWalk";
 
-type Phase =
-  | "idle"
-  | "loading-model"
-  | "sampling"
-  | "detecting"
-  | "building"
-  | "done"
-  | "error";
+type Phase = "idle" | WalkPhase | "done" | "error";
 
-interface Found {
-  tripId: string;
-  href: string;
-  detections: number;
-  candidates: number;
-  discarded: number;
-  moments: number;
+interface Found extends BuiltWalk {
   splatJobId: string | null;
 }
-
-/** Detector confidence floor. Below this a frame is mostly furniture hallucination. */
-const THRESHOLD = 0.5;
 
 export function VideoWalkPanel() {
   const router = useRouter();
@@ -78,92 +57,38 @@ export function VideoWalkPanel() {
       setFile(video);
 
       try {
-        const info = await probeVideo(video);
-        if (info.durationSec < 4) {
-          throw new Error(
-            `that clip is ${info.durationSec.toFixed(1)}s — too short for the scorer's ${8}s window to see anything`,
-          );
-        }
-
-        // 1 · the model. Cached at module scope, so a second video is instant.
-        setPhase("loading-model");
-        const detector = await loadDetector(modelId, setProgress);
-
-        // 2 · the frames. Sampled by seeking, so a 4-minute clip does not take
-        //     4 minutes.
-        setPhase("sampling");
-        const { frames } = await sampleFrames(video, {
-          signal: controller.signal,
-          onFrame: (done, total) => setStep({ done, total }),
-        });
-
-        // 3 · the detector, frame by frame. This is the slow part and the only
-        //     part that is actually doing perception.
-        setPhase("detecting");
-        const perFrame: FrameDetections[] = [];
-        for (let i = 0; i < frames.length; i++) {
-          if (controller.signal.aborted) throw new DOMException("cancelled", "AbortError");
-          // One pass per frame — the video already gives the detector many looks
-          // at each object, so the still-frame TTA presets would only slow it.
-          const run = await detector.detect(frames[i].dataUrl, {
-            threshold: THRESHOLD,
-            quality: "fast",
-          });
-          perFrame.push({ t: frames[i].t, frameId: frames[i].frameId, raw: run.detections });
-          setStep({ done: i + 1, total: frames.length });
-        }
-
-        // 4 · link boxes into tracks, so a person standing still is one sighting
-        //     rather than ninety.
-        const detections = trackDetections(perFrame, { tripId: "trip_upload_pending" });
-        if (!detections.length) {
-          throw new Error(
-            "the detector found nothing above 50% in any frame — try footage with people or objects clearly in shot",
-          );
-        }
-
-        // 5 · hand the video over for reconstruction, if asked. Started BEFORE
-        //     the walk post so the long errand gets a head start.
+        // The reconstruction leaves FIRST, if asked, so the long errand gets a
+        // head start while the detector is still downloading. A reconstruction
+        // that fails must never cost you the walk.
         let splatJobId: string | null = null;
         if (reconstruct) {
           const form = new FormData();
           form.append("video", video);
           const res = await fetch("/api/splat/jobs", { method: "POST", body: form });
           if (res.ok) {
-            splatJobId = (await res.json()).job?.id ?? null;
+            splatJobId = ((await res.json()) as { job?: { id?: string } }).job?.id ?? null;
           } else {
-            // A failed reconstruction must not cost you the walk.
             console.warn("[upload] splat job failed to open:", await res.text());
           }
         }
 
-        // 6 · the pipeline, on the server, on real detections.
-        setPhase("building");
-        const res = await fetch("/api/upload/walk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            detections,
-            durationSec: info.durationSec,
-            sourceName: video.name,
-            splatJobId,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `the walk could not be built (${res.status})`);
-        }
-        const built = await res.json();
-
-        setFound({
-          tripId: built.tripId,
-          href: built.href,
-          detections: built.found.detections,
-          candidates: built.found.candidates,
-          discarded: built.found.discarded,
-          moments: built.found.moments,
+        // The funnel itself is lib/video/buildWalk.ts, because a clip arriving
+        // from the phone has to go through exactly the same one — otherwise the
+        // two paths give different answers for the same footage and nobody can
+        // say which is right. See components/live/CapturedWalk.tsx.
+        const built = await buildWalkFromVideo({
+          video,
+          modelId,
           splatJobId,
+          signal: controller.signal,
+          onProgress: (p) => {
+            setPhase(p.phase);
+            if (p.download !== undefined) setProgress(p.download);
+            if (p.step) setStep(p.step);
+          },
         });
+
+        setFound({ ...built, splatJobId });
         setPhase("done");
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -267,6 +192,20 @@ export function VideoWalkPanel() {
               hidden
               onChange={(e) => onFile(e.target.files?.[0])}
             />
+
+            {/* The footage is usually on the phone that shot it, and getting it
+                onto a laptop first is AirDrop, a cable, or a cloud round trip —
+                all of which are longer than pointing a camera at a square. The
+                same handoff as section 02, but the phone lands on its video
+                picker instead of a recorder. */}
+            <div className="mt-4 border-t border-ink/10 pt-4">
+              <p className="fnote mb-2 text-[9.5px] text-ink-faint">
+                [ the video is on your phone? ]
+              </p>
+              <div className="mx-auto max-w-xs">
+                <PhoneHandoffPanel intent="upload" label="Send one from my phone" />
+              </div>
+            </div>
           </>
         ) : (
           <Working

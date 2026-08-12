@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Start and stop a trip, from the toolbar.
+ * The trip, from the toolbar. Report and stop — starting is hardware's job.
  *
  * Colour follows the palette's existing meanings rather than inventing new ones:
  *
- *   idle       machine green  — SOLID fill, dark text. The one primary action.
+ *   idle       fog            — a muted STATUS. No rover, no session, no action.
  *   recording  signal green   — the palette's "active / navigable", and the same
  *                               green as the follow dot
  *   confirming fail rose      — a destructive-ish confirm
@@ -54,7 +54,7 @@ export function RecordControl({
   compact?: boolean;
   tone?: RecordTone;
 }) {
-  const { active, elapsedSec, pending, start, stop } = useLiveTrip();
+  const { active, elapsedSec, pending, stop } = useLiveTrip();
   const [armed, setArmed] = useState(false);
 
   // Derived, not synced: if the trip ends some other way, the confirm state
@@ -172,49 +172,41 @@ export function RecordControl({
     );
   }
 
+  // ── Idle: a STATUS, not an action ──────────────────────────────────────────
+  //
+  // This used to be the app's one primary action — a solid green "Start a trip?"
+  // that opened a session and filled the toolbar with a live clock and counters
+  // extrapolated from elapsed time. Nothing was driving any of it, because
+  // nobody has a rover.
+  //
+  // So the control reports a condition instead. A session now opens only when
+  // hardware POSTs to /api/ingest/* (see openTripForIngest in lib/liveTrip.ts),
+  // and at that instant every branch above this one starts working on its own —
+  // clock, counters, stop — with no code change here.
+  //
+  // Deliberately still rendered. The rover is a real part of the product's
+  // shape, and an absent control reads as "this does not exist" rather than
+  // "this is not plugged in". Matches RoverGate on /live.
   if (field) {
-    // The journal's primary action is the brass pill — the same one the landing
-    // uses to open a walk. Idle is the only state that gets a filled control.
     return (
-      <button
-        type="button"
-        onClick={() => void start()}
-        disabled={pending}
-        aria-label="Start a trip?"
-        title="Opens a recording session. The rover-follow behaviour is not implemented yet."
-        className="pill-brass px-4 py-2 text-[13px] disabled:opacity-60"
+      <span
+        className={`${FIELD_PILL} fnote text-[10.5px] text-ink-faint opacity-60`}
+        aria-disabled="true"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-ink/55" />
-        {pending ? "Starting…" : "Start a trip?"}
-      </button>
+        <span className="h-1.5 w-1.5 rounded-full bg-ink/25" />
+        [ no rover connected ]
+      </span>
     );
   }
 
-  // Idle is the app's one primary action, so it is the one place that takes a
-  // SOLID fill. `bg-machine-400 text-ink-950` measures 10.9:1 — a shade better
-  // than the brand orange it replaces, and it now matches the green already
-  // carrying the active view pill, the focus rings and the device toggle, so the
-  // chrome reads as one system instead of two accents. The live states below
-  // keep their own state colours; see the header.
-  //
-  // This is a deliberate exception to the "brand orange is the primary action"
-  // rule in globals.css — the rule's real job is that orange never becomes a
-  // category, and it still never does.
   return (
-    <button
-      type="button"
-      onClick={() => void start()}
-      disabled={pending}
-      // The accessible name matches the visible label exactly, question mark and
-      // all: a speech-input user says what they can see.
-      aria-label="Start a trip?"
-      title="Opens a recording session. The rover-follow behaviour is not implemented yet."
-      className={`${PILL} border-transparent bg-machine-400 font-semibold text-ink-950 hover:bg-machine-300 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-machine-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-ink-950`}
+    <span
+      className={`${PILL} border-fog-700/40 bg-fog-900/40 text-fog-400`}
+      aria-disabled="true"
+      title="A trip opens by itself when a rover starts reporting."
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-ink-950/55" />
-      <span className={compact ? "hidden sm:inline" : ""}>
-        {pending ? "Starting…" : "Start a trip?"}
-      </span>
-    </button>
+      <span className="h-1.5 w-1.5 rounded-full bg-fog-600" />
+      <span className={compact ? "hidden sm:inline" : ""}>No rover connected</span>
+    </span>
   );
 }

@@ -25,7 +25,7 @@
  * Step 3 is a copy, not an integration, and that is deliberate — the alternative
  * is this app holding credentials for a box it does not own.
  */
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 
 export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
@@ -80,7 +80,58 @@ export function createSplatJob(input: {
     tripId: input.tripId ?? null,
     note: "",
   });
+  sweepUploads();
   return getSplatJob(id)!;
+}
+
+/**
+ * How long a source video is kept.
+ *
+ * Seven days, matching the lifecycle rule the storage plan sets on the uploads
+ * bucket. The source is the largest artefact in the system by a wide margin — a
+ * 3-minute 1080p clip is 150–400 MB against a ~7 MB delivered splat — and it is
+ * read exactly twice: once by the detector, once by the reconstructor. Keeping
+ * it forever means a demo laptop fills up with footage nobody will watch again.
+ *
+ * This is NOT the reclaim policy in lib/storage/reclaim.ts, and the difference
+ * matters: that one gives up a PLY master a user might still want, so it ranks
+ * candidates, previews the loss and demands the replacement be verified first.
+ * A source video is working material — everything downstream has already been
+ * extracted from it — so it can go on a timer.
+ */
+export const UPLOAD_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Drop source videos past their retention window.
+ *
+ * Bounded and lazy, on the same principle as lib/handoff.ts's sweep: no cron,
+ * no timer to leak, and the work happens when something is already happening.
+ * Deliberately does NOT consult the job record — a video whose job was lost to
+ * a restart is exactly the kind of orphan that would otherwise never be
+ * collected, and age alone is the honest test.
+ */
+export function sweepUploads(now = Date.now()): number {
+  let removed = 0;
+  let entries: string[];
+  try {
+    entries = readdirSync(UPLOAD_DIR);
+  } catch {
+    // Nothing has been uploaded yet. Not an error.
+    return 0;
+  }
+
+  for (const name of entries) {
+    const file = path.join(UPLOAD_DIR, name);
+    try {
+      if (now - statSync(file).mtimeMs < UPLOAD_RETENTION_MS) continue;
+      unlinkSync(file);
+      removed++;
+    } catch {
+      // Being written right now, or already gone. Either way, leave it.
+    }
+  }
+  if (removed > 0) console.log(`[splatJobs] swept ${removed} expired upload(s)`);
+  return removed;
 }
 
 /** Late-binds the walk, since the walk id is only known after the pipeline runs. */

@@ -4,7 +4,7 @@
  * Day-2 integration seam; see the detections route for the same pattern.
  */
 import { NextResponse } from "next/server";
-import { noteIngest } from "@/lib/liveTrip";
+import { noteIngest, openTripForIngest } from "@/lib/liveTrip";
 import { buildObjectIndex } from "@/lib/objectIndex";
 import { validateMoment } from "@/lib/validate";
 
@@ -53,8 +53,9 @@ export async function POST(request: Request) {
 
   // ── TODO(day 2): persist here. `await db.moments.upsert(moment)` ────────────
 
-  // See the note in the detections route — this is what flips the live counters
-  // from extrapolated to measured.
+  // See the note in the detections route — reporting is what opens a session,
+  // and there is no other way to open one.
+  openTripForIngest(moment.tripId);
   const attachedToActiveTrip = noteIngest(moment.tripId, { moments: 1 });
 
   return NextResponse.json(

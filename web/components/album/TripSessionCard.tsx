@@ -39,11 +39,16 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
   // This is React's documented "adjust state while rendering" pattern — compare
   // against the last value seen and correct during render, which costs no extra
   // commit and no effect.
-  const [seen, setSeen] = useState<{ id: string; simulated: boolean } | null>(null);
+  // Counters ride along so the outcome can report what the session actually
+  // captured, rather than the session having to still exist to be described.
+  const [seen, setSeen] = useState<{
+    id: string;
+    counters: { detections: number; candidates: number; moments: number };
+  } | null>(null);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
 
-  if (active && (seen?.id !== active.id || seen.simulated !== active.simulated)) {
-    setSeen({ id: active.id, simulated: active.simulated });
+  if (active && (seen?.id !== active.id || seen.counters !== active.counters)) {
+    setSeen({ id: active.id, counters: active.counters });
   }
 
   const justEnded = !active && seen && dismissedId !== seen.id ? seen : null;
@@ -97,12 +102,6 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
         </div>
 
         <Counters counters={active.counters} />
-
-        {active.simulated && (
-          <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-warn-400/45 bg-warn-400/12 px-2 py-0.5 font-mono text-[10px] text-warn-400">
-            simulated counters · no robot connected
-          </p>
-        )}
       </Card>
     );
   }
@@ -110,22 +109,18 @@ export function TripSessionCard({ detectionsSoFar }: { detectionsSoFar: number }
   if (justEnded) {
     return (
       <Card tone="warn">
-        {/* "Trip", like everywhere else. The body below stays technical on
-            purpose — see this file's header — because it is addressed to whoever
-            wires the robot up, and that is the one audience the exact route name
-            helps. The EYEBROW is not addressed to them; it is the state of the
-            thing the visitor just stopped. */}
         <Eyebrow tone="warn">Trip ended</Eyebrow>
         <p className="mt-2 font-display text-[15px] font-semibold text-fog-100">
-          Nothing was captured.
+          {justEnded.counters.moments > 0
+            ? `${justEnded.counters.moments} moment${justEnded.counters.moments === 1 ? "" : "s"} kept.`
+            : "Nothing was worth keeping."}
         </p>
         <p className="mt-1.5 max-w-[52ch] text-[13px] leading-relaxed text-fog-400">
-          No robot is connected, so the pipeline ran on 0 real detections and there is no album to
-          make. Wire a robot to <span className="font-mono">/api/ingest/detections</span> and this
-          becomes a real capture with no code change.
+          {justEnded.counters.moments > 0
+            ? "Stage 3 builds the album from here — reconstruction, summaries, music."
+            : `${compactNumber(justEnded.counters.detections)} detections came in and none of the windows scored high enough to promote. That is the scorer working, not failing.`}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <RecordControl />
           <Link
             href="/detect"
             className="font-mono text-[11px] text-fog-400 transition-colors hover:text-machine-300"

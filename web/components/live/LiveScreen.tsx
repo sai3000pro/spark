@@ -11,6 +11,8 @@
  *
  * The provider is what `useLiveTrip()` reads; without it RecordControl throws.
  */
+import { useEffect, useState } from "react";
+
 import { LiveTripProvider, useLiveTrip } from "@/components/shell/LiveTripProvider";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
 import { VideoWalkPanel } from "@/components/live/VideoWalkPanel";
@@ -121,10 +123,131 @@ function PhoneHandoffSection() {
         <PhoneHandoffPanel tripId={active?.id ?? null} />
       </div>
 
+      <KiriKeyField />
+
       <p className="fnote mt-4 text-[10px] leading-relaxed text-ink-faint">
         [ want to mount this on a rover? a build guide is coming ]
       </p>
     </section>
+  );
+}
+
+/**
+ * The KIRI key, entered here rather than on the phone.
+ *
+ * Typing a 40-character API key with a thumb is miserable, and the person is
+ * sitting at the laptop anyway — so the phone only picks KIRI as a destination
+ * and says "add a key on the laptop" when there isn't one.
+ *
+ * The key is POSTed once and never comes back: the server validates it against
+ * KIRI's own /balance before storing, and every read after that returns four
+ * characters and a credit count. See lib/reconstruction/keys.ts, which is also
+ * honest about what this store is not.
+ */
+function KiriKeyField() {
+  const [key, setKey] = useState("");
+  const [state, setState] = useState<
+    { k: "idle" } | { k: "saving" } | { k: "saved"; tail: string; credits: number | null } | { k: "error"; why: string }
+  >({ k: "idle" });
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/reconstruction/key", { cache: "no-store" });
+        if (!alive || !res.ok) return;
+        const body = (await res.json()) as { present: boolean; tail: string | null; credits: number | null };
+        if (alive && body.present && body.tail) {
+          setState({ k: "saved", tail: body.tail, credits: body.credits });
+        }
+      } catch {
+        // No key configured is the normal case, not an error to announce.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const save = async () => {
+    setState({ k: "saving" });
+    try {
+      const res = await fetch("/api/reconstruction/key", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const body = (await res.json()) as {
+        tail?: string; credits?: number | null; error?: string;
+      };
+      if (!res.ok) {
+        setState({ k: "error", why: body.error ?? "That key was not accepted." });
+        return;
+      }
+      // Out of the field the instant it is stored, so it is not sitting in a
+      // form that a screenshot or an autofill dump would pick up.
+      setKey("");
+      setState({ k: "saved", tail: body.tail ?? "····", credits: body.credits ?? null });
+    } catch {
+      setState({ k: "error", why: "Could not reach the server." });
+    }
+  };
+
+  const forget = async () => {
+    await fetch("/api/reconstruction/key", { method: "DELETE" }).catch(() => undefined);
+    setState({ k: "idle" });
+  };
+
+  if (state.k === "saved") {
+    return (
+      <p className="fnote mt-4 flex flex-wrap items-center gap-2 text-[10px] text-ink-faint">
+        [ kiri key ····{state.tail}
+        {state.credits !== null ? ` · ${state.credits} credits` : ""} ]
+        <button
+          type="button"
+          onClick={() => void forget()}
+          className="underline underline-offset-2 transition-colors hover:text-ink"
+        >
+          forget it
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <details className="mt-4 max-w-sm">
+      <summary className="fnote cursor-pointer text-[10px] text-ink-faint">
+        [ add a kiri key, to reconstruct in the cloud ]
+      </summary>
+      <div className="mt-2 flex flex-col gap-2">
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="KIRI API key"
+          autoComplete="off"
+          spellCheck={false}
+          className="rounded-[3px] border border-ink/15 bg-transparent px-2.5 py-1.5 font-mono text-[12px] text-ink placeholder:text-ink-faint"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={!key.trim() || state.k === "saving"}
+            className="pill-brass px-3 py-1.5 text-[12px] disabled:opacity-50"
+          >
+            {state.k === "saving" ? "Checking…" : "Save"}
+          </button>
+          {state.k === "error" && (
+            <span className="text-[11px] leading-relaxed text-clay">{state.why}</span>
+          )}
+        </div>
+        <p className="fnote text-[9.5px] leading-relaxed text-ink-faint">
+          [ checked against kiri before it is stored · held in memory on this server only,
+          not encrypted at rest, and lost on restart ]
+        </p>
+      </div>
+    </details>
   );
 }
 
@@ -164,11 +287,9 @@ function LiveCounters() {
           <span className="fnote text-[9.5px] text-ink-faint">{label}</span>
         </span>
       ))}
-      {active.simulated && (
-        <span className="fnote chip chip-synth ml-auto text-[9.5px]">
-          [ extrapolated · no hardware reporting ]
-        </span>
-      )}
+      {/* No "extrapolated" badge any more, because there is nothing left to
+          extrapolate: a session cannot exist unless something reported into it,
+          so every number here was counted. See lib/liveTrip.ts. */}
     </div>
   );
 }

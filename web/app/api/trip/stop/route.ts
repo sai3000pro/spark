@@ -40,11 +40,10 @@ export async function POST(request: Request) {
         processingSec: PROCESSING_SEC,
         persisted: false,
         momentsPromoted: active.counters.moments,
-        // The honest part. Nothing was captured because nothing was connected.
-        capturedFromRobot: !active.simulated,
-        note: active.simulated
-          ? "No robot reported to /api/ingest/*, so this session captured nothing. The counters were extrapolated from elapsed time and no album will appear."
-          : "Ingested data was attached to this session.",
+        // Always true now: a session only exists because something reported
+        // into it, so there is no "captured nothing" case left to disclaim.
+        capturedFromRobot: true,
+        note: "Ingested data was attached to this session.",
       },
       { status: 202, headers: NO_STORE },
     );

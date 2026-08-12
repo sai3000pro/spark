@@ -16,7 +16,6 @@
  * the flow; not knowing whether the flow works would have changed everything.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { randomBytes } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -26,6 +25,9 @@ import { pipeline } from "node:stream/promises";
 import { NextResponse } from "next/server";
 
 import { noteUploadFinished, noteUploadStarted, verifyClaim } from "@/lib/handoff";
+import { dispatch } from "@/lib/reconstruction/dispatch";
+import { isReconTarget, type ReconTarget } from "@/lib/reconstruction/targets";
+import { createSplatJob, UPLOAD_DIR } from "@/lib/splatJobs";
 import { videoExtFor } from "@/lib/storage/keys";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +36,8 @@ export const runtime = "nodejs";
 /** Above KIRI's 3-minute cap a clip is rejected anyway; this is a sanity bound. */
 const MAX_BYTES = 512 * 1024 * 1024;
 
-const UPLOAD_DIR = path.join(process.cwd(), ".uploads");
+/** Where it goes if the phone did not say. Local, free, and never spends a credit. */
+const DEFAULT_TARGET: ReconTarget = "studio-batch";
 
 interface Ctx {
   params: Promise<{ handoffId: string }>;
@@ -81,12 +84,23 @@ export async function POST(request: Request, { params }: Ctx) {
   // from a server-minted id and a whitelisted extension, so nothing the phone
   // says can shape it.
   const name = (request.headers.get("x-file-name") ?? "capture").slice(0, 120);
-  const jobId = `splat_${Date.now().toString(36)}${randomBytes(2).toString("hex")}`;
+
+  // Where the phone asked for this to be reconstructed. A header rather than a
+  // query string so it never lands in an access log next to the upload, and
+  // validated rather than trusted — an unknown value falls back to the local
+  // route, which is the one that cannot cost anybody money.
+  const asked = request.headers.get("x-reconstruct-target");
+  const requested: ReconTarget = isReconTarget(asked) ? asked : DEFAULT_TARGET;
+
+  // A REAL job, not a label. This route used to mint an id string and register
+  // nothing, so the "jobId" it handed back referred to no record anywhere and
+  // /api/splat/jobs/[jobId] would 404 it forever.
+  const job = createSplatJob({ sourceName: name, sourceBytes: declared });
 
   noteUploadStarted(handoffId, name, declared);
 
   await mkdir(UPLOAD_DIR, { recursive: true });
-  const dest = path.join(UPLOAD_DIR, `${jobId}.${ext}`);
+  const dest = path.join(UPLOAD_DIR, `${job.id}.${ext}`);
 
   let written = 0;
   try {
@@ -104,16 +118,28 @@ export async function POST(request: Request, { params }: Ctx) {
     return NextResponse.json({ error: "received 0 bytes" }, { status: 400 });
   }
 
-  noteUploadFinished(handoffId, written, jobId);
+  // Safe on disk. Only now is anything allowed to fail — see the header of
+  // lib/reconstruction/dispatch.ts. The handoff is marked received BEFORE the
+  // dispatch, so a phone that walks out of Wi-Fi during a KIRI upload still
+  // sees its clip land, and the laptop still shows it arrived.
+  noteUploadFinished(handoffId, written, job.id);
+
+  const outcome = await dispatch({
+    requested,
+    filePath: dest,
+    filename: `${job.id}.${ext}`,
+  });
 
   return NextResponse.json(
     {
       ok: true,
-      jobId,
+      jobId: job.id,
       bytes: written,
-      note:
-        "Stored locally under .uploads. Reconstruction is a separate errand — " +
-        "see lib/reconstruction when the provider layer lands.",
+      stored: true,
+      reconstruction: outcome,
+      note: outcome.ok
+        ? outcome.note
+        : `${outcome.note} (Saved as ${job.id}.${ext}.)`,
     },
     { status: 201 },
   );

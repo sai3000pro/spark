@@ -126,8 +126,6 @@ const LAND_MS = 220;
  * that finally settles it.
  */
 const BRACE_LEAD_MS = 130;
-/** If the server never answers, come back down rather than hang in the air. */
-const LAUNCH_TIMEOUT_MS = 6000;
 
 /** Hold this long on a touch screen to pick the blob up instead of scrolling. */
 const LONG_PRESS_MS = 250;
@@ -343,7 +341,7 @@ interface Grab {
 }
 
 export function HeroBlobButton() {
-  const { active, elapsedSec, pending, error, start } = useLiveTrip();
+  const { active, elapsedSec, pending, error } = useLiveTrip();
   const router = useRouter();
   const reduced = useReducedMotion();
 
@@ -971,27 +969,19 @@ export function HeroBlobButton() {
   }, [grounded, snapHome]);
 
   // ── The handoff ────────────────────────────────────────────────────────────
-  // `start()` never rejects — it catches and sets `error` — so this waits on
-  // STATE rather than on a promise, and re-runs when the trip or the error
-  // arrives. While it waits, the label already reads "Setting off…" under a
-  // hovering robot, which is the right picture at any network speed.
   //
-  // A FAILED LAUNCH IS DERIVED, NOT STORED (see `shownPhase` below), so there is
-  // no state to write back here — an effect whose job is "navigate" should not
-  // also be an effect whose job is "undo".
+  // The blob used to POST /api/trip/start and wait at the top of its arc for a
+  // session to come back. Nothing was driving that session — see the header of
+  // lib/liveTrip.ts — so the arc ended in a screen of numbers no hardware had
+  // measured. Now the leap is pure anticipation and the landing is a navigation:
+  // it carries you to /live, where the capture that actually exists lives.
+  //
+  // A trip still opens by itself the moment a rover reports in, and when one is
+  // open every live branch in this component works exactly as before.
   useEffect(() => {
-    if (phase !== "launched" || error) return;
-    if (active) {
-      router.push("/live");
-      return;
-    }
-    // The server never answered. Come back down rather than hang in the air.
-    phaseTimer.current = setTimeout(
-      () => setPhase("asking"),
-      LAUNCH_TIMEOUT_MS,
-    );
-    return () => clearTimer(phaseTimer);
-  }, [phase, active, error, router]);
+    if (phase !== "launched") return;
+    router.push("/live");
+  }, [phase, router]);
 
   // ── Blocking the scroll, but only once it is actually holding the blob ──────
   // `touch-action` is latched at touchstart, so flipping it when the long press
@@ -1128,9 +1118,6 @@ export function HeroBlobButton() {
 
   const launch = () => {
     clearTimer(sleepTimer);
-    // The network call goes out NOW, in parallel with the anticipation — the
-    // animation is cover for the round trip, not a thing that delays it.
-    void start();
     setFlight("leap");
     setPhase("crouching");
     phaseTimer.current = setTimeout(() => {

@@ -28,9 +28,6 @@
  * No `next/*` imports — scripts/verify-pipeline.ts reaches this file, and it runs
  * under tsx.
  */
-import { buildTrip } from "./mock/buildTrip";
-import { PIPELINE_CONFIG } from "./pipeline";
-import { waterlooPark } from "./mock/trips/waterloo-park";
 import type { GeoPoint } from "./types";
 
 export type LiveTripStatus = "starting" | "recording" | "stopping" | "processing";
@@ -68,14 +65,15 @@ export interface ActiveTripSnapshot {
   placeLabel: string;
   region: string;
   country: string;
+  /** Measured, always. There is no session without hardware reporting one. */
   counters: LiveCounters;
-  /** True while the counters are extrapolated from elapsed time, not measured. */
-  simulated: boolean;
   /** Matches the ingest routes' flag. Nothing here is written anywhere. */
   persisted: false;
 }
 
 export interface StartTripInput {
+  /** Adopt the caller's own trip id, so its ingest batches match immediately. */
+  id?: string;
   placeLabel?: string;
   region?: string;
   country?: string;
@@ -124,49 +122,36 @@ export const serverStartedAt = (): string => store().serverStartedAt;
 // ─────────────────────────────────────────────────────────────────────────────
 // Counters
 //
-// When nothing has been reported, the numbers are extrapolated from elapsed time
-// using the REAL pipeline tunables and the demo trip's own promotion rates —
-// computed once at module load, not hardcoded. So the live readout and the
-// finished albums agree with each other instead of being two separate fictions.
-// buildTrip is memoized, so this costs nothing.
+// Measured or nothing.
+//
+// This module used to EXTRAPOLATE counters from elapsed time whenever no robot
+// was reporting — detections at 9.4 Hz, candidates and moments at the demo
+// trip's own promotion rates — and badge them "simulated". The numbers were
+// derived from the real pipeline tunables and the badge told the truth, so it
+// was honest. It was still the wrong thing to show: the one prominent action in
+// the toolbar opened a session that no hardware was driving, and a screen of
+// numbers nothing had measured is a demo of a product rather than the product.
+//
+// Now a session cannot exist without something reporting into it. See
+// openTripForIngest below — the ingest routes bring the session up themselves,
+// so "connect a rover" is the only way in, and every number on screen was
+// counted by something.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Stage 1 runs at ~10 fps with drops. */
-const DETECTION_HZ = 9.4;
-
-const RATES = (() => {
-  const { trip } = buildTrip(waterlooPark);
-  const durationSec =
-    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
-  const windows = Math.max(
-    1,
-    Math.floor((durationSec - PIPELINE_CONFIG.windowSec) / PIPELINE_CONFIG.strideSec) + 1,
-  );
-  const candidates = trip.candidates.length;
-  const promoted = trip.candidates.filter((c) => c.status === "promoted").length;
-  return {
-    candidatePerWindow: candidates / windows,
-    promotedPerCandidate: candidates ? promoted / candidates : 0,
-  };
-})();
-
-function simulateCounters(elapsedSec: number): LiveCounters {
-  const windows = Math.max(
-    0,
-    Math.floor((elapsedSec - PIPELINE_CONFIG.windowSec) / PIPELINE_CONFIG.strideSec) + 1,
-  );
-  const candidates = Math.round(windows * RATES.candidatePerWindow);
-  return {
-    detections: Math.round(elapsedSec * DETECTION_HZ),
-    candidates,
-    moments: Math.round(candidates * RATES.promotedPerCandidate),
-  };
-}
+const NO_COUNTERS: LiveCounters = { detections: 0, candidates: 0, moments: 0 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Open a session directly.
+ *
+ * No longer reachable from the UI — nothing in the app calls this any more, and
+ * `/api/trip/start` exists for hardware and for tooling that wants to declare a
+ * session before its first batch arrives. A rover that just starts POSTing does
+ * not need it; see openTripForIngest.
+ */
 export function startTrip(input: StartTripInput = {}): ActiveTripSnapshot {
   const current = getActiveTrip();
   if (current) {
@@ -175,7 +160,7 @@ export function startTrip(input: StartTripInput = {}): ActiveTripSnapshot {
 
   const now = new Date();
   store().active = {
-    id: `trip_live_${now.getTime().toString(36)}`,
+    id: input.id ?? `trip_live_${now.getTime().toString(36)}`,
     startedAt: now.toISOString(),
     endedAt: null,
     origin: input.origin ?? { lat: 43.4735, lng: -80.531 },
@@ -252,10 +237,28 @@ export function getActiveTrip(): ActiveTripSnapshot | null {
     placeLabel: active.placeLabel,
     region: active.region,
     country: active.country,
-    counters: active.reported ?? simulateCounters(measuredSec),
-    simulated: active.reported === null,
+    counters: active.reported ?? NO_COUNTERS,
     persisted: false,
   };
+}
+
+/**
+ * A rover reporting in brings its own session up.
+ *
+ * This is what makes "connect a rover and it starts working" literal: hardware
+ * does not have to know about /api/trip/start, and the UI does not offer a
+ * button that opens an empty session. The first batch to arrive IS the start,
+ * and the session takes the rover's own trip id so every later batch matches.
+ *
+ * A no-op when a session is already open under that id, and deliberately a
+ * no-op when a DIFFERENT trip is running — two rovers reporting at once should
+ * not silently steal the session from each other.
+ */
+export function openTripForIngest(tripId: string, input: StartTripInput = {}): boolean {
+  const current = getActiveTrip();
+  if (current) return current.id === tripId;
+  startTrip({ ...input, id: tripId, source: "robot" });
+  return true;
 }
 
 /**

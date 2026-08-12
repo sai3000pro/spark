@@ -55,11 +55,10 @@ export function SiteFooter() {
       </div>
 
       <div className="mx-auto w-full max-w-7xl px-4 pb-10 sm:px-5">
-        {/* warn-400, the same token the live "simulated counters" badge uses, so
-            the two honesty notices are visibly the same kind of statement. */}
+        {/* warn-400, the token this build uses for its honesty notices. */}
         <p className="max-w-[62ch] font-mono text-[10.5px] leading-relaxed text-warn-400/80">
-          Demo build. No robot is connected, so a trip you start here runs the real pipeline over
-          simulated counters and produces no album. The albums above are recorded fixtures.
+          Demo build. No rover is connected, so no live trip can open — record with your phone
+          instead. The albums above are recorded fixtures.
         </p>
       </div>
     </footer>

@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import type { ActiveTripSnapshot, StartTripInput } from "./liveTrip";
+import type { ActiveTripSnapshot } from "./liveTrip";
 
 /**
  * Wall-clock seconds, as a subscribable external store.
@@ -51,7 +51,11 @@ interface UseActiveTrip {
   elapsedSec: number;
   pending: boolean;
   error: string | null;
-  start: (input?: StartTripInput) => Promise<void>;
+  /**
+   * There is no `start`. A session opens when hardware POSTs to /api/ingest/*
+   * (see openTripForIngest in lib/liveTrip.ts) — nothing in the UI can open one,
+   * because a session nothing is driving is a screen of numbers nobody measured.
+   */
   stop: () => Promise<void>;
 }
 
@@ -180,13 +184,9 @@ export function useActiveTrip(initial: ActiveTripSnapshot | null): UseActiveTrip
     [adopt, router],
   );
 
-  const start = useCallback(
-    (input?: StartTripInput) => mutate("/api/trip/start", input),
-    [mutate],
-  );
   const stop = useCallback(() => mutate("/api/trip/stop", {}), [mutate]);
 
-  return { active, elapsedSec, pending, error, start, stop };
+  return { active, elapsedSec, pending, error, stop };
 }
 
 /** "12:04" / "1:02:44" — the live timer. */

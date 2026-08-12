@@ -77,9 +77,25 @@ export type HandoffState =
   /** Nothing claimed it in time, or it was used and closed. */
   | "expired";
 
+/**
+ * What the phone was sent here to do.
+ *
+ * The two paths share every byte of transport — claim, upload, storage, job —
+ * and differ only in which control the phone is handed first. Carrying it on
+ * the handoff rather than in the URL means the phone cannot land on the wrong
+ * screen because a link was edited, and the laptop's copy can say what it is
+ * offering before anyone scans.
+ */
+export type HandoffIntent =
+  /** Record here and now, with coverage guidance. */
+  | "record"
+  /** Send a clip that already exists on the phone. */
+  | "upload";
+
 export interface Handoff {
   id: string;
   state: HandoffState;
+  intent: HandoffIntent;
   createdAt: string;
   expiresAt: string;
   /** Which trip this capture belongs to, if one was already open. */
@@ -175,6 +191,7 @@ function view(s: Stored): Handoff {
   return {
     id: s.id,
     state,
+    intent: s.intent,
     createdAt: s.createdAt,
     expiresAt: s.expiresAt,
     tripId: s.tripId,
@@ -195,7 +212,9 @@ const NOTES: Record<HandoffState, string> = {
 };
 
 /** The raw token is returned ONCE, here. It is never stored and never re-issued. */
-export function createHandoff(input: { tripId?: string | null } = {}): {
+export function createHandoff(
+  input: { tripId?: string | null; intent?: HandoffIntent } = {},
+): {
   handoff: Handoff;
   token: string;
 } {
@@ -206,6 +225,7 @@ export function createHandoff(input: { tripId?: string | null } = {}): {
 
   const stored: Stored = {
     id,
+    intent: input.intent ?? "record",
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + TTL_MS).toISOString(),
     tripId: input.tripId ?? null,

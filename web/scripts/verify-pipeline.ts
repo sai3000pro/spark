@@ -43,9 +43,26 @@ import {
   __resetLiveTrip,
   getActiveTrip,
   noteIngest,
+  openTripForIngest,
   startTrip,
   stopTrip,
 } from "../lib/liveTrip";
+import {
+  BucketCoverage,
+  bearingOfPixel,
+  cameraDirection,
+  colorRamp,
+  focalFor,
+  metresBetween,
+  popcount,
+  projectToScreen,
+  surfaceAzimuthBucket,
+  type Projection,
+  type Vec3,
+} from "../lib/coverage";
+import { PointTracker, toGray } from "../lib/tracking";
+import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
+import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
 
 let failures = 0;
 
@@ -701,7 +718,10 @@ function verifyLiveTrip() {
     check("it reports recording or starting", ["starting", "recording"].includes(started.status),
       started.status);
     check("it is honest about not being persisted", started.persisted === false);
-    check("counters begin simulated", started.simulated === true);
+    check("counters begin at zero, not extrapolated",
+      started.counters.detections === 0 &&
+      started.counters.candidates === 0 &&
+      started.counters.moments === 0);
 
     let conflicted = false;
     try {
@@ -735,70 +755,56 @@ function verifyLiveTrip() {
     check("stopping nothing conflicts rather than throwing", noTrip);
   }
 
-  section("Counters");
+  // Counters used to be EXTRAPOLATED from elapsed time whenever nothing was
+  // reporting, and this section asserted that the extrapolation was monotonic
+  // and landed near the demo trip's real numbers. All of that is gone: a
+  // session cannot exist unless hardware opened it, so the only counters are
+  // measured ones. What is asserted now is that nothing invents a number.
+  section("Counters are measured, or they are zero");
   {
     __resetLiveTrip();
     startTrip();
 
-    // Extrapolated counters must be monotonic in elapsed time, or the live readout
-    // would visibly count backwards.
-    const samples = [0, 10, 60, 300, 1800, 5700].map((t) => simulateCountersForCheck(t));
-    check(
-      "detections never decrease as the trip runs",
-      samples.every((s, i) => i === 0 || s.detections >= samples[i - 1].detections),
-    );
-    check(
-      "candidates never decrease",
-      samples.every((s, i) => i === 0 || s.candidates >= samples[i - 1].candidates),
-    );
-    check(
-      "promoted never decreases",
-      samples.every((s, i) => i === 0 || s.moments >= samples[i - 1].moments),
-    );
-    check("a fresh session has promoted nothing", samples[0].moments === 0);
+    const fresh = getActiveTrip()!;
+    check("an unreported session counts nothing",
+      fresh.counters.detections === 0 && fresh.counters.moments === 0);
 
-    // The simulated rates come from the real demo trip, so a 95-minute session
-    // should land near its actual 6 moments rather than at an invented number.
-    const atFullTrip = samples[samples.length - 1];
-    check(
-      "a 95-minute session extrapolates to roughly the demo trip's 6 moments",
-      atFullTrip.moments >= 3 && atFullTrip.moments <= 12,
-      `${atFullTrip.moments}`,
-    );
-
-    const active = getActiveTrip()!;
     check("noteIngest rejects an unrelated trip id", noteIngest("trip_not_it", { moments: 1 }) === false);
-    check("noteIngest accepts the live one", noteIngest(active.id, { detections: 40 }) === true);
+    check("noteIngest accepts the live one", noteIngest(fresh.id, { detections: 40 }) === true);
 
     const measured = getActiveTrip()!;
-    check("reporting flips simulated off", measured.simulated === false);
     check("reported counts are used verbatim", measured.counters.detections === 40,
       `${measured.counters.detections}`);
+    check("counters do not drift with elapsed time",
+      getActiveTrip()!.counters.detections === 40);
 
     __resetLiveTrip();
   }
-}
 
-/** Mirrors lib/liveTrip's private extrapolation via the public surface. */
-function simulateCountersForCheck(elapsedSec: number) {
-  const windows = Math.max(
-    0,
-    Math.floor((elapsedSec - PIPELINE_CONFIG.windowSec) / PIPELINE_CONFIG.strideSec) + 1,
-  );
-  const { trip } = buildTrip(waterlooPark);
-  const durationSec =
-    (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000;
-  const totalWindows = Math.max(
-    1,
-    Math.floor((durationSec - PIPELINE_CONFIG.windowSec) / PIPELINE_CONFIG.strideSec) + 1,
-  );
-  const candidates = Math.round(windows * (trip.candidates.length / totalWindows));
-  const promoted = trip.candidates.filter((c) => c.status === "promoted").length;
-  return {
-    detections: Math.round(elapsedSec * 9.4),
-    candidates,
-    moments: Math.round(candidates * (trip.candidates.length ? promoted / trip.candidates.length : 0)),
-  };
+  // The rover brings its own session up. This is what makes "connect a rover
+  // and it starts working" literal rather than aspirational — no UI, no
+  // /api/trip/start, just a batch arriving.
+  section("Ingest opens the session");
+  {
+    __resetLiveTrip();
+    check("nothing is running", getActiveTrip() === null);
+
+    const opened = openTripForIngest("trip_rover_alpha");
+    check("a first batch opens a session", opened === true);
+    const live = getActiveTrip();
+    check("the session adopts the rover's own trip id", live?.id === "trip_rover_alpha", live?.id);
+    check("so the very same batch attaches",
+      noteIngest("trip_rover_alpha", { detections: 12 }) === true);
+    check("and the counters are its own", getActiveTrip()!.counters.detections === 12);
+
+    check("a second batch from the same rover is a no-op",
+      openTripForIngest("trip_rover_alpha") === true);
+    check("a different rover does not steal the session",
+      openTripForIngest("trip_rover_beta") === false);
+    check("the original session is untouched", getActiveTrip()!.id === "trip_rover_alpha");
+
+    __resetLiveTrip();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1150,12 +1156,316 @@ function verifyDetectionQuality() {
   }
 }
 
+/**
+ * Capture coverage — the browser port of the iOS scan feedback.
+ *
+ * The load-bearing claim is that this measures the SAME thing the native app
+ * measures (distinct azimuths a surface has been seen from) rather than a proxy
+ * for it. The two assertions that prove it are "pan in place gains exactly one
+ * bucket" and "orbit gains all twelve" — if those ever diverge, the overlay has
+ * gone back to rewarding attention instead of parallax, which is the bug this
+ * whole module was written to kill.
+ *
+ * lib/coverage.ts and lib/tracking.ts are DOM-free precisely so this can run
+ * here, with no browser and no camera.
+ */
+function verifyCoverage() {
+  const W = 192;
+  const H = 144;
+  const proj: Projection = {
+    focal: focalFor(W, H, W, H),
+    width: W,
+    height: H,
+    screenAngle: 0,
+  };
+  const unit = (v: Vec3): Vec3 => {
+    const l = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  const towards = (from: Vec3, to: Vec3): Vec3 =>
+    unit([to[0] - from[0], to[1] - from[1], to[2] - from[2]]);
+  /** Camera at `from` looking at `to`, upright, no roll. See cameraDirection. */
+  const lookAt = (from: Vec3, to: Vec3) => {
+    const d = towards(from, to);
+    const yaw = (Math.atan2(d[0], d[1]) * 180) / Math.PI;
+    // cameraDirection yields yaw = −alpha for an upright phone, so this aims it.
+    return cameraDirection(-yaw, 90, 0)!;
+  };
+  /** Bucket a world point as seen from a camera pose, or null if out of frame. */
+  const bucketOf = (R: Parameters<typeof projectToScreen>[0], dir: Vec3) => {
+    const px = projectToScreen(R, dir, proj);
+    if (!px || px.x < 0 || px.x >= W || px.y < 0 || px.y >= H) return null;
+    const b = bearingOfPixel(R, px.x, px.y, proj);
+    return b ? surfaceAzimuthBucket(b.azDeg) : null;
+  };
+
+  section("Coverage — the maths that replaces LiDAR");
+  {
+    // The inverse is new code and everything downstream trusts it.
+    const look = cameraDirection(37, 74, 21)!;
+    const d = unit([0.3, 0.9, 0.15]);
+    const px = projectToScreen(look.R, d, proj)!;
+    const back = bearingOfPixel(look.R, px.x, px.y, proj)!;
+    const az = (Math.atan2(d[0], d[1]) * 180) / Math.PI;
+    const el = (Math.asin(d[2]) * 180) / Math.PI;
+    check(
+      "bearingOfPixel inverts projectToScreen",
+      Math.abs(((back.azDeg - az + 540) % 360) - 180) < 0.01 &&
+        Math.abs(back.elDeg - el) < 0.01,
+      `${back.azDeg.toFixed(2)}/${((az % 360) + 360) % 360} · ${back.elDeg.toFixed(2)}/${el.toFixed(2)}`,
+    );
+
+    // iOS buckets surface → camera, the reverse of the ray we cast.
+    check("a ray due north buckets as seen-from-the-south", surfaceAzimuthBucket(0) === 6);
+    check("a ray due south buckets as seen-from-the-north", surfaceAzimuthBucket(180) === 0);
+  }
+
+  section("Coverage — pan versus orbit, the whole point");
+  {
+    // Camera pinned at the origin, sweeping. A fixed surface keeps a fixed
+    // bearing from a fixed camera, so no amount of turning adds an angle.
+    const pan = new BucketCoverage();
+    const P: Vec3 = [3, 4, 0.5];
+    let panSamples = 0;
+    for (let a = 0; a < 360; a += 3) {
+      const look = cameraDirection(a, 90, 0)!;
+      const b = bucketOf(look.R, unit(P));
+      if (b === null) continue;
+      panSamples++;
+      pan.observe(1, b);
+    }
+    check("panning actually sees the point", panSamples > 5, `${panSamples} samples`);
+    check("pan in place gains exactly ONE bucket", popcount(pan.mask(1)) === 1,
+      `${popcount(pan.mask(1))} buckets`);
+    check("pan in place greens nothing", pan.fraction === 0);
+
+    // Same surface, camera walking a circle round it.
+    const orbit = new BucketCoverage();
+    const target: Vec3 = [0, 0, 0];
+    for (let t = 0; t < 360; t += 5) {
+      const r = (t * Math.PI) / 180;
+      const C: Vec3 = [3 * Math.sin(r), 3 * Math.cos(r), 0];
+      const look = lookAt(C, target);
+      const b = bucketOf(look.R, towards(C, target));
+      if (b !== null) orbit.observe(1, b);
+    }
+    check("orbiting gains all TWELVE buckets", popcount(orbit.mask(1)) === 12,
+      `${popcount(orbit.mask(1))} buckets`);
+    check("orbiting greens it", orbit.fraction === 1);
+
+    // Walking straight at something barely changes its bearing; things passing
+    // at the side sweep through many. Both are correct, and the second is why
+    // side-stepping is the advice the UI gives on a walk.
+    const walk = new BucketCoverage();
+    const ahead: Vec3 = [0, 30, 0];
+    const beside: Vec3 = [3, 7, 0];
+    for (let y = 0; y <= 12; y += 0.25) {
+      const C: Vec3 = [0, y, 0];
+      const look = cameraDirection(0, 90, 0)!; // facing north the whole way
+      const a = bucketOf(look.R, towards(C, ahead));
+      if (a !== null) walk.observe(1, a);
+      const s = bucketOf(look.R, towards(C, beside));
+      if (s !== null) walk.observe(2, s);
+    }
+    check("walking straight at a thing leaves it red", walk.level(1) < 1,
+      `${popcount(walk.mask(1))} buckets`);
+    check("things passing at the side gain more angles",
+      popcount(walk.mask(2)) > popcount(walk.mask(1)),
+      `${popcount(walk.mask(2))} vs ${popcount(walk.mask(1))}`);
+  }
+
+  section("Coverage — the accumulator, ported from KeyframeCoverage");
+  {
+    const c = new BucketCoverage();
+    let crossings = 0;
+    for (let b = 0; b < 12; b++) if (c.observe(9, b)) crossings++;
+    check("the crossing edge fires exactly once", crossings === 1);
+    check("five of twelve is green", c.level(9) === 1);
+
+    const partial = new BucketCoverage();
+    for (const b of [0, 3, 6]) partial.observe(7, b);
+    check("three of twelve is not green", partial.level(7) === 3 / 5);
+    check("fraction counts only what was observed", partial.cellCount === 1 && partial.fraction === 0);
+    check("unionMask is the angle budget", popcount(partial.unionMask) === 3);
+
+    // Banking a dead track into a direction, then seeding a new one from it.
+    const memory = new BucketCoverage();
+    memory.merge(42, partial.mask(7));
+    const revived = new BucketCoverage();
+    revived.merge(1, memory.mask(42));
+    check("a revisited direction does not start from zero", popcount(revived.mask(1)) === 3);
+
+    // Ported verbatim from CaptureView.swift:350.
+    check("colorRamp: 0 is red", JSON.stringify(colorRamp(0)) === JSON.stringify({ r: 255, g: 0, b: 0 }));
+    check("colorRamp: 0.5 is yellow", JSON.stringify(colorRamp(0.5)) === JSON.stringify({ r: 255, g: 255, b: 0 }));
+    check("colorRamp: 1 is green", JSON.stringify(colorRamp(1)) === JSON.stringify({ r: 0, g: 255, b: 0 }));
+
+    // Waterloo to Toronto, ~93 km.
+    const d = metresBetween({ lat: 43.4643, lng: -80.5204 }, { lat: 43.6532, lng: -79.3832 });
+    check("metresBetween is right to a per cent", d > 92_000 && d < 95_000, `${Math.round(d)} m`);
+  }
+
+  section("Coverage — the tracker that replaces depth");
+  {
+    const W2 = 96;
+    const H2 = 96;
+    // Deterministic texture: a seeded LCG, so a failure here is reproducible.
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const noise = new Uint8ClampedArray(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2; i++) {
+      const v = Math.floor(rnd() * 256);
+      noise[i * 4] = noise[i * 4 + 1] = noise[i * 4 + 2] = v;
+      noise[i * 4 + 3] = 255;
+    }
+    const shifted = (dx: number, dy: number) => {
+      const out = new Uint8ClampedArray(W2 * H2 * 4);
+      for (let y = 0; y < H2; y++) {
+        for (let x = 0; x < W2; x++) {
+          const sx = Math.min(W2 - 1, Math.max(0, x - dx));
+          const sy = Math.min(H2 - 1, Math.max(0, y - dy));
+          const o = (y * W2 + x) * 4;
+          const i = (sy * W2 + sx) * 4;
+          out[o] = noise[i];
+          out[o + 1] = noise[i + 1];
+          out[o + 2] = noise[i + 2];
+          out[o + 3] = 255;
+        }
+      }
+      return out;
+    };
+
+    const t = new PointTracker();
+    const first = t.update(toGray(noise, W2, H2));
+    check("the tracker seeds points on texture", first.points.length > 20,
+      `${first.points.length} points`);
+
+    const was = new Map(first.points.map((p) => [p.id, { x: p.x, y: p.y }]));
+    const DX = 3;
+    const DY = -2;
+    const next = t.update(toGray(shifted(DX, DY), W2, H2));
+    const moved = next.points
+      .map((p) => ({ p, w: was.get(p.id) }))
+      .filter((m): m is { p: typeof m.p; w: { x: number; y: number } } => !!m.w);
+    check("most points survive a small shift", moved.length > first.points.length * 0.6,
+      `${moved.length} of ${first.points.length}`);
+    check("the recovered shift is the real one",
+      moved.length > 0 && moved.every((m) => m.p.x - m.w.x === DX && m.p.y - m.w.y === DY),
+      `${moved.filter((m) => m.p.x - m.w.x === DX && m.p.y - m.w.y === DY).length}/${moved.length} exact`);
+    check("median flow reports the displacement",
+      Math.abs(next.medianFlow - Math.hypot(DX, DY)) < 0.6,
+      `${next.medianFlow.toFixed(2)} vs ${Math.hypot(DX, DY).toFixed(2)}`);
+
+    // A featureless frame must produce no points at all, or the overlay would
+    // paint confident colour over blank sky.
+    const flat = new PointTracker();
+    const blank = new Uint8ClampedArray(W2 * H2 * 4).fill(255);
+    flat.update(toGray(blank, W2, H2));
+    const flatUpd = flat.update(toGray(blank, W2, H2));
+    check("a featureless frame seeds nothing", flatUpd.points.length === 0,
+      `${flatUpd.points.length} points`);
+
+    // An unrelated frame is not a match, and must be dropped rather than
+    // silently reported as enormous motion.
+    const cut = new PointTracker();
+    cut.update(toGray(noise, W2, H2));
+    seed = 999;
+    const other = new Uint8ClampedArray(W2 * H2 * 4);
+    for (let i = 0; i < W2 * H2; i++) {
+      const v = Math.floor(rnd() * 256);
+      other[i * 4] = other[i * 4 + 1] = other[i * 4 + 2] = v;
+      other[i * 4 + 3] = 255;
+    }
+    const cutUpd = cut.update(toGray(other, W2, H2));
+    check("an unrelated frame loses its tracks", cutUpd.lost.length > 0,
+      `${cutUpd.lost.length} dropped`);
+  }
+
+  // What the browser puts on the wire for live reconstruction. The socket half
+  // needs a running capture server, but these two decide whether a studio gets
+  // a usable frame or a confident lie — so they are asserted here.
+  section("Live reconstruction — the frame metadata");
+  {
+    const T = transformFromRotation([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    check("the camera transform is 4×4", T.length === 4 && T.every((r) => r.length === 4));
+    check("the real rotation is carried through", T[0][0] === 1 && T[2][2] === 9);
+    // The one that matters. A browser cannot know where the camera IS, and a
+    // plausible-looking translation would train a confident, wrong scene — so
+    // it must be exactly zero and flagged, never guessed.
+    check("translation is zero, never invented",
+      T[0][3] === 0 && T[1][3] === 0 && T[2][3] === 0 && T[3][3] === 1);
+
+    const K = intrinsicsFor(640, 480);
+    check("intrinsics centre on the image", K[0][2] === 320 && K[1][2] === 240);
+    check("square pixels", K[0][0] === K[1][1]);
+    check("focal is plausible for a phone lens", K[0][0] > 300 && K[0][0] < 1200,
+      K[0][0].toFixed(1));
+
+    // Portrait frames must not get a focal derived from the short side.
+    const portrait = intrinsicsFor(480, 640);
+    check("focal comes off the long side either way", portrait[0][0] === K[0][0]);
+  }
+
+  // What decides whether a machine is offered in-browser reconstruction. The
+  // probe itself needs a GPU, but the policy is pure — and the policy is where
+  // the damage happens, because it is what tells someone their machine cannot
+  // do a thing it can.
+  section("GPU tiering — capability gates, speed only budgets");
+  {
+    const capable = {
+      software: false,
+      computeVerified: true,
+      float32Blendable: true,
+      maxStorageBindingBytes: 2 * 1024 * 1024 * 1024,
+    };
+
+    // The reference machine: an Intel Iris Xe, integrated, no dedicated VRAM.
+    // It must be OFFERED. Refusing it was the original bug.
+    check("the reference integrated GPU is offered",
+      tierFor({ ...capable, score: REFERENCE_SCORE }) === "weak");
+
+    // THE REGRESSION GUARD. That same machine measured 15,884 and 58,356 on
+    // consecutive runs under load. Neither may be refused — a thermal dip is
+    // not a hardware limitation.
+    for (const observed of [15_884, 58_356, 88_012, 109_565]) {
+      check(`a ${observed} reading is still offered`,
+        tierFor({ ...capable, score: observed }) !== "none");
+    }
+    check("even an absurdly slow reading is offered, just smaller",
+      tierFor({ ...capable, score: 1 }) === "weak");
+
+    // Capability, by contrast, IS allowed to say no.
+    check("a software rasteriser is refused",
+      tierFor({ ...capable, software: true, score: 1e9 }) === "none");
+    check("a driver that failed the arithmetic is refused",
+      tierFor({ ...capable, computeVerified: false, score: 1e9 }) === "none");
+    check("no float32 blending is refused",
+      tierFor({ ...capable, float32Blendable: false, score: 1e9 }) === "none");
+    check("too small a storage buffer is refused",
+      tierFor({ ...capable, maxStorageBindingBytes: 64 * 1024 * 1024, score: 1e9 }) === "none");
+
+    // Faster hardware earns a bigger budget, monotonically.
+    const tiers = [1e3, 3e5, 1e6].map((s) => tierFor({ ...capable, score: s }));
+    check("faster hardware tiers up", JSON.stringify(tiers) === '["weak","modest","strong"]',
+      tiers.join(","));
+    const budgets = tiers.map((t) => budgetFor(t));
+    check("budgets grow with the tier",
+      budgets[0].totalSteps < budgets[1].totalSteps &&
+      budgets[1].totalSteps < budgets[2].totalSteps);
+    check("a refused machine gets a zero budget",
+      budgetFor("none").totalSteps === 0 && budgetFor("none").maxSplats === 0);
+    check("every offered tier can actually hold splats",
+      budgets.every((b) => b.maxSplats > 0 && b.maxResolution > 0));
+  }
+}
+
 verifyWaterlooPark();
 verifyEveryTrip();
 verifyGeoAndGlobalIndex();
 verifyGlobe();
 verifyLiveTrip();
 verifyDetectionQuality();
+verifyCoverage();
 
 console.log(
   failures === 0
