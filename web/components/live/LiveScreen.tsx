@@ -42,6 +42,8 @@ export function LiveScreen({ initial }: { initial: ActiveTripSnapshot | null }) 
             to /api/ingest/detections the counters simply appear, with no code
             change. That seam is the point; see lib/liveTrip.ts. */}
         <LiveCounters />
+
+        <RoverSeam />
       </section>
 
       <PhoneHandoffSection />
@@ -85,6 +87,53 @@ function RoverGate() {
 }
 
 /**
+ * What a rover would have to do — the guide, in the two lines that are true.
+ *
+ * The section above says "connect one and the session opens by itself", which
+ * is accurate and completely unactionable: it does not say what connecting IS.
+ * A "full guide coming soon" note on its own would be worse — a promise instead
+ * of information.
+ *
+ * So this states the seam. It is not a roadmap item; it is the contract the
+ * counters above are already listening on, today, and anything that can POST
+ * to it opens a session — a robot, a script, a phone on a stick. Naming it
+ * turns a dead pill into something someone can actually go and satisfy.
+ *
+ * Closed by default. Someone who has no rover should not have to scroll past
+ * an API description to reach the two capture routes that work right now.
+ */
+function RoverSeam() {
+  return (
+    <details className="group mt-4">
+      <summary className="fnote cursor-pointer text-[10px] text-ink-faint">
+        [ what counts as a rover ]
+      </summary>
+      <div className="mt-2.5 max-w-prose text-[12.5px] leading-relaxed text-ink-soft">
+        <p>
+          Anything that can POST detections. Send batches to{" "}
+          <code className="fnote text-[11px] text-ink">POST /api/ingest/detections</code> as they
+          are found — that call opens the session on its own, so there is no handshake to get
+          wrong. The counters above appear on the first batch that validates, and the numbers are
+          whatever was actually sent.
+        </p>
+        <p className="mt-2">
+          <code className="fnote text-[11px] text-ink">POST /api/trip/start</code> is optional, and
+          only worth calling to name the walk and its place before the first detection arrives.
+        </p>
+        <p className="mt-2">
+          There is no rover-specific code path and no hardware list, which is deliberate: the
+          detections a robot sends and the ones a browser produces from a video go through the same
+          scorer.
+        </p>
+        <p className="fnote mt-2.5 text-[10px] leading-relaxed text-ink-faint">
+          [ want to mount a phone on one instead? a build guide is coming ]
+        </p>
+      </div>
+    </details>
+  );
+}
+
+/**
  * Record on the phone instead.
  *
  * A laptop webcam is the wrong instrument for walking around a thing, so the
@@ -124,10 +173,6 @@ function PhoneHandoffSection() {
       </div>
 
       <KiriKeyField />
-
-      <p className="fnote mt-4 text-[10px] leading-relaxed text-ink-faint">
-        [ want to mount this on a rover? a build guide is coming ]
-      </p>
     </section>
   );
 }

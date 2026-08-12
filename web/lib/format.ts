@@ -1,5 +1,17 @@
 /** Formatting shared by server and client. Keep it dependency-free. */
 
+/**
+ * Bytes, as a person reads them. Decimal MB rather than MiB, because that is
+ * what a browser's own download UI shows and disagreeing with it by 5% only
+ * makes the number look wrong.
+ *
+ * Lives here rather than in lib/detector.ts, where it started: the splat viewer
+ * needs it to say how big a capture is, and importing the detector for a string
+ * helper would drag the whole model-loading module into that bundle.
+ */
+export const formatBytes = (n?: number) =>
+  n === undefined ? "" : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} kB`;
+
 /** 0 → "0:00", 3875 → "1:04:35". Trip-relative, which is how every stage clocks. */
 export function timecode(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));

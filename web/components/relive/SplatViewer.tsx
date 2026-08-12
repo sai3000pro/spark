@@ -42,7 +42,7 @@ import {
 } from "@/lib/splat/renderer";
 import { setSplatRenderer, useSplatRenderer } from "@/lib/splat/useSplatRenderer";
 import { colorForLabel } from "@/lib/mock/labels";
-import { compactNumber } from "@/lib/format";
+import { compactNumber, formatBytes } from "@/lib/format";
 import { CANVAS_BG, type MomentInk } from "@/lib/theme";
 import type { Moment } from "@/lib/types";
 
@@ -54,13 +54,39 @@ interface Props {
   onSelectObject: (trackId: string | null) => void;
 }
 
+/**
+ * Above this, the download is not something to start on someone's behalf.
+ *
+ * The build-room capture is 1,797,380 gaussians and about 96 MiB, and until now
+ * opening that moment began fetching all of it the instant the page settled —
+ * on whatever connection the reader happened to be on, without being asked. On
+ * a phone on cellular that is somebody's data plan.
+ *
+ * 12 MB is roughly where a capture stops being a page asset and starts being a
+ * download. Below it, nothing changes and nothing is asked: an ordinary capture
+ * still just appears, because a consent prompt in front of a 4 MB file is a
+ * dialog for the sake of one.
+ */
+const ASK_FIRST_ABOVE_BYTES = 12 * 1024 * 1024;
+
 type Mode = "checking" | "real" | "synthetic";
+
+/** What the HEAD probe learned. `bytes` is null when the server sent no length. */
+interface Probe {
+  url: string;
+  ok: boolean;
+  bytes: number | null;
+}
 
 export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   const [mode, setMode] = useState<Mode>(() =>
     moment.splat.status === "ready" && moment.splat.url ? "checking" : "synthetic",
   );
   const preference = useSplatRenderer();
+
+  const [probe, setProbe] = useState<Probe | null>(null);
+  /** The gesture. Per capture, and never remembered — see the note by the button. */
+  const [invited, setInvited] = useState<string | null>(null);
 
   // Two numbers, because a big capture has two slow phases and conflating them
   // parks the chip at "100%" for minutes: `progress` is the download, `ready` is
@@ -72,13 +98,25 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   const [load, setLoad] = useState({ key: "", progress: 0, ready: false });
 
   // Probe for the asset instead of letting the renderer fail: a 404 deep inside
-  // a splat loader is a worse failure than never starting it.
+  // a splat loader is a worse failure than never starting it. The same request
+  // answers the second question for free — how big it is — which is what makes
+  // asking before a large download cost nothing extra.
   useEffect(() => {
-    if (mode !== "checking" || !moment.splat.url) return;
+    const url = moment.splat.url;
+    if (mode !== "checking" || !url) return;
     let alive = true;
-    fetch(moment.splat.url, { method: "HEAD" })
-      .then((res) => alive && setMode(res.ok ? "real" : "synthetic"))
-      .catch(() => alive && setMode("synthetic"));
+    fetch(url, { method: "HEAD" })
+      .then((res) => {
+        if (!alive) return;
+        const len = Number(res.headers.get("content-length"));
+        setProbe({ url, ok: res.ok, bytes: Number.isFinite(len) && len > 0 ? len : null });
+        setMode(res.ok ? "real" : "synthetic");
+      })
+      .catch(() => {
+        if (!alive) return;
+        setProbe({ url, ok: false, bytes: null });
+        setMode("synthetic");
+      });
     return () => {
       alive = false;
     };
@@ -99,7 +137,20 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
   // safe to hold: choosing mkkellogg and then opening an SPZ quietly uses Spark
   // rather than failing.
   const engine = moment.splat.url ? rendererFor(preference, moment.splat.url) : null;
-  const useReal = mode === "real" && Boolean(moment.splat.url) && engine !== null;
+
+  // A big capture waits to be asked for.
+  //
+  // Only when the size is KNOWN and over the line. A server that sends no
+  // content-length gets the benefit of the doubt and loads as before — guessing
+  // "probably large" would put a prompt in front of captures nobody needs to be
+  // warned about, and the failure of over-asking is that people stop reading.
+  const fresh = probe !== null && probe.url === moment.splat.url ? probe : null;
+  const heavyBytes =
+    fresh?.ok && fresh.bytes !== null && fresh.bytes > ASK_FIRST_ABOVE_BYTES ? fresh.bytes : null;
+  const waitingForGesture = heavyBytes !== null && invited !== moment.splat.url;
+
+  const useReal =
+    mode === "real" && Boolean(moment.splat.url) && engine !== null && !waitingForGesture;
 
   // One load = one engine on one file. Both numbers below are read through it.
   const loadKey = `${engine ?? ""}:${moment.splat.url ?? ""}`;
@@ -179,6 +230,15 @@ export function SplatViewer({ moment, focusTrackId, onSelectObject }: Props) {
           />
           <CameraRig anchors={cloud.anchors} focusTrackId={focusTrackId} />
         </Canvas>
+      )}
+
+      {/* ── The invitation, for a capture too big to fetch unasked ───────── */}
+      {waitingForGesture && heavyBytes !== null && (
+        <InviteToLoad
+          bytes={heavyBytes}
+          gaussians={moment.splat.pointCount}
+          onAccept={() => setInvited(moment.splat.url ?? null)}
+        />
       )}
 
       {/* ── Provenance chips over the stage ─────────────────────────────── */}
@@ -298,6 +358,52 @@ function RendererToggle({
           {RENDERER_INFO[engine].label.toLowerCase()}. Your choice still stands elsewhere.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * "This one is 96.4 MB. Load it?" — over the synthetic preview, which is already
+ * showing, so nothing is blocked while it sits there.
+ *
+ * It is a BUTTON, not a double-tap on the stage. The stage is a 3D control
+ * surface: drag orbits, scroll zooms, and a double-click there is far more
+ * likely to be someone trying to reset the view than someone consenting to a
+ * download. A gesture is only consent if it cannot be produced by accident.
+ *
+ * The choice is deliberately not remembered. A stored "yes, always" would make
+ * the next 100 MB capture load unasked on whatever connection the reader has
+ * moved to since — which is exactly the thing this exists to stop.
+ */
+function InviteToLoad({
+  bytes,
+  gaussians,
+  onAccept,
+}: {
+  bytes: number;
+  gaussians?: number;
+  onAccept: () => void;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+      <div className="pointer-events-auto flex max-w-[19rem] flex-col items-center gap-2 rounded-[6px] bg-vellum/95 px-4 py-3 text-center"
+        style={{ boxShadow: "var(--ring-ink), 0 6px 20px rgb(6 10 11 / 0.45)" }}
+      >
+        <p className="text-[13px] leading-relaxed text-ink">
+          The real capture is {formatBytes(bytes)}
+          {gaussians ? ` — ${compactNumber(gaussians)} gaussians` : ""}.
+        </p>
+        <button
+          type="button"
+          onClick={onAccept}
+          className="pill-brass px-3 py-1.5 text-[12.5px]"
+        >
+          Load it
+        </button>
+        <p className="fnote text-[9.5px] leading-relaxed text-ink-faint">
+          [ the preview above is a stand-in · nothing downloads until you say so ]
+        </p>
+      </div>
     </div>
   );
 }

@@ -416,5 +416,6 @@ export function trackFrames(
 
 const round = (v: number) => Number(v.toFixed(4));
 
-export const formatBytes = (n?: number) =>
-  n === undefined ? "" : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} kB`;
+// Moved to lib/format.ts so the splat viewer can use it without importing this
+// module. Re-exported because every existing caller imports it from here.
+export { formatBytes } from "./format";
