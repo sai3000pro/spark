@@ -63,6 +63,17 @@ import {
 import { PointTracker, toGray } from "../lib/tracking";
 import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
 import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
+import {
+  __resetAlbums,
+  addToAlbum,
+  albumForJourney,
+  createAlbum,
+  deleteAlbum,
+  forgetJourney,
+  getAlbum,
+  listAlbums,
+  MAX_TITLE,
+} from "../lib/albums";
 
 let failures = 0;
 
@@ -1456,6 +1467,69 @@ function verifyCoverage() {
       budgetFor("none").totalSteps === 0 && budgetFor("none").maxSplats === 0);
     check("every offered tier can actually hold splats",
       budgets.every((b) => b.maxSplats > 0 && b.maxResolution > 0));
+  }
+
+  // Filing a walk under an album is the step that turns captures into a
+  // collection, and the globe groups by it — so a mistake here is a pin in the
+  // wrong place or a count that overstates what is behind it.
+  section("Albums");
+  {
+    __resetAlbums();
+    check("nothing is filed to begin with", listAlbums().length === 0);
+
+    const made = createAlbum({ title: "  Autumn   in Waterloo  ", journeyId: "trip_a" });
+    check("an album is created", made.ok === true);
+    if (!made.ok) return;
+    check("the title is trimmed and collapsed", made.album.title === "Autumn in Waterloo",
+      JSON.stringify(made.album.title));
+    check("its first walk is filed with it", made.album.journeyIds.length === 1);
+    check("the first walk becomes the cover", made.album.coverJourneyId === "trip_a");
+
+    check("whitespace alone is not a title",
+      createAlbum({ title: "   " }).ok === false);
+    check("a title is capped", (() => {
+      const long = createAlbum({ title: "x".repeat(500) });
+      return long.ok && long.album.title.length === MAX_TITLE;
+    })());
+
+    // Newest first, so the album reads as a stack rather than a queue.
+    addToAlbum(made.album.id, "trip_b");
+    check("later walks go on top",
+      JSON.stringify(getAlbum(made.album.id)!.journeyIds) === '["trip_b","trip_a"]');
+    check("the cover does not move on its own",
+      getAlbum(made.album.id)!.coverJourneyId === "trip_a");
+
+    check("adding the same walk twice does not duplicate it", (() => {
+      addToAlbum(made.album.id, "trip_b");
+      return getAlbum(made.album.id)!.journeyIds.length === 2;
+    })());
+
+    // A walk lives in one album, and re-filing MOVES it rather than erroring.
+    const second = createAlbum({ title: "Winter" });
+    check("a second album is created", second.ok === true);
+    if (!second.ok) return;
+    addToAlbum(second.album.id, "trip_b");
+    check("re-filing moves rather than copies",
+      getAlbum(made.album.id)!.journeyIds.length === 1 &&
+      getAlbum(second.album.id)!.journeyIds.length === 1);
+    check("the lookup follows the move",
+      albumForJourney("trip_b")?.id === second.album.id);
+
+    // The hazard: uploadedTrips evicts past MAX_WALKS, and an album naming a
+    // dead walk would pin the globe to nothing.
+    forgetJourney("trip_a");
+    check("an evicted walk is forgotten by its album",
+      getAlbum(made.album.id)!.journeyIds.length === 0);
+    check("and the album survives it", !!getAlbum(made.album.id));
+    check("the cover falls back rather than dangling",
+      getAlbum(made.album.id)!.coverJourneyId === null);
+
+    check("deleting an album releases its walks", (() => {
+      deleteAlbum(second.album.id);
+      return albumForJourney("trip_b") === null && getAlbum(second.album.id) === null;
+    })());
+
+    __resetAlbums();
   }
 }
 

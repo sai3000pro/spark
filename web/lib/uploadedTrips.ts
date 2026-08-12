@@ -40,6 +40,8 @@ import { estimateWorldPos } from "./video/trackFrames";
 import type { BuiltTrip } from "./mock/buildTrip";
 import type { Detection, GeoPoint, Moment, TrackPoint, Trip, Vec2 } from "./types";
 
+import { forgetJourney } from "./albums";
+
 export interface UploadedWalkInput {
   /** Real detections from real frames. `t` is seconds into the video. */
   detections: Detection[];
@@ -154,6 +156,10 @@ export function createUploadedWalk(input: UploadedWalkInput): UploadedWalk {
   while (s.walks.size > MAX_WALKS) {
     const oldest = [...s.walks.keys()][0];
     s.walks.delete(oldest);
+    // An album naming an evicted walk would put a pin on the globe with
+    // nothing behind it, and show a count that overstates what is there. The
+    // album survives; only its reference to this walk goes.
+    forgetJourney(oldest);
   }
 
   return s.walks.get(id)!;

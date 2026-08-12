@@ -5,6 +5,7 @@
  * or its ten thousand detections. Anything the pin panel cannot show should not
  * cross the RSC boundary to get here.
  */
+import { albumForJourney } from "./albums";
 import { haversineM } from "./globe/geo";
 import { computeTripStats } from "./pipeline";
 import { isWalkPosted } from "./postedWalks";
@@ -99,13 +100,67 @@ export function getGlobeView(): GlobeView {
     }),
   ].filter((album) => isWalkPosted(album.id));
 
-  const pins = clusterByProximity(albums, CLUSTER_RADIUS_KM).map((cluster) => ({
+  const grouped = groupByAlbum(albums);
+
+  const pins = clusterByProximity(grouped, CLUSTER_RADIUS_KM).map((cluster) => ({
     key: cluster.items.map((a) => a.id).sort().join("+"),
     origin: cluster.origin,
     albums: cluster.items,
   }));
 
-  return { albums, pins };
+  return { albums: grouped, pins };
+}
+
+/**
+ * Walks filed under the same album collapse into one entry.
+ *
+ * This is what filing is FOR. Four visits to the same park used to put four
+ * unrelated dots on the sphere with four titles; now they are one pin named
+ * whatever you called it, and the counts add up. A walk that was never filed is
+ * passed through untouched — most are, and an unfiled walk is not a broken one.
+ *
+ * The album's position is its cover walk's, not the mean of its members: an
+ * album spanning two cities should sit on the one you chose to represent it,
+ * whereas a mean would park it in a field between them. Proximity clustering
+ * still runs afterwards and may merge it with neighbours, which is a different
+ * question — "these are near each other" rather than "these are the same trip".
+ */
+function groupByAlbum(walks: GlobeAlbum[]): GlobeAlbum[] {
+  const out: GlobeAlbum[] = [];
+  const merged = new Map<string, GlobeAlbum>();
+
+  for (const walk of walks) {
+    const album = albumForJourney(walk.id);
+    if (!album) {
+      out.push(walk);
+      continue;
+    }
+
+    const existing = merged.get(album.id);
+    if (!existing) {
+      const seed: GlobeAlbum = { ...walk, id: album.id, title: album.title };
+      merged.set(album.id, seed);
+      out.push(seed);
+      continue;
+    }
+
+    existing.momentCount += walk.momentCount;
+    existing.durationSec += walk.durationSec;
+    existing.distanceM += walk.distanceM;
+    // Earliest start, so the album reads as "since then" rather than as
+    // whichever walk happened to be enumerated first.
+    if (walk.startedAt < existing.startedAt) existing.startedAt = walk.startedAt;
+    // The cover walk decides the pin's place and picture.
+    if (album.coverJourneyId === walk.id) {
+      existing.origin = walk.origin;
+      existing.cover = walk.cover;
+      existing.placeLabel = walk.placeLabel;
+      existing.region = walk.region;
+      existing.country = walk.country;
+    }
+  }
+
+  return out;
 }
 
 /**

@@ -34,6 +34,7 @@ import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { SaveToAlbum } from "@/components/album/SaveToAlbum";
 import { DETECTOR_MODELS } from "@/lib/detector";
 import {
   buildWalkFromVideo,
@@ -129,6 +130,9 @@ export function CapturedWalk({
             Open the walk
           </Link>
         )}
+        {/* Only worth filing if something came of it. An empty walk in an album
+            is a promise the album cannot keep. */}
+        {walk.moments > 0 && <SaveToAlbum journeyId={walk.tripId} />}
       </div>
     );
   }

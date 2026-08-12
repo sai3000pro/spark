@@ -21,6 +21,7 @@
  */
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SaveToAlbum } from "@/components/album/SaveToAlbum";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
 import { DETECTOR_MODELS, formatBytes, type ProgressInfo } from "@/lib/detector";
 import { buildWalkFromVideo, type BuiltWalk, type WalkPhase } from "@/lib/video/buildWalk";
@@ -257,6 +258,10 @@ export function VideoWalkPanel() {
               public/mock/splats/{found.splatJobId}.ply ]
             </p>
           )}
+
+          {/* The same filing step the phone path gets, for the same reason: a
+              walk on its own is a file, a walk in an album is a collection. */}
+          {found.moments > 0 && <SaveToAlbum journeyId={found.tripId} />}
 
           {found.moments > 0 && (
             <button
