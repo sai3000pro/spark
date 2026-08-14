@@ -76,12 +76,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The path wraps the mountain, so the view arrives all at once rather than gradually. Everyone stopped without discussing it.",
     people: ["Thandi", "Marcus"],
-    transcript: [
-      [7, "Marcus", "Oh — okay. Okay, that's the whole bay."],
-      [22, "Thandi", "Told you to wait for the corner."],
-      [55, "You", "Hold on, let it catch up, it's got the good angle."],
-      [84, "Marcus", "It does have the good angle."],
-    ],
+    speechAt: [[7, 3.1], [22, 2.7], [55, 4.2], [84, 2.3]],
     laughterAt: [27],
     keywords: [[55, "let it catch up"]],
     tracks: [
@@ -118,12 +113,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The scramble everyone warns you about, done twice — once for us and once for the thing that was supposed to be following us.",
     people: ["Thandi", "Marcus"],
-    transcript: [
-      [8, "Thandi", "It cannot do this. There is no version where it does this."],
-      [21, "Marcus", "Straps. We brought straps for exactly this."],
-      [52, "You", "Nobody let go. Nobody let go!"],
-      [88, "Thandi", "Never again. Beautiful. Never again."],
-    ],
+    speechAt: [[8, 4.6], [21, 2.7], [52, 2.3], [88, 1.9]],
     laughterAt: [25, 92],
     keywords: [[21, "we brought straps"]],
     tracks: [
@@ -154,12 +144,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The reason for the whole thing. Sunset from the top, the city on one side, the Atlantic on the other, and a very long silence.",
     people: ["Thandi", "Marcus"],
-    transcript: [
-      [14, "Marcus", "There it goes."],
-      [40, "Thandi", "The mountain's gone completely pink."],
-      [78, "You", "Don't say anything. Let it get all of this."],
-      [108, "Marcus", "Worth the chain. Worth all of it."],
-    ],
+    speechAt: [[14, 1.6], [40, 1.9], [78, 3.5], [108, 2.7]],
     keywords: [
       [78, "let it get"],
       [108, "worth"],

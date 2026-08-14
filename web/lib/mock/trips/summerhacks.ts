@@ -86,12 +86,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The yard at the front of Stackt, stacked two containers high and painted every colour, where the badge table had been set up in the sun.",
     people: ["Priya", "Marcus"],
-    transcript: [
-      [6, "Marcus", "It's a hackathon inside a shipping container. Of course it is."],
-      [18, "Priya", "Wait, is our room the one with the roll-up door?"],
-      [41, "You", "Look at this place, it's all containers stacked up."],
-      [72, "Marcus", "Badges first. Then coffee. Then panic."],
-    ],
+    speechAt: [[6, 4.2], [18, 3.8], [41, 3.5], [72, 2.3]],
     laughterAt: [24, 78],
     keywords: [
       [41, "look at this"],
@@ -145,12 +140,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The container we were given, mid-build: laptops open on the long table, cables everywhere, and the particular quiet of everyone being deep in something at once.",
     people: ["Priya", "Marcus"],
-    transcript: [
-      [5, "Priya", "Okay, it compiles. Nobody touch anything."],
-      [22, "Marcus", "Say that again in an hour."],
-      [58, "You", "Capture this, the whole room's heads-down right now."],
-      [91, "Priya", "That's the demo. That right there is the demo."],
-    ],
+    speechAt: [[5, 2.3], [22, 2.3], [58, 3.1], [91, 3.5]],
     laughterAt: [29],
     keywords: [
       [58, "capture this"],
@@ -205,12 +195,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The demo tables at the north end, where the pitch stopped being a script somewhere around the third judge and started being a conversation.",
     people: ["Priya", "Marcus"],
-    transcript: [
-      [8, "Priya", "So it decides what was worth keeping. We don't tell it."],
-      [27, "Marcus", "Show them the part where it picks the music."],
-      [63, "You", "This is the bit I want on video."],
-      [84, "Priya", "Fourth time's the charm, apparently."],
-    ],
+    speechAt: [[8, 4.2], [27, 3.5], [63, 3.1], [84, 1.9]],
     laughterAt: [33, 88],
     keywords: [
       [27, "show them"],

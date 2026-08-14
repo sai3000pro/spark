@@ -140,14 +140,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The whole intake down on the turf with their laptops open, nobody an hour into anything yet, and the robot doing slow laps of the row like it already knew it was the demo.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [4, "Ravi", "Okay. Route check. Fort, park, water, canoe, back here for food."],
-      [12, "Jess", "And it just… follows? The whole way?"],
-      [18, "You", "A metre behind. Watch."],
-      [39, "Jess", "It's doing laps of the table. It's showing off."],
-      [61, "Ravi", "If it keeps the sunset bit I'll forgive the laps."],
-      [87, "You", "It decides, not me. That's the whole point."],
-    ],
+    speechAt: [[4, 4.2], [12, 2.7], [18, 1.6], [39, 3.5], [61, 3.8], [87, 3.1]],
     laughterAt: [42, 90],
     keywords: [[39, "look at"]],
     /*
@@ -195,13 +188,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Somebody found the long tables and ten minutes later there were no seats left. From up here it read like a floor plan nobody had agreed on.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [6, "Jess", "Every one of those was empty when we walked past."],
-      [19, "Ravi", "That's what a schedule slipping looks like from above."],
-      [44, "You", "Look at the floor from up here. That's the whole room."],
-      [71, "Jess", "There is already someone asleep under the far one."],
-      [96, "Ravi", "Hour one. That has to be a record."],
-    ],
+    speechAt: [[6, 3.8], [19, 3.5], [44, 4.2], [71, 3.5], [96, 3.1]],
     laughterAt: [48, 100],
     keywords: [[44, "look at"]],
     frames: ["/mock/frames/sh-build-room.webp"],
@@ -236,13 +223,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "It had been loud for an hour and then it wasn't — just fans, keys, and one person who had very clearly just found the bug.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [5, "Ravi", "Nobody has said anything for four minutes. I counted."],
-      [23, "Jess", "That's the good kind of quiet."],
-      [47, "You", "Look at him. He's found it. Watch his face."],
-      [78, "Ravi", "He has absolutely found it."],
-      [103, "Jess", "Don't say anything. Don't jinx it."],
-    ],
+    speechAt: [[5, 3.5], [23, 2.3], [47, 3.5], [78, 1.9], [103, 2.3]],
     laughterAt: [82],
     keywords: [[47, "look at"]],
     frames: ["/mock/frames/sh-build-room-close.webp"],
@@ -282,14 +263,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Rice and eggs and far too many small bowls, eaten standing up at a table meant for laptops. Somebody's water bottle stayed behind on it.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [8, "Jess", "You ordered four things."],
-      [17, "You", "I ordered three things and a soup."],
-      [35, "Ravi", "The soup is a thing."],
-      [59, "Jess", "Look at this. It's kept the whole table."],
-      [88, "Ravi", "First time anyone has stood up in an hour."],
-      [106, "Jess", "Wait — whose bottle is that? Did we—"],
-    ],
+    speechAt: [[8, 1.6], [17, 2.7], [35, 1.9], [59, 3.1], [88, 3.5], [106, 3.1]],
     laughterAt: [21, 40],
     keywords: [
       [59, "look at"],
@@ -330,12 +304,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Two of us at the end of the table walking a judge through it for the fourth time. Four people moving through a small frame is the hardest thing to rebuild, so this one is still coming in.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [7, "Ravi", "Okay, from the top. Run it again."],
-      [22, "Jess", "It decides. That's the sentence — lead with the sentence."],
-      [51, "You", "Look at it trying to rebuild us while we're standing in it."],
-      [83, "Ravi", "Fourth time, and I finally believe me."],
-    ],
+    speechAt: [[7, 2.7], [22, 3.8], [51, 4.6], [83, 2.7]],
     laughterAt: [87],
     keywords: [[51, "look at"]],
     // The best pairing in the set, and the reason this moment is where it is:
@@ -380,14 +349,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "A nine-metre red canoe beached on a hill over the Gardiner, stern pointed at the skyline. We climbed in as the light went brass; a pickup soccer game supplied the soundtrack.",
     people: ["Jess", "Ravi"],
-    transcript: [
-      [6, "Jess", "We're allowed in it, right? Everyone gets in it?"],
-      [13, "Ravi", "It's a canoe on a hill over a highway. It exists to be gotten into."],
-      [31, "You", "Robot's holding the bow angle. It's framing us with the towers."],
-      [63, "Jess", "The light. Look at the light on the glass."],
-      [96, "Ravi", "Demo's over. This is the product. This, right here."],
-      [121, "You", "Remember this one. Keep this one."],
-    ],
+    speechAt: [[6, 3.5], [13, 5.8], [31, 4.2], [63, 3.5], [96, 3.5], [121, 2.3]],
     // Chained close enough to merge into ONE long candidate window — golden
     // hour giggles, not three separate blips the scorer would split.
     laughterAt: [16, 40, 66, 92, 118],

@@ -95,7 +95,31 @@ export interface MomentSpec {
   title: string;
   summary: string;
   people: string[];
-  transcript: Array<[number, string, string]>; // [tOffset, speaker, text]
+  /**
+   * WHEN somebody spoke, without inventing WHAT they said. [tOffset, durationSec]
+   *
+   * This replaced an authored `transcript` of plausible sentences with speaker
+   * names and timecodes on them. Two things were wrong with that. It rendered
+   * in the panel identically to a real Whisper pass, with nothing telling a
+   * reader which one they were looking at — and it was not decorative:
+   * `buildAudioEvents` turned every line into a `speech` event, so invented
+   * dialogue was feeding the scorer and helping decide which windows became
+   * moments at all.
+   *
+   * The timing is the honest half, and it is the only half that ever scored. A
+   * speech trigger asks whether somebody was talking, never what about. These
+   * offsets and durations are exactly the ones the removed lines produced, so
+   * every trip keeps the moments it had.
+   */
+  speechAt?: Array<[number, number]>;
+  /**
+   * A real transcript, if a spec ever has one.
+   *
+   * Absent in everything shipped, and deliberately so — see `speechAt`. The
+   * feature itself is real and unaffected: tick "listen too" on a capture and
+   * lib/audio/ runs Whisper in the browser, and those segments arrive measured.
+   */
+  transcript?: Array<[number, string, string]>; // [tOffset, speaker, text]
   tracks: TrackSpec[];
   splat: SplatRef;
   music?: MusicPick;
@@ -209,7 +233,8 @@ function buildStops(spec: TripSpec): Stop[] {
 }
 
 function buildTranscript(spec: MomentSpec): TranscriptSegment[] {
-  return spec.transcript.map(([offset, speaker, text], i) => ({
+  // Absent is the normal case — see the note on MomentSpec.transcript.
+  return (spec.transcript ?? []).map(([offset, speaker, text], i) => ({
     id: `${spec.id}_seg${i}`,
     t: spec.tStart + offset,
     // Rough speaking rate: ~2.6 words/sec, floor of 1.6s.
@@ -224,10 +249,13 @@ function buildAudioEvents(spec: TripSpec): AudioEvent[] {
   const events: AudioEvent[] = [];
 
   for (const moment of spec.moments) {
-    for (const seg of buildTranscript(moment)) {
+    // Timing only. A speech trigger asks whether somebody was talking, never
+    // what about — so this needs no words, and inventing them to obtain it was
+    // always the wrong way round.
+    for (const [offset, durationSec] of moment.speechAt ?? []) {
       events.push({
-        t: seg.t,
-        durationSec: seg.durationSec,
+        t: moment.tStart + offset,
+        durationSec,
         kind: "speech",
         // Energy tracks the moment's vibe, so a quiet hilltop doesn't score like
         // a frisbee game.

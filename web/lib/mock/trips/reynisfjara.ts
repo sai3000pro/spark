@@ -70,12 +70,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Hexagonal columns stacked into something that looks deliberate and isn't. Everyone climbed three steps up and then thought better of it.",
     people: ["Elin", "Jonas"],
-    transcript: [
-      [6, "Jonas", "This cannot be natural. Look at the edges on it."],
-      [19, "Elin", "It's cooling cracks. It's just physics being tidy."],
-      [50, "You", "Get it close to the wall, the geometry is the whole shot."],
-      [84, "Jonas", "Physics being tidy. I'm using that."],
-    ],
+    speechAt: [[6, 3.8], [19, 3.1], [50, 4.6], [84, 2.3]],
     laughterAt: [24, 88],
     keywords: [[50, "the whole shot"]],
     tracks: [
@@ -112,12 +107,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The sneaker waves here are genuinely dangerous and the signs say so in five languages. So: black sand, white water, and a respectful distance.",
     people: ["Elin", "Jonas"],
-    transcript: [
-      [10, "Elin", "That's far enough. Seriously, that's far enough."],
-      [28, "Jonas", "I'm ten metres back!"],
-      [62, "You", "The sign says twenty. Move."],
-      [104, "Elin", "Look at the black on the white though. That's the picture."],
-    ],
+    speechAt: [[10, 2.7], [28, 1.6], [62, 1.9], [104, 4.2]],
     laughterAt: [32],
     keywords: [
       [62, "the sign says"],

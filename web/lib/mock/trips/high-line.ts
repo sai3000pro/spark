@@ -79,12 +79,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The sunken amphitheatre over 10th Avenue, where the whole point is to sit and watch traffic through a window. It worked on all of us.",
     people: ["Nadia", "Theo"],
-    transcript: [
-      [4, "Theo", "We came to a park to watch cars."],
-      [11, "Nadia", "We came to a park to watch cars and we are enjoying it."],
-      [26, "You", "Look at the light coming down the avenue, that's the whole thing."],
-      [48, "Theo", "Okay. Yeah. I get it."],
-    ],
+    speechAt: [[4, 3.1], [11, 5.0], [26, 4.6], [48, 1.9]],
     laughterAt: [15],
     keywords: [[26, "look at"]],
     tracks: [
@@ -121,12 +116,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "A brief and entirely one-sided friendship with a beagle, negotiated over a coffee cup on the planting beds.",
     people: ["Nadia", "Theo"],
-    transcript: [
-      [5, "Nadia", "Oh, hello. Hello. You're very committed to this."],
-      [14, "Theo", "It's going for the cup. It's absolutely going for the cup."],
-      [33, "You", "Get a picture before it takes the whole thing."],
-      [52, "Nadia", "Too late."],
-    ],
+    speechAt: [[5, 3.1], [14, 4.2], [33, 3.5], [52, 1.6]],
     laughterAt: [18, 55],
     keywords: [[33, "get a picture"]],
     tracks: [
@@ -163,12 +153,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The wide platform at the north end, facing west into whatever the Hudson was doing to the sun. Nobody said much.",
     people: ["Nadia", "Theo"],
-    transcript: [
-      [9, "Theo", "That's the good one. That's the postcard."],
-      [21, "Nadia", "Don't narrate it."],
-      [55, "You", "Just let it record. It knows."],
-      [80, "Theo", "Worth the walk up."],
-    ],
+    speechAt: [[9, 2.7], [21, 1.6], [55, 2.3], [80, 1.6]],
     laughterAt: [25],
     keywords: [
       [55, "let it record"],

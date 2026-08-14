@@ -79,12 +79,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Forty-one steps of azulejo, and a long negotiation about whether we were carrying it. We were, in the end.",
     people: ["Inês", "Rui"],
-    transcript: [
-      [6, "Rui", "It's looking at the stairs. It knows."],
-      [17, "Inês", "It does not know, it's a robot."],
-      [38, "You", "Alright, everybody take a corner."],
-      [64, "Rui", "This is the most exercise it's given anyone."],
-    ],
+    speechAt: [[6, 2.7], [17, 2.7], [38, 1.9], [64, 3.1]],
     laughterAt: [21, 68],
     keywords: [[38, "take a corner"]],
     tracks: [
@@ -121,12 +116,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The viewpoint everybody walks up for, and it earned it. Orange roofs, the river behind them, a guitar somewhere below.",
     people: ["Inês", "Rui"],
-    transcript: [
-      [7, "Inês", "There. That's what I was trying to describe."],
-      [19, "You", "You did not describe this."],
-      [46, "Rui", "Is someone playing down there?"],
-      [88, "Inês", "Leave it running, I want the sound."],
-    ],
+    speechAt: [[7, 3.1], [19, 1.9], [46, 1.9], [88, 2.7]],
     laughterAt: [24],
     keywords: [
       [7, "that's what"],
@@ -165,12 +155,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The tram takes the whole street, so everyone becomes part of the wall for ten seconds. The robot learned this the hard way.",
     people: ["Inês", "Rui"],
-    transcript: [
-      [8, "Rui", "Back, back, back — against the wall."],
-      [16, "Inês", "Is it going to move? It's not moving."],
-      [34, "You", "It moved. Look at it go."],
-      [61, "Rui", "That was closer than I'd like."],
-    ],
+    speechAt: [[8, 2.7], [16, 3.1], [34, 2.3], [61, 2.3]],
     laughterAt: [39, 66],
     keywords: [[34, "look at"]],
     tracks: [

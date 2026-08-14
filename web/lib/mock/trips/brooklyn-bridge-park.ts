@@ -70,12 +70,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Someone was down two games and refusing to leave. The bridge is directly overhead and after four minutes nobody was looking at it.",
     people: ["Dara", "Wes"],
-    transcript: [
-      [6, "Wes", "One more. One more and then we walk."],
-      [17, "Dara", "You said that two games ago."],
-      [44, "You", "It's filming you losing, you know that?"],
-      [76, "Wes", "It's filming me warming up."],
-    ],
+    speechAt: [[6, 3.1], [17, 2.3], [44, 2.7], [76, 1.9]],
     laughterAt: [22, 80],
     keywords: [[44, "it's filming"]],
     tracks: [
@@ -112,12 +107,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "It's a 1922 carousel inside a glass pavilion, lit from within, with Manhattan behind it. Absurd, and completely effective.",
     people: ["Dara", "Wes"],
-    transcript: [
-      [9, "Dara", "It's a carousel in a glass box. Why is that so good."],
-      [26, "Wes", "Because it shouldn't be there."],
-      [58, "You", "Hold on, wait for it to come round again."],
-      [94, "Dara", "That's the album cover. Done."],
-    ],
+    speechAt: [[9, 4.6], [26, 1.9], [58, 3.5], [94, 1.9]],
     laughterAt: [30],
     keywords: [
       [58, "wait for it"],

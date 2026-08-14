@@ -110,15 +110,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Ten minutes in, the robot proved it would actually keep up — right to the edge of Silver Lake, where a small delegation of ducks came to inspect it.",
     people: ["Maya", "Omar"],
-    transcript: [
-      [2, "You", "Okay. It's actually following us. It's following us."],
-      [7, "Maya", "Watch it go straight into the lake."],
-      [11, "Omar", "It's fine, it's got — hold on, is that thing waterproof?"],
-      [16, "You", "Do not answer that."],
-      [24, "Maya", "Look at the ducks, they're forming a committee."],
-      [31, "Omar", "They think it's one of them."],
-      [44, "You", "Remember this bit, this is going in the demo."],
-    ],
+    speechAt: [[2, 3.1], [7, 2.7], [11, 4.2], [16, 1.6], [24, 3.1], [31, 2.3], [44, 3.5]],
     laughterAt: [13, 34],
     keywords: [
       [24, "look at"],
@@ -160,15 +152,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Omar's throw curved into a tree. The robot tracked the disc the entire way, which is more than anyone else managed.",
     people: ["Maya", "Omar"],
-    transcript: [
-      [3, "Omar", "Go long!"],
-      [6, "Maya", "That is not long, that is sideways —"],
-      [12, "You", "It's in the tree. It's in the tree, Omar."],
-      [22, "Omar", "The wind took it."],
-      [26, "Maya", "There is no wind."],
-      [40, "You", "Did it get that? Tell me it got that."],
-      [58, "Maya", "One more, and this time aim at a person."],
-    ],
+    speechAt: [[3, 1.6], [6, 3.1], [12, 3.5], [22, 1.6], [26, 1.6], [40, 3.5], [58, 3.5]],
     laughterAt: [15, 28, 44],
     keywords: [[40, "did it get that"]],
     tracks: [
@@ -207,24 +191,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Twenty minutes of actual planning: what to build first, what to fake, and what to cut. The robot sat and transcribed all of it.",
     people: ["Maya", "Omar"],
-    transcript: [
-      [4, "Maya", "Okay but seriously, what are we building first?"],
-      [9, "You", "Detection. Everything else hangs off it — the moments, the search, the anchors in the splat."],
-      [18, "Omar", "You could start with the splats, they look better in a demo."],
-      [24, "You", "They look better and they prove nothing. If detection works, the moments write themselves."],
-      [34, "Maya", "So detection feeds the moment candidates, and the candidates get promoted into the full thing?"],
-      [42, "You", "Right. Cheap pass on every frame, then only the interesting windows get the expensive treatment."],
-      [53, "Omar", "What's the cheap pass looking for?"],
-      [58, "You", "New objects, faces, whether we stopped walking, and audio. Laughter is a really strong signal."],
-      [69, "Maya", "And the thing where you ask it where your stuff is?"],
-      [74, "You", "That's just an index over the detections. Group by track, keep the best sighting, sort by recency."],
-      [86, "Omar", "Are we doing voice control?"],
-      [90, "You", "No. We're cutting voice. It'll eat the whole day and nobody scores it."],
-      [97, "Maya", "Agreed. Cut voice, mock the music picks, make the trip page look real."],
-      [106, "Omar", "And if the splats aren't done by morning?"],
-      [110, "You", "Then we show the point cloud and say the reconstruction is still cooking. It's honest and it still reads."],
-      [119, "Maya", "Fine. Write the schema down first so we're not all inventing field names."],
-    ],
+    speechAt: [[4, 3.1], [9, 6.2], [18, 4.6], [24, 5.4], [34, 5.8], [42, 5.8], [53, 2.3], [58, 5.8], [69, 4.2], [74, 6.5], [86, 1.9], [90, 5.0], [97, 5.0], [106, 3.1], [110, 7.3], [119, 5.0]],
     laughterAt: [30, 94],
     keywords: [
       [9, "detection"],
@@ -268,16 +235,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Four tries, one usable frame. The robot was asked to back up twice and did, which felt like a bigger milestone than it should have.",
     people: ["Maya", "Omar", "Priya"],
-    transcript: [
-      [3, "Maya", "Everyone in. Priya, you're behind the post."],
-      [8, "Priya", "I am aware."],
-      [14, "You", "Back up a bit? Can it — yeah, there we go."],
-      [23, "Omar", "It just did that. It just backed up because you asked."],
-      [30, "Maya", "Get a photo of the robot taking the photo."],
-      [41, "You", "Okay, three, two —"],
-      [46, "Priya", "Someone's eyes were shut, I can feel it."],
-      [58, "Maya", "One more. This is the one."],
-    ],
+    speechAt: [[3, 2.7], [8, 1.6], [14, 4.2], [23, 4.2], [30, 3.5], [41, 1.6], [46, 3.1], [58, 2.3]],
     laughterAt: [26, 50],
     keywords: [
       [30, "get a photo"],
@@ -319,14 +277,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "A short stop at the picnic tables. Notable in hindsight: this is the last time the robot saw the blue water bottle.",
     people: ["Maya", "Omar", "Priya"],
-    transcript: [
-      [5, "Omar", "I'm getting fries. Anyone else?"],
-      [10, "Maya", "Fries. And put your bottle down, you've been holding it for an hour."],
-      [17, "You", "Just leave it on the table, we're coming back this way."],
-      [28, "Priya", "We are not coming back this way."],
-      [39, "Maya", "It'll be fine, the robot's watching it."],
-      [46, "You", "That is... actually true."],
-    ],
+    speechAt: [[5, 1.9], [10, 5.0], [17, 4.2], [28, 2.7], [39, 2.7], [46, 1.6]],
     laughterAt: [43],
     keywords: [
       [17, "leave it on the table"],
@@ -367,15 +318,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The longest stop of the day and the least said. The robot kept recording anyway, which is the whole point of it.",
     people: ["Maya", "Omar", "Priya"],
-    transcript: [
-      [8, "Maya", "Oh, that's good."],
-      [14, "Priya", "Yeah."],
-      [39, "Omar", "How long have we been out?"],
-      [44, "You", "Hour and a half, maybe."],
-      [52, "Maya", "Feels like less."],
-      [78, "You", "Don't say anything, just let it get this."],
-      [104, "Priya", "Okay, that was worth the walk."],
-    ],
+    speechAt: [[8, 1.6], [14, 1.6], [39, 2.3], [44, 1.9], [52, 1.6], [78, 3.1], [104, 2.3]],
     keywords: [
       [78, "let it get this"],
       [104, "worth the walk"],

@@ -75,12 +75,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Six in the morning on a stone lane that is impassable by ten. Wooden shopfronts, nobody in them, and one very committed cat.",
     people: ["Haruka", "Ben"],
-    transcript: [
-      [5, "Ben", "There is nobody here. There is genuinely nobody here."],
-      [18, "Haruka", "That's why we got up at five."],
-      [44, "You", "Get this now, in an hour it's a queue."],
-      [72, "Ben", "Worth it. Grudgingly, worth it."],
-    ],
+    speechAt: [[5, 3.5], [18, 2.7], [44, 3.5], [72, 1.9]],
     laughterAt: [22, 76],
     keywords: [[44, "get this"]],
     tracks: [
@@ -117,12 +112,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "The tunnel of torii, where the light strobes as you walk and every photo looks the same and you take forty anyway.",
     people: ["Haruka", "Ben"],
-    transcript: [
-      [9, "Haruka", "Don't stop in the middle, people are coming."],
-      [24, "Ben", "I'm counting. Ninety-something."],
-      [58, "You", "You lost count at forty, admit it."],
-      [92, "Haruka", "He lost count at twelve."],
-    ],
+    speechAt: [[9, 3.1], [24, 1.6], [58, 2.7], [92, 1.9]],
     laughterAt: [63, 96],
     keywords: [[58, "lost count"]],
     tracks: [
@@ -159,12 +149,7 @@ const MOMENTS: MomentSpec[] = [
     summary:
       "Thirty metres of bamboo moving in wind you cannot feel at ground level. The audio track is better than the video and everyone knew it.",
     people: ["Haruka", "Ben"],
-    transcript: [
-      [11, "Ben", "Okay, everybody shut up for a second."],
-      [30, "Haruka", "It's the top of them. The bottom isn't moving at all."],
-      [68, "You", "Don't talk over it, just let it get this."],
-      [96, "Ben", "That's the one for the album."],
-    ],
+    speechAt: [[11, 2.7], [30, 4.2], [68, 3.5], [96, 2.3]],
     laughterAt: [15],
     keywords: [
       [68, "let it get this"],
