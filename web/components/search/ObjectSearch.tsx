@@ -226,20 +226,43 @@ function ResultRow({
               <button
                 type="button"
                 onClick={() => setShowNav((v) => !v)}
-                className="rounded-md border border-signal-500/45 bg-signal-500/10 px-2.5 py-1 text-[11px] font-medium text-signal-400 transition-colors hover:bg-signal-500/20"
+                className="rounded-md border border-ink-600 bg-ink-700/60 px-2.5 py-1 text-[11px] font-medium text-fog-200 transition-colors hover:bg-ink-600"
               >
-                Send robot here
+                Where a robot would stand
               </button>
             )}
           </div>
 
+          {/*
+            The approach pose — a preview, and labelled as one.
+
+            This panel used to open with "Nav goal queued" in signal green, the
+            colour this app uses for something that actually happened. Nothing
+            was ever queued. The click handler is `setShowNav(v => !v)` — a local
+            disclosure toggle, no fetch, no POST; there is no robot connected and
+            no nav endpoint anywhere in this app to POST to. The panel announced
+            a completed action that consisted entirely of expanding itself.
+
+            The numbers stay, because they are real, and the tense changes,
+            because it wasn't. Consistent with the call the rest of the app
+            already made: app/api/trip/start says plainly that "the rover-follow
+            behaviour is not implemented", and components/live/LiveScreen.tsx
+            demoted the rover control to a status pill rather than leave a button
+            that produced numbers no hardware made. If a nav endpoint ever lands,
+            this becomes a real send and the panel can go back to signal. Until
+            then it says what is true — please don't restore the confident
+            wording.
+          */}
           {showNav && navigable && entry.navTarget && (
-            <div className="mt-2 rounded-md border border-signal-500/30 bg-signal-500/5 p-2">
+            <div className="mt-2 rounded-md border border-ink-600 bg-ink-800/60 p-2">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-fog-400">
+                Approach preview — nothing is sent
+              </p>
               {/* `pos` is a standing position offset back from the object along
                   the direction its best look came from — not the object's own
-                  coordinates, which is what this used to send the robot to. */}
-              <p className="text-[11px] text-signal-400">
-                Nav goal queued — the robot would drive here and turn to face it
+                  coordinates, which is what this used to point the robot at. */}
+              <p className="mt-1 text-[11px] text-fog-200">
+                A robot would drive here and turn to face it
                 {entry.navTarget.distanceM !== undefined
                   ? ` from ${entry.navTarget.distanceM.toFixed(1)} m back`
                   : ""}
@@ -255,6 +278,10 @@ function ResultRow({
                 stand at ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
                 heading {entry.navTarget.heading}° · best look at{" "}
                 {timecode(entry.navTarget.approachFromT)}
+              </p>
+              <p className="mt-1.5 text-[10px] leading-snug text-fog-400">
+                Worked out from the sighting, not sent anywhere — there is no robot
+                connected and no nav endpoint to send it to.
               </p>
             </div>
           )}

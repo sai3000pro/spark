@@ -414,7 +414,9 @@ app* below for where the seam is.
    3D stage, what was seen (click an object row and the camera flies to its anchor), what was
    said, and the soundtrack Spark picked. `←`/`→` step between moments, `esc` back to the map.
 8. `⌘K` → "where is my nalgene" (alias → bottle) → *Step into the splat* → lands inside the
-   picnic-table moment with the bottle anchor focused → *Send robot here* shows the nav pose.
+   picnic-table moment with the bottle anchor focused → *Where a robot would stand* shows the
+   nav pose. It is a preview computed from the sighting — nothing is dispatched, and there is no
+   robot connected to dispatch it to.
 
 ### Either
 

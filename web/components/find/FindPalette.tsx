@@ -255,25 +255,51 @@ function ResultRow({
                 onClick={() => setShowNav((v) => !v)}
                 className="pill-ghost px-3.5 py-1.5 text-[12px] text-ink"
               >
-                Send robot here
+                Where a robot would stand
               </button>
             )}
           </div>
 
+          {/*
+            The approach pose — a preview, and labelled as one.
+
+            This panel used to be headed "[ nav goal queued ]" in moss, the ink
+            this journal reserves for measured, seen-it-myself facts, and opened
+            with "Nav goal queued". Nothing was ever queued. The click handler is
+            `setShowNav(v => !v)` — a local disclosure toggle, no fetch, no POST;
+            there is no robot connected and no nav endpoint anywhere in this app
+            to POST to. The panel was announcing a completed action that consisted
+            entirely of expanding itself.
+
+            The numbers stay, because they are real: `pos` is where the robot
+            STANDS, offset back from the object along the direction its best look
+            came from — not the object's own coordinates, which is what this used
+            to show — and the heading and approach time are derived from the same
+            sighting. That is worth showing. What is not true is the tense.
+
+            So it is titled as a preview, printed in the neutral pen line rather
+            than the "live" ink, and says outright that nothing was sent. Same
+            call the rest of the app already made: app/api/trip/start states that
+            "the rover-follow behaviour is not implemented", and
+            components/live/LiveScreen.tsx demoted the rover control to a status
+            pill rather than leave a button that produced numbers no hardware
+            made. If a nav endpoint ever lands, this becomes a real send and the
+            heading can go back to moss. Until then it says what is true — please
+            don't restore the confident wording.
+          */}
           {showNav && entry.navTarget && (
             <div
               className="mt-2 rounded-[8px] px-3 py-2"
               style={{
-                background: "rgb(125 119 48 / 0.12)",
-                boxShadow: "0 0 0 1px rgb(125 119 48 / 0.35)",
+                background: "rgb(27 27 24 / 0.04)",
+                boxShadow: "var(--ring-ink)",
               }}
             >
-              <p className="fnote text-[10px] text-moss">[ nav goal queued ]</p>
-              {/* `pos` is where the robot STANDS, offset back from the object
-                  along the direction its best look came from — not the object's
-                  own coordinates, which is what this used to show. */}
+              <p className="fnote text-[10px] text-ink-faint">
+                [ approach preview — nothing is sent ]
+              </p>
               <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">
-                The robot would drive here and turn to face it
+                A robot would drive here and turn to face it
                 {entry.navTarget.distanceM !== undefined
                   ? ` from ${entry.navTarget.distanceM.toFixed(1)} m back`
                   : ""}
@@ -288,6 +314,10 @@ function ResultRow({
                 Stand at ({entry.navTarget.pos[0].toFixed(1)}, {entry.navTarget.pos[1].toFixed(1)}) m ·
                 heading {entry.navTarget.heading.toFixed(0)}° · best look at{" "}
                 {timecode(entry.navTarget.approachFromT)}
+              </p>
+              <p className="fnote mt-1.5 text-[10px] leading-snug text-ink-faint">
+                Worked out from the sighting, not sent anywhere — there is no robot
+                connected and no nav endpoint to send it to.
               </p>
             </div>
           )}

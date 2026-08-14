@@ -210,21 +210,60 @@ export default function CapturePage() {
     [poll],
   );
 
+  /**
+   * Queue the offline high-quality reconstruction — and only say so if it was.
+   *
+   * This used to `await fetch(…)` and then announce "Full splat queued" on the
+   * next line. fetch only rejects on a network-level failure, so every HTTP
+   * error the proxy can hand back walked straight into the success alert: the
+   * 502 {"error":"studio unreachable"} from app/api/capture/full-run when the
+   * studio is down, and the 404 an older studio build returns because it has no
+   * /api/live/full-run route at all. The user was told a reconstruction was
+   * running and then waited for an Album entry that would never arrive — and
+   * because the reachability poll can be green while that one route is missing,
+   * nothing else on the page contradicted it.
+   *
+   * So the status is checked, and the failure names the step and carries the
+   * server's own error text — same shape as the save path in
+   * components/studio-album/AlbumClient.tsx, which had this bug too. The two
+   * status codes worth translating get a sentence saying where to look, since
+   * "502" tells a demo audience nothing and "is the studio running?" tells them
+   * exactly what to do.
+   */
   const generateFull = useCallback(
     async (sid: string) => {
       setGenerating((p) => new Set(p).add(sid));
       try {
-        await fetch("/api/capture/full-run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session: sid }),
-        });
+        let res: Response;
+        try {
+          res = await fetch("/api/capture/full-run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session: sid }),
+          });
+        } catch {
+          // Network-level failure — this app's own server isn't answering.
+          throw new Error(
+            "Can’t reach the app server to queue the full splat. Reload the page?",
+          );
+        }
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          const msg = (detail as { error?: string }).error;
+          throw new Error(
+            `Queueing the full splat failed (${res.status}${msg ? `: ${msg}` : ""}).` +
+              (res.status === 502 ? " Is the studio (:8899) running?" : "") +
+              (res.status === 404
+                ? " This studio build may not have the full-run route yet."
+                : ""),
+          );
+        }
         await poll();
         alert(
           "Full splat queued — a high-quality reconstruction is running and will appear in the Album when done.",
         );
-      } catch {
-        alert("Couldn’t queue the full splat — the studio server may be unreachable.");
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Couldn’t queue the full splat.");
       } finally {
         setGenerating((p) => {
           const n = new Set(p);

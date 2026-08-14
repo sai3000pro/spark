@@ -35,6 +35,31 @@ export function isReconTarget(v: unknown): v is ReconTarget {
   return typeof v === "string" && (RECON_TARGETS as string[]).includes(v);
 }
 
+/**
+ * Is there actually a trainer to run in the browser?
+ *
+ * No. And that is the entire reason this constant exists rather than being
+ * implied by the GPU probe.
+ *
+ * The probe in lib/gpu.ts answers "could this machine train a splat" — it
+ * requests a real adapter, runs a compute shader and checks the arithmetic, so
+ * on a decent laptop it returns a genuine yes. What it cannot answer is whether
+ * this repo contains anything that would DO the training, and it does not: no
+ * browser-side Gaussian-splat trainer is npm-installable, so Brush's WASM build
+ * has to be sourced and vendored separately. Until it is, capability and
+ * availability are two different facts and only one of them is true.
+ *
+ * Gating on the probe alone made the menu lie in the most expensive way it
+ * could. "Reconstruct right here" appeared enabled on exactly the good machines,
+ * accepted the clip, and the dispatcher answered "Saved. Reconstruction runs in
+ * your browser" — a success message for work that would never start. The clip
+ * was safe on disk, but the user had been told to keep a tab open and wait for
+ * something that was not coming, and nothing anywhere would ever contradict it.
+ *
+ * Flip this to true in the same commit that lands the trainer, not before.
+ */
+const BROWSER_TRAINER_AVAILABLE = false;
+
 export interface TargetOption {
   id: ReconTarget;
   label: string;
@@ -119,7 +144,7 @@ export function describeTargets(input: {
       detail: budget
         ? `In this tab, on your own GPU. About ${budget.estimate}.`
         : "In this tab, on your own GPU. Nothing to install.",
-      available: !!gpu && gpu.tier !== "none",
+      available: BROWSER_TRAINER_AVAILABLE && !!gpu && gpu.tier !== "none",
       blockedBecause:
         !gpu
           ? // Deliberately not "still checking". The server has no GPU and is
@@ -129,7 +154,13 @@ export function describeTargets(input: {
             "Offered on the laptop that receives the clip, not here."
           : gpu.tier === "none"
             ? (gpu.blockedBecause ?? "This machine cannot reconstruct in the browser.")
-            : null,
+            : !BROWSER_TRAINER_AVAILABLE
+              ? // The machine passed the probe; we are the ones not ready. Say
+                // so in those terms — "your GPU is fine, the engine isn't here
+                // yet" sends nobody hunting through their own driver settings
+                // for a fault that is ours.
+                "Your GPU can do this, but the in-browser engine isn't shipped yet. Use the studio or KIRI."
+              : null,
     },
     {
       id: "studio-live",
