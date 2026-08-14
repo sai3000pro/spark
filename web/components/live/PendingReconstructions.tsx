@@ -36,9 +36,11 @@
  *
  * Renders nothing at all when there is nothing outstanding.
  */
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { CapturedWalk } from "@/components/live/CapturedWalk";
+import { NotifyWhenDone } from "@/components/live/NotifyWhenDone";
 import { ReconstructionWatch } from "@/components/live/ReconstructionWatch";
 import { TryAnyway } from "@/components/live/TryAnyway";
 import { formatBytes } from "@/lib/format";
@@ -102,6 +104,13 @@ export function PendingReconstructions() {
           finished splat but no walk needs the detector run over it before there is a moment to
           open it from.
         </p>
+
+        {/* Offered HERE and only here: this panel exists because something is
+            still finishing, which is the one moment "tell me when it's done" is
+            an answer to a question the reader already has. It renders itself
+            away when Firebase is not configured, when the browser cannot do
+            push, and permanently once it has asked once. */}
+        <NotifyWhenDone />
       </header>
 
       <ul className="mt-4 flex flex-col gap-4">
@@ -126,8 +135,31 @@ export function PendingReconstructions() {
               */
               <>
                 <p className="fnote mt-2 text-[9.5px] leading-relaxed text-lagoon">
-                  [ the reconstruction is here · build a walk so there is a moment to open it from ]
+                  [ the reconstruction is here · look at it now, or build a walk so there is a
+                  moment to open it from ]
                 </p>
+
+                {/*
+                  SEEING IT AND FILING IT ARE TWO DIFFERENT THINGS.
+
+                  This used to offer only the detector, which is the right way to
+                  give a splat a home but is minutes of work and a walk you may
+                  not want — and until it finished there was no screen in the app
+                  that could show you the file at all. "Where's the new splat
+                  though?" is the question this link answers, and it answers it
+                  in one click, off the .ply alone.
+
+                  It does not replace the walk below. `/splat/<id>` is the file:
+                  no moments, no anchors, no map. The detector is still what
+                  turns a capture into something you can find a cup inside.
+                */}
+                <Link
+                  href={`/splat/${job.id}`}
+                  className="pill-brass mt-2.5 inline-flex px-3 py-1.5 text-[12.5px]"
+                >
+                  View the splat
+                </Link>
+
                 <CapturedWalk jobId={job.id} sourceName={job.sourceName} />
               </>
             ) : (
