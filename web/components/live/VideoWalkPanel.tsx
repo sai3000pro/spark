@@ -12,12 +12,29 @@
  *
  *   the walk     found here in the browser, posted to /api/upload/walk as
  *                detections, back in seconds, openable immediately.
- *   the splat    the video itself posted to /api/splat/jobs, reconstructed on a
- *                GPU box, back in minutes. The walk does not wait for it; every
- *                moment simply reads `processing` until it lands.
+ *   the splat    the video itself posted to /api/splat/jobs, which stores it and
+ *                hands it to a reconstructor, back in minutes. The walk does not
+ *                wait for it; every moment simply reads `processing` until it
+ *                lands.
  *
  * The frames never leave the tab. The video does, and only if reconstruction is
  * asked for — the checkbox says so, and it is off by default.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE CHECKBOX SAYS WHERE THE CLIP WENT, INCLUDING "NOWHERE".
+ *
+ * This panel used to tick the box, upload, keep the job id, and start a live
+ * watcher on it — and the upload route dispatched nothing at all, so the watcher
+ * sat on a queue that did not exist, reporting "waiting" and then "still working"
+ * forever. The route now dispatches and reports where it went, and none of that
+ * is worth anything if this side ignores the answer: an outcome with `ok: false`
+ * or `target: null` means NOTHING is reconstructing this clip, and the one thing
+ * that must not happen next is a progress indicator.
+ *
+ * So the watcher is started only when something is actually working, and a
+ * refusal is printed in the server's own words with the retry still offered
+ * beside it — the clip is on disk either way, which is what makes the retry a
+ * button press rather than another walk around the building.
  */
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -28,6 +45,9 @@ import { ReconstructionWatch } from "@/components/live/ReconstructionWatch";
 import { TryAnyway } from "@/components/live/TryAnyway";
 import { DETECTOR_MODELS, formatBytes, type ProgressInfo } from "@/lib/detector";
 import { WHISPER_APPROX_MB } from "@/lib/audio/transcribe";
+import { DEFAULT_RECON_TARGET } from "@/lib/reconstruction/preference";
+import { useReconTarget } from "@/lib/reconstruction/useReconTarget";
+import type { ReconTarget } from "@/lib/reconstruction/targets";
 import { buildWalkFromVideo, type BuiltWalk, type WalkPhase } from "@/lib/video/buildWalk";
 
 type Phase = "idle" | WalkPhase | "done" | "error";
@@ -36,10 +56,51 @@ interface Found extends BuiltWalk {
   splatJobId: string | null;
 }
 
+/**
+ * The part of the server's DispatchOutcome this panel reads.
+ *
+ * Declared structurally rather than imported from lib/reconstruction/dispatch,
+ * which is a server module (it reads the filesystem) and whose outcome carries
+ * fields — pre-flight measurements, KIRI handles — that are none of this
+ * component's business. Same posture as TryAnyway.
+ */
+interface Handoff {
+  ok: boolean;
+  /** Where it actually went. Null means nowhere: stored, and idle. */
+  target: ReconTarget | null;
+  /** True when it went somewhere other than what was asked for. */
+  degraded: boolean;
+  note: string;
+}
+
+/**
+ * What to call each destination in one line of a checkbox.
+ *
+ * KIRI names its price here, and that is the point of the map existing. The
+ * server will never send a clip to KIRI unless it is asked to by name, so the
+ * only way this box can spend a credit is a preference the reader set
+ * themselves in the picker below — and a checkbox that quietly acts on a choice
+ * made in a different control ten minutes ago should at minimum repeat it back.
+ */
+const TARGET_SHORT: Record<ReconTarget, string> = {
+  browser: "this tab",
+  "studio-live": "the studio on your laptop",
+  "studio-batch": "the studio on your laptop",
+  kiri: "KIRI · spends one credit",
+};
+
 export function VideoWalkPanel() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  /**
+   * The destination this reader last chose, remembered between visits. The
+   * checkbox has no picker of its own — it borrows the one from TryAnyway rather
+   * than growing a second, disagreeing answer to the same question — so on a
+   * first visit this is DEFAULT_RECON_TARGET, which is local and free.
+   */
+  const preferred = useReconTarget();
 
   const [modelId, setModelId] = useState(DETECTOR_MODELS[0].id);
   const [reconstruct, setReconstruct] = useState(false);
@@ -70,6 +131,30 @@ export function VideoWalkPanel() {
   const [watchJobId, setWatchJobId] = useState<string | null>(null);
 
   /**
+   * What the server did with the clip the checkbox uploaded, if it uploaded one.
+   *
+   * Null means the box was never ticked. A value with `ok: false` is NOT an
+   * error state — the upload succeeded and the clip is on disk; only the
+   * dispatch went nowhere. Those two facts are rendered separately below,
+   * because collapsing them is how the panel ends up either hiding a saved
+   * recording or watching a queue that is empty.
+   */
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
+
+  /**
+   * The job to point a watcher at, or null for "nothing is being reconstructed".
+   *
+   * Two ways in, and neither of them is "a job exists". The checkbox path
+   * qualifies only once the server has said it handed the clip on; the
+   * TryAnyway path reports its own outcome inline, so its id is taken at its
+   * word here. The null case is the one that had no representation at all
+   * before — a stored, undispatched clip — and it is now the difference between
+   * a watcher and a sentence explaining why there is nothing to watch.
+   */
+  const inFlightJobId =
+    watchJobId ?? (handoff?.ok && found?.splatJobId ? found.splatJobId : null);
+
+  /**
    * The job whose clip the server holds, uploading it now if it does not.
    *
    * Unlike the phone path, this panel may never have sent the video at all —
@@ -88,6 +173,18 @@ export function VideoWalkPanel() {
     // Attach it to the walk that was just built, so the reconstruction lands on
     // the right trip rather than floating loose.
     if (found) form.append("tripId", found.tripId);
+    /*
+      DELIBERATELY the free local target, and NOT `preferred`.
+
+      This path exists to get the bytes onto the server for TryAnyway, which is
+      about to POST /api/splat/jobs/<id>/dispatch with the destination the
+      reader actually pressed. Passing the remembered preference here would make
+      that two dispatches of the same clip — harmless for the studio, which only
+      queues, and a second spent credit if the remembered answer is KIRI. So
+      this one asks for the destination that cannot cost anything, and the real
+      choice is made once, by the button.
+    */
+    form.append("target", DEFAULT_RECON_TARGET);
 
     const res = await fetch("/api/splat/jobs", { method: "POST", body: form });
     if (!res.ok) {
@@ -106,6 +203,9 @@ export function VideoWalkPanel() {
       abortRef.current = controller;
       setError(null);
       setFound(null);
+      setHandoff(null);
+      setWatchJobId(null);
+      lazyJobRef.current = null;
       setFile(video);
 
       try {
@@ -116,11 +216,46 @@ export function VideoWalkPanel() {
         if (reconstruct) {
           const form = new FormData();
           form.append("video", video);
+          // Named outright, because the server will only ever send a clip to a
+          // paid destination that was asked for by name — an absent field falls
+          // back to the local studio there, and that is the correct thing for it
+          // to do. This is the reader's own remembered answer, echoed in the
+          // checkbox label so it is not a surprise.
+          form.append("target", preferred);
+
           const res = await fetch("/api/splat/jobs", { method: "POST", body: form });
           if (res.ok) {
-            splatJobId = ((await res.json()) as { job?: { id?: string } }).job?.id ?? null;
+            const body = (await res.json()) as {
+              job?: { id?: string };
+              reconstruction?: Handoff;
+            };
+            splatJobId = body.job?.id ?? null;
+            // Straight through, unedited. The server phrased this for a person
+            // and already knows things this tab does not — whether the studio
+            // answered, what pre-flight measured, whether a credit was spent.
+            setHandoff(body.reconstruction ?? null);
           } else {
-            console.warn("[upload] splat job failed to open:", await res.text());
+            /*
+              The upload itself was refused, so there is no job and no clip on
+              the server — a different failure from "stored but not dispatched",
+              and the only one where the video exists nowhere but this tab.
+
+              Said out loud rather than logged. The console line this replaces
+              meant the panel went on to render as though reconstruction had
+              never been asked for, silently downgrading a ticked box into an
+              unticked one. The walk still runs; `splatJobId` stays null, so the
+              retry below is offered and will upload again from the file we
+              still hold.
+            */
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            setHandoff({
+              ok: false,
+              target: null,
+              degraded: false,
+              note:
+                (body.error ?? `The upload was refused (${res.status}).`) +
+                " The video is still open in this tab — you can send it again below.",
+            });
           }
         }
 
@@ -154,7 +289,7 @@ export function VideoWalkPanel() {
         abortRef.current = null;
       }
     },
-    [modelId, reconstruct, transcribe],
+    [modelId, reconstruct, transcribe, preferred],
   );
 
   const onFile = (f: File | undefined) => {
@@ -203,11 +338,17 @@ export function VideoWalkPanel() {
             which parked it at the right edge of the model-chip row — correct when
             it was the only option, wrong the moment a second one appeared beneath
             it, because two peer checkboxes then hung off opposite margins. */}
+        {/* The tooltip used to read "Reconstruction runs on the GPU box, not
+            here" — a sentence about a machine this app had never contacted, on
+            a route that dispatched nothing. It now names the destination the
+            clip will actually be offered to, and admits that the destination
+            can turn out to be unreachable, which is the outcome the panel
+            below is written to report rather than hide. */}
         <label
           className={`fnote flex w-full cursor-pointer items-center gap-2 text-[10px] ${
             reconstruct ? "text-clay" : "text-ink-faint"
           }`}
-          title="Sends the video to /api/splat/jobs. Reconstruction runs on the GPU box, not here."
+          title={`Uploads the video to this app and hands it to ${TARGET_SHORT[preferred]}. If nothing is reachable the clip is still saved and you can send it somewhere else afterwards — it is never reconstructed without being asked.`}
         >
           <input
             type="checkbox"
@@ -216,7 +357,7 @@ export function VideoWalkPanel() {
             onChange={(e) => setReconstruct(e.target.checked)}
             className="accent-clay"
           />
-          [ also reconstruct a splat · uploads the video ]
+          [ also reconstruct a splat · uploads the video · → {TARGET_SHORT[preferred]} ]
         </label>
 
         <label
@@ -350,26 +491,58 @@ export function VideoWalkPanel() {
           {/* Live, not a static line. This is the only thing that asks KIRI
               whether the job finished and pulls the splat down when it has —
               see components/live/ReconstructionWatch.tsx. The old note just
-              told you where to copy a file by hand. */}
-          {found.splatJobId && (
-            <ReconstructionWatch jobId={found.splatJobId} href={found.href} />
+              told you where to copy a file by hand.
+
+              Gated on the DISPATCH having succeeded, not on the job existing.
+              A job id only proves the clip was stored; the watcher's states are
+              "waiting" and "still working", so pointing it at a clip nobody
+              picked up is a progress bar for a queue of one that no machine is
+              reading. That was the bug. */}
+          {inFlightJobId && <ReconstructionWatch jobId={inFlightJobId} href={found.href} />}
+
+          {/* Stored, and going nowhere. Said plainly, in the server's own words
+              — it knows whether the studio answered, whether a key is missing,
+              whether pre-flight refused the clip, and it phrased all of those
+              for a person already. The retry sits directly underneath: the
+              bytes are on disk, so trying again is a button and not another
+              walk around the building. */}
+          {handoff && !handoff.ok && (
+            <p className="fnote mt-3 text-[10px] leading-relaxed text-clay">
+              [ nothing is reconstructing this yet · {handoff.note} ]
+            </p>
           )}
 
-          {/* Overrule the scorer. Offered only when no reconstruction is already
-              in flight — a second copy of the same clip on the GPU box is not a
-              second chance, it is the same errand run twice. */}
-          {!found.splatJobId && watchJobId && (
-            <ReconstructionWatch jobId={watchJobId} href={found.href} />
+          {/* Where it went, said even when it went exactly where it was asked
+              to. The watcher above can report that a reconstruction is running
+              but not WHICH machine is running it, and "queued for the studio on
+              your laptop" versus "sent to KIRI" is the difference between
+              waiting for a fan to spin up and having spent a credit. Degraded
+              gets the same prefix TryAnyway uses, because being quietly moved to
+              another destination is otherwise only ever noticed later, by
+              someone wondering why their credits did not go down. */}
+          {handoff?.ok && (
+            <p className="fnote mt-2 text-[9.5px] leading-relaxed text-ink-faint">
+              [ {handoff.degraded ? "sent elsewhere · " : ""}
+              {handoff.note} ]
+            </p>
           )}
 
-          {!found.splatJobId && (
+          {/* Overrule the scorer, or pick up after a dispatch that found nothing
+              running. Offered only when no reconstruction is actually in flight
+              — a second copy of the same clip on the GPU box is not a second
+              chance, it is the same errand run twice — and `resolveJobId`
+              re-uses the job already opened above, so pressing this after a
+              failed dispatch costs no second upload. */}
+          {!inFlightJobId && (
             <TryAnyway
               onDispatched={setWatchJobId}
               resolveJobId={resolveJobId}
               prompt={
-                found.moments > 0
-                  ? "reconstruct this place too · sends the video"
-                  : "the scorer kept nothing · build the place anyway · sends the video"
+                handoff && !handoff.ok
+                  ? "the clip is saved · send it somewhere that is running"
+                  : found.moments > 0
+                    ? "reconstruct this place too · sends the video"
+                    : "the scorer kept nothing · build the place anyway · sends the video"
               }
             />
           )}
