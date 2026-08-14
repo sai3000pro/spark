@@ -27,13 +27,14 @@
  * 200-only response makes seeking either fail or buffer the whole file.
  */
 import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 
 import { NextResponse } from "next/server";
 
-import { getSplatJob, UPLOAD_DIR } from "@/lib/splatJobs";
+import { ensureBrowserPlayable } from "@/lib/video/remux";
+import { findUploadFor, getSplatJob } from "@/lib/splatJobs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,20 +62,35 @@ export async function GET(request: Request, { params }: Ctx) {
   // The extension was chosen from a whitelist at upload time and is not
   // recorded on the job, so it is recovered by looking rather than by trusting
   // anything in the request.
-  let name: string | undefined;
-  try {
-    const entries = await readdir(UPLOAD_DIR);
-    name = entries.find((e) => e.startsWith(`${jobId}.`));
-  } catch {
-    return NextResponse.json({ error: "no-uploads" }, { status: 404 });
-  }
-  if (!name) return NextResponse.json({ error: "no-video" }, { status: 404 });
+  const found = findUploadFor(jobId);
+  if (!found) return NextResponse.json({ error: "no-video" }, { status: 404 });
 
+  /*
+    Hand back something the browser will actually open.
+
+    This route exists so a tab can decode the clip — the detector runs in the
+    browser, which is the whole "frames never leave your machine" property. A
+    phone that recorded QuickTime therefore stops the pipeline dead: Chrome
+    answers `canPlayType("video/quicktime")` with the empty string and then
+    stalls at readyState 0 without firing `error`, so the walk hangs on
+    "reading frames" with nothing in the console.
+
+    So the container is normalised HERE rather than at upload: the phone's 201
+    stays fast, the conversion only happens for clips that need it, and it
+    happens once — the copy is cached beside the original. Lossless `-c copy`,
+    about a second and a half for 105 MB. See lib/video/remux.ts.
+
+    A failure is not fatal. `ensureBrowserPlayable` falls back to the original,
+    which Safari and Firefox may well open anyway, and says why in a header.
+  */
+  const remux = await ensureBrowserPlayable(found.path);
+
+  const name = path.basename(remux.servePath);
   const ext = path.extname(name).toLowerCase();
   const type = TYPES[ext];
   if (!type) return NextResponse.json({ error: "unsupported-type" }, { status: 415 });
 
-  const file = path.join(UPLOAD_DIR, name);
+  const file = remux.servePath;
   const size = (await stat(file)).size;
 
   const range = request.headers.get("range");
@@ -84,6 +100,12 @@ export async function GET(request: Request, { params }: Ctx) {
     // Never cached: a job id is reused by nothing, but a stale 206 in a proxy
     // would be indistinguishable from a truncated upload.
     "Cache-Control": "no-store",
+    // What the caller is actually holding. Worth stating rather than leaving to
+    // be inferred from the content type: "this is a lossless re-container of
+    // your recording" and "this is your recording" are different facts, and the
+    // next person to debug a decode failure should not have to guess which.
+    "X-Spark-Container": remux.converted ? "remuxed-mp4" : "original",
+    ...(remux.skipped ? { "X-Spark-Remux-Skipped": remux.skipped } : {}),
   };
 
   if (range) {

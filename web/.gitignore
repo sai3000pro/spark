@@ -52,3 +52,6 @@ next-env.d.ts
 
 # bake-routes.mjs Overpass cache — 5 MB of raw OSM pulls, refetched on demand
 scripts/.bake-cache/
+
+# Local dev server output (see the session that added ffmpeg-based remuxing).
+.devserver.log

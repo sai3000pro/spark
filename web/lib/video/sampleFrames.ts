@@ -48,6 +48,53 @@ export interface SampleOptions {
 
 const DEFAULTS = { fps: 3, maxFrames: 240, maxEdge: 640 } as const;
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY EVERY WAIT BELOW IS ON A CLOCK
+ *
+ * A <video> that cannot be demuxed does NOT always fire `error`. Chrome accepts
+ * a blob whose type it will not play, sits at `readyState 0`, and fires neither
+ * `loadedmetadata` nor `error` — ever. Measured, not guessed: a 105 MB iPhone
+ * clip with a bare `qt  ` brand (ftyp/wide/mdat/moov, structurally perfect,
+ * H.264 inside) hangs exactly this way, and relabelling the blob `video/mp4`
+ * does not help because the brand, not the MIME, is what the demuxer rejects.
+ *
+ * The old code awaited `seeked`-or-`error` with no third outcome, so that file
+ * parked the whole walk on "reading frames" with no error, no progress and
+ * nothing in the console. A timeout is what turns an invisible stall into a
+ * sentence someone can act on.
+ *
+ * Generous on purpose: these are ceilings for "something is wrong", not budgets
+ * for slow machines. A 105 MB blob decodes its first frame in well under a
+ * second on hardware that can decode it at all.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+const METADATA_TIMEOUT_MS = 20_000;
+const SEEK_TIMEOUT_MS = 15_000;
+
+/**
+ * Would this browser even try? `""` means a flat no.
+ *
+ * `canPlayType` is advisory and its "maybe" is worth little, but its EMPTY
+ * answer is definite and is the one that matters here: Chrome returns "" for
+ * `video/quicktime`, which is precisely the file that then hangs. Catching it
+ * before a decoder is involved turns a 20-second wait into an instant answer.
+ *
+ * A file with no type at all is not judged — the browser will sniff it, and
+ * refusing on missing metadata would reject perfectly good drag-and-drop files.
+ */
+function refuseEarly(file: File): string | null {
+  if (!file.type) return null;
+  const probe = document.createElement("video");
+  if (probe.canPlayType(file.type) !== "") return null;
+  return (
+    `this browser will not open ${file.type} files` +
+    (/quicktime/i.test(file.type)
+      ? " — Chrome does not read QuickTime .mov. Convert it to .mp4 (H.264), or open this page in Safari."
+      : " — try converting it to .mp4 (H.264).")
+  );
+}
+
 /** Reads duration and dimensions without decoding the whole file. */
 export function probeVideo(file: File): Promise<VideoInfo> {
   return withVideo(file, (video) => ({
@@ -115,6 +162,10 @@ export async function sampleFrames(
  * file in memory — and these are videos.
  */
 async function withVideo<T>(file: File, fn: (video: HTMLVideoElement) => T | Promise<T>): Promise<T> {
+  // Before a decoder is involved at all — see refuseEarly.
+  const refusal = refuseEarly(file);
+  if (refusal) throw new Error(refusal);
+
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.preload = "auto";
@@ -126,17 +177,38 @@ async function withVideo<T>(file: File, fn: (video: HTMLVideoElement) => T | Pro
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const onReady = () => {
-        // A stream with no duration is one we cannot seek through.
-        if (!Number.isFinite(video.duration) || video.duration <= 0) {
-          reject(new Error("that file has no readable duration — is it a complete video?"));
-          return;
-        }
-        resolve();
+      // The third outcome the old code did not have. Without it a demuxer that
+      // refuses the file silently leaves this promise pending forever.
+      const bell = setTimeout(() => {
+        settle(() =>
+          reject(
+            new Error(
+              `the browser stopped responding while opening this ${file.type || "video"} — ` +
+                "it parsed no duration in 20s and reported no error, which usually means " +
+                "it cannot read this container. Converting it to .mp4 (H.264) fixes it.",
+            ),
+          ),
+        );
+      }, METADATA_TIMEOUT_MS);
+
+      const settle = (run: () => void) => {
+        clearTimeout(bell);
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        run();
       };
-      video.onloadedmetadata = onReady;
+
+      video.onloadedmetadata = () =>
+        settle(() => {
+          // A stream with no duration is one we cannot seek through.
+          if (!Number.isFinite(video.duration) || video.duration <= 0) {
+            reject(new Error("that file has no readable duration — is it a complete video?"));
+            return;
+          }
+          resolve();
+        });
       video.onerror = () =>
-        reject(new Error("the browser could not decode that file as a video"));
+        settle(() => reject(new Error("the browser could not decode that file as a video")));
     });
     return await fn(video);
   } finally {
@@ -152,21 +224,32 @@ async function withVideo<T>(file: File, fn: (video: HTMLVideoElement) => T | Pro
 /** One seek, resolved when the frame at `t` is actually decoded and paintable. */
 function seek(video: HTMLVideoElement, t: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const done = () => {
+    // A decoder can stall mid-clip on a damaged GOP without ever firing
+    // `error`, the same way it can stall on open. Every wait gets a clock.
+    const bell = setTimeout(() => {
+      settle(() =>
+        reject(
+          new Error(
+            `the decoder stalled seeking to ${t.toFixed(2)}s — no frame and no error in 15s`,
+          ),
+        ),
+      );
+    }, SEEK_TIMEOUT_MS);
+
+    const settle = (run: () => void) => {
+      clearTimeout(bell);
       video.onseeked = null;
       video.onerror = null;
-      resolve();
+      run();
     };
-    video.onseeked = done;
-    video.onerror = () => {
-      video.onseeked = null;
-      video.onerror = null;
-      reject(new Error(`could not seek to ${t.toFixed(2)}s`));
-    };
+
+    video.onseeked = () => settle(resolve);
+    video.onerror = () => settle(() => reject(new Error(`could not seek to ${t.toFixed(2)}s`)));
+
     // Seeking to a time already current fires no `seeked` event at all, so a
     // duplicate request has to resolve itself or the walk hangs forever.
     if (Math.abs(video.currentTime - t) < 1e-3 && video.readyState >= 2) {
-      done();
+      settle(resolve);
       return;
     }
     video.currentTime = t;
