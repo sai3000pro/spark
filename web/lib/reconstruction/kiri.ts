@@ -310,6 +310,32 @@ export interface KiriSubmission {
 }
 
 /**
+ * What /3dgs/video will accept, in KIRI's own words.
+ * https://docs.kiriengine.app/3dgs-scan/video-upload
+ *
+ *   "The duration should be no longer than 3 minutes."
+ *   "The video resolution must not exceed 1920x1080."
+ *
+ * Lives here rather than beside the checker because this file is where the
+ * endpoint and its documentation live, and two copies of a limit is how one of
+ * them ends up wrong. app/m/[handoffId]/GuidedRecorder.tsx already stops
+ * recording at 170s against the same cap — ten seconds of headroom, deliberate,
+ * because container duration and frame duration are not the same number.
+ *
+ * The sides are named LONG and SHORT, not width and height. A phone held
+ * upright produces 1080x1920 and it is exactly as legal as 1920x1080; see the
+ * header of ../video/clipLimits.ts for what testing width does instead.
+ *
+ * No size limit is listed here because KIRI publishes none. An undocumented
+ * limit is not a limit we get to enforce on someone's behalf.
+ */
+export const KIRI_VIDEO_LIMITS = {
+  maxDurationSec: 180,
+  maxLongSide: 1920,
+  maxShortSide: 1080,
+} as const;
+
+/**
  * Hand a clip to KIRI. Returns the job handle it will be known by.
  *
  * The caller must have stored the video FIRST. This spends a credit, KIRI's

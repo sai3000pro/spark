@@ -58,8 +58,14 @@ const PROBE_TIMEOUT_MS = 20_000;
 
 let cachedBin: string | null | undefined;
 
-/** Same verified-path resolution as lib/video/remux.ts — see the note there. */
-function ffmpegBinary(): string | null {
+/**
+ * Same verified-path resolution as lib/video/remux.ts — see the note there.
+ *
+ * Exported so ./preflight.ts can tell "there is no ffmpeg on this machine"
+ * apart from "ffmpeg ran and said nothing useful". Those are the same outcome
+ * for this module and different sentences for that one.
+ */
+export function ffmpegBinary(): string | null {
   if (cachedBin !== undefined) return cachedBin;
   const candidates = [
     ffmpegPath,
@@ -78,10 +84,7 @@ function ffmpegBinary(): string | null {
  * and is NOT a failure, so the output is parsed regardless of it.
  */
 export async function probeVideoMetadata(filePath: string): Promise<VideoMetadata> {
-  const bin = ffmpegBinary();
-  if (!bin) return NOTHING;
-
-  const text = await run(bin, filePath);
+  const text = await readVideoHeader(filePath);
   if (!text) return NOTHING;
 
   return {
@@ -125,6 +128,24 @@ function isoFromCreationTime(text: string): string | null {
   if (!raw) return null;
   const ms = Date.parse(raw);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+/**
+ * Everything ffmpeg prints about a file it was given nowhere to write.
+ *
+ * The raw stderr block: the metadata table this module parses, and also the
+ * `Duration:` line and the `Stream ... Video:` line that ./preflight.ts reads.
+ * Exported as ONE call rather than two probes, because spawning ffmpeg twice to
+ * read two halves of the same header would double the cost of the one thing
+ * that has to happen while a phone waits on a spinner.
+ *
+ * Null when there is no binary, when it could not be started, or when it timed
+ * out. Every caller treats that as "unknown", never as "bad file".
+ */
+export async function readVideoHeader(filePath: string): Promise<string | null> {
+  const bin = ffmpegBinary();
+  if (!bin) return null;
+  return run(bin, filePath);
 }
 
 function run(bin: string, filePath: string): Promise<string | null> {

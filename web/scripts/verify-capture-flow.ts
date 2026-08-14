@@ -24,7 +24,9 @@
  * exactly the part that is plumbing rather than perception.
  */
 
+import { KIRI_VIDEO_LIMITS } from "../lib/reconstruction/kiri";
 import { RECON_TARGETS } from "../lib/reconstruction/targets";
+import { judgeClipForKiri, sidesOf, type ClipFacts } from "../lib/video/clipLimits";
 
 const BASE = process.env.VERIFY_BASE_URL ?? "http://localhost:3000";
 
@@ -39,8 +41,73 @@ function section(title: string): void {
   console.log(`\n${title}`);
 }
 
+/**
+ * The clip pre-flight, which needs no server and no ffmpeg.
+ *
+ * Runs FIRST and off a fixture rather than a file, because the rule it protects
+ * is arithmetic and the thing it protects against is a one-character mistake
+ * that would be invisible until someone's portrait clip was refused. See
+ * lib/video/clipLimits.ts: a phone shoots 1080x1920, so a check written as
+ * `height <= 1080` rejects every capture the app's own recorder produces while
+ * passing every landscape test anyone thinks to write.
+ */
+function checkPreflight(): void {
+  section("Pre-flight, before a credit is spent");
+
+  const facts = (over: Partial<ClipFacts> = {}): ClipFacts => ({
+    durationSec: 90,
+    longSide: 1920,
+    shortSide: 1080,
+    bytes: 60 * 1024 * 1024,
+    ...over,
+  });
+
+  // THE one that matters. Same clip, held the other way up.
+  const landscape = sidesOf(1920, 1080);
+  const portrait = sidesOf(1080, 1920);
+  check("orientation cannot change a frame's measurements",
+    landscape.longSide === portrait.longSide && landscape.shortSide === portrait.shortSide,
+    `${portrait.longSide}×${portrait.shortSide}`);
+  check("a portrait clip at KIRI's exact limit is accepted",
+    judgeClipForKiri(facts({ ...portrait })).verdict === "ok",
+    judgeClipForKiri(facts({ ...portrait })).reason);
+
+  const tooLong = judgeClipForKiri(facts({ durationSec: 184 }));
+  check("a clip past the duration cap is refused", tooLong.verdict === "refuse");
+  check("and the refusal names the limit and the overshoot",
+    tooLong.reason.includes("3:04") && tooLong.reason.includes("3:00"),
+    tooLong.reason);
+
+  // The boundary is legal, and a container's own rounding must not make it
+  // illegal. Refusing here would cost a reconstruction over 0.02 of a second.
+  check("exactly the cap is not refused",
+    judgeClipForKiri(facts({ durationSec: KIRI_VIDEO_LIMITS.maxDurationSec })).verdict !== "refuse");
+  check("nor is a hair over it, which is measurement noise",
+    judgeClipForKiri(facts({ durationSec: 180.02 })).verdict !== "refuse");
+
+  const tooBig = judgeClipForKiri(facts({ ...sidesOf(2160, 3840) }));
+  check("an oversized frame is refused in either orientation",
+    tooBig.verdict === "refuse", tooBig.reason);
+
+  // Refusing is only ever for certain rejection. Everything else proceeds.
+  check("a very large file warns and still goes",
+    judgeClipForKiri(facts({ bytes: 480 * 1024 * 1024 })).verdict === "warn");
+  check("an unusual aspect warns and still goes",
+    judgeClipForKiri(facts({ ...sidesOf(1920, 640) })).verdict === "warn");
+
+  // A missing tool must never cost somebody their reconstruction.
+  const unmeasured = judgeClipForKiri({
+    durationSec: null, longSide: null, shortSide: null, bytes: null,
+  });
+  check("an unmeasurable clip is 'unknown', never 'refuse'",
+    unmeasured.verdict === "unknown", unmeasured.reason);
+}
+
 async function main(): Promise<void> {
   console.log(`Capture flow · ${BASE}`);
+
+  // No server needed for this one, so it runs before the ping that requires it.
+  checkPreflight();
 
   // Fail loudly and early rather than reporting twenty confusing failures.
   try {
@@ -64,8 +131,10 @@ async function main(): Promise<void> {
 
   if (openRes.status === 503) {
     // Legitimate on a machine with no reachable address; not a code failure.
+    // Still exits non-zero if the checks above it failed — those are pure
+    // arithmetic and have nothing to do with whether this laptop has a LAN IP.
     console.log("  skip  this machine has no address a phone could reach");
-    process.exit(0);
+    process.exit(failures === 0 ? 0 : 1);
   }
   check("a handoff opens", openRes.ok, `HTTP ${openRes.status}`);
   const opened = (await openRes.json()) as {

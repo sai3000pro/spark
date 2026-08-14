@@ -20,6 +20,7 @@ import path from "node:path";
 
 import { noteCreditSpent, withKiriKey } from "./keys";
 import { noteKiriSubmission } from "../splatJobs";
+import { preflightForKiri, type ClipPreflight } from "../video/preflight";
 import { ensureBrowserPlayable } from "../video/remux";
 import { serializeOf, submitVideo } from "./kiri";
 import {
@@ -43,6 +44,12 @@ export interface DispatchOutcome {
   /** Whether a retry could ever succeed. See kiri.ts's terminal codes. */
   terminal: boolean;
   note: string;
+  /**
+   * What was measured off the clip before it was sent, when it was going to
+   * KIRI. Absent for every other destination — these are KIRI's limits, not
+   * facts about video in general, and a studio dispatch is not judged by them.
+   */
+  preflight?: ClipPreflight;
 }
 
 export async function dispatch(input: {
@@ -90,6 +97,13 @@ export async function dispatch(input: {
   // would be a lie the UI then repeats. The machine that trains is the one
   // holding the tab; this side's whole job was to store the clip so that
   // machine can read it back through /api/splat/jobs/[jobId]/video.
+  //
+  // Unreachable in practice, and kept as a backstop rather than deleted. This
+  // call site passes no `gpu`, so `describeTargets` already refuses the browser
+  // option here — and `BROWSER_TRAINER_AVAILABLE` refuses it everywhere else
+  // until the WASM trainer is vendored. If some future path does arrive here,
+  // the note must not promise training that nothing will perform: what actually
+  // happened is that the clip was stored, so that is what it says.
   if (target === "browser") {
     return {
       requested,
@@ -98,7 +112,7 @@ export async function dispatch(input: {
       degraded,
       external: null,
       terminal: false,
-      note: "Saved. Reconstruction runs in your browser — keep the tab open.",
+      note: "Saved. Nothing is training yet — pick the studio or KIRI to reconstruct it.",
     };
   }
 
@@ -130,11 +144,54 @@ async function dispatchToKiri(input: {
 }): Promise<DispatchOutcome> {
   const { requested, degraded, filePath, filename, jobId } = input;
 
+  /*
+    ─────────────────────────────────────────────────────────────────────────
+    PRE-FLIGHT. THE LAST MOMENT AT WHICH THIS IS STILL FREE.
+
+    Everything below this block costs a credit the instant KIRI accepts the
+    upload, and KIRI's limits are enforced on their side AFTER the whole file
+    has crossed the network. A clip four seconds over the cap therefore used to
+    cost one of ten unrepeatable credits, several minutes of upload, and a
+    rejection message that arrived long after the person had put their phone
+    away. Duration and frame size are readable here in about a second.
+
+    Only `refuse` stops anything, and `refuse` only ever fires on the two limits
+    KIRI documents in prose — see lib/video/clipLimits.ts. A clip that is merely
+    unusual, or that could not be measured at all because this machine has no
+    ffmpeg, goes exactly as it would have before. The verdict is carried on the
+    outcome either way so the UI can repeat it rather than invent one.
+
+    The clip is untouched by all of this. It was stored before dispatch was ever
+    called, it is still on disk after a refusal, and /api/splat/jobs/[jobId]/
+    dispatch can send it to the studio instead — which has no such limits.
+    ─────────────────────────────────────────────────────────────────────────
+  */
+  const preflight = await preflightForKiri(filePath);
+
+  // Carried on EVERY outcome from here down, refusal and success alike: what we
+  // measured is the same either way, and an outcome that reports it only when
+  // it stopped something is one the UI cannot use to explain what it did send.
   const base = {
     requested,
     target: "kiri" as const,
     degraded,
+    preflight,
   };
+
+  if (preflight.verdict === "refuse") {
+    return {
+      ...base,
+      ok: false,
+      external: null,
+      // Terminal in exactly the sense kiri.ts means it: no other key and no
+      // amount of waiting changes a clip's length. Retrying this one spends a
+      // second credit to hear the same sentence.
+      terminal: true,
+      note:
+        `${preflight.reason} Nothing was sent and no credit was spent — the clip is ` +
+        `saved, and the studio on your laptop has no such limit.`,
+    };
+  }
 
   /*
     Send the MP4, not whatever the phone happened to record.
@@ -217,6 +274,13 @@ async function dispatchToKiri(input: {
     ok: true,
     external: serialize,
     terminal: false,
-    note: "Sent to KIRI. Reconstruction takes a few minutes.",
+    // A warning is said out loud even though it changed nothing, because the
+    // clip that gets rejected in four minutes' time is usually the one this
+    // sentence was about — and having been told beforehand is the difference
+    // between a puzzling failure and an understood one.
+    note:
+      preflight.verdict === "warn" || preflight.verdict === "unknown"
+        ? `Sent to KIRI. ${preflight.reason} Reconstruction takes a few minutes.`
+        : "Sent to KIRI. Reconstruction takes a few minutes.",
   };
 }
