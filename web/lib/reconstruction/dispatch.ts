@@ -16,8 +16,11 @@
  * and the clip is still there to try again with.
  */
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { noteCreditSpent, withKiriKey } from "./keys";
+import { noteKiriSubmission } from "../splatJobs";
+import { ensureBrowserPlayable } from "../video/remux";
 import { serializeOf, submitVideo } from "./kiri";
 import {
   describeTargets,
@@ -46,8 +49,14 @@ export async function dispatch(input: {
   requested: ReconTarget;
   filePath: string;
   filename: string;
+  /**
+   * The job these bytes belong to. Optional only so older callers still
+   * compile; without it a KIRI submission cannot be collected later, because
+   * nothing records the handle KIRI hands back. See lib/reconstruction/collect.ts.
+   */
+  jobId?: string;
 }): Promise<DispatchOutcome> {
-  const { requested, filePath, filename } = input;
+  const { requested, filePath, filename, jobId } = input;
 
   const options = describeTargets({
     studio: await probeStudio(),
@@ -73,7 +82,9 @@ export async function dispatch(input: {
     };
   }
 
-  if (target === "kiri") return dispatchToKiri({ requested, degraded, filePath, filename });
+  if (target === "kiri") {
+    return dispatchToKiri({ requested, degraded, filePath, filename, jobId });
+  }
 
   // The browser target has nothing for the server to do, and saying otherwise
   // would be a lie the UI then repeats. The machine that trains is the one
@@ -114,8 +125,10 @@ async function dispatchToKiri(input: {
   degraded: boolean;
   filePath: string;
   filename: string;
+  /** Which job to record KIRI's handle against, so it can be collected later. */
+  jobId?: string;
 }): Promise<DispatchOutcome> {
-  const { requested, degraded, filePath, filename } = input;
+  const { requested, degraded, filePath, filename, jobId } = input;
 
   const base = {
     requested,
@@ -123,9 +136,33 @@ async function dispatchToKiri(input: {
     degraded,
   };
 
+  /*
+    Send the MP4, not whatever the phone happened to record.
+
+    This used to read the original file and hand it over as
+    `new Blob([...], { type: "video/mp4" })` with the source filename — so an
+    iPhone capture went to KIRI as a QuickTime stream, labelled `video/mp4`,
+    under a `.mov` name. Three descriptions of the same bytes, two of them
+    wrong. That is a poor thing to be uncertain about on a call that spends a
+    credit and cannot be undone.
+
+    `ensureBrowserPlayable` already produced a faststart MP4 for the detector to
+    read, so this is almost always a cache hit — and where it is not, a lossless
+    `-c copy` is a second and a half. If the remux fails it falls back to the
+    original, and the content type below is derived from whatever we actually
+    ended up with rather than asserted.
+  */
+  const playable = await ensureBrowserPlayable(filePath);
+  const sendPath = playable.servePath;
+  const sendExt = path.extname(sendPath).toLowerCase();
+  const sendName = playable.converted
+    ? `${path.basename(filename, path.extname(filename))}.mp4`
+    : filename;
+  const sendType = sendExt === ".mov" ? "video/quicktime" : sendExt === ".webm" ? "video/webm" : "video/mp4";
+
   let bytes: Buffer;
   try {
-    bytes = await readFile(filePath);
+    bytes = await readFile(sendPath);
   } catch {
     return {
       ...base,
@@ -140,7 +177,7 @@ async function dispatchToKiri(input: {
     // A Blob view over the buffer we already have: KIRI wants multipart, and
     // streaming it would mean holding the request open on our side for the same
     // duration anyway.
-    submitVideo(key, new Blob([new Uint8Array(bytes)], { type: "video/mp4" }), filename),
+    submitVideo(key, new Blob([new Uint8Array(bytes)], { type: sendType }), sendName),
   );
 
   if (!result) {
@@ -169,10 +206,16 @@ async function dispatchToKiri(input: {
   // here keeps the UI from offering a route that will now fail.
   noteCreditSpent();
 
+  // Record the handle against the job IMMEDIATELY. From here the credit is
+  // already spent, so losing this string means paying for a reconstruction
+  // nobody can ever download.
+  const serialize = serializeOf(result.data);
+  if (jobId && serialize) noteKiriSubmission(jobId, serialize);
+
   return {
     ...base,
     ok: true,
-    external: serializeOf(result.data),
+    external: serialize,
     terminal: false,
     note: "Sent to KIRI. Reconstruction takes a few minutes.",
   };

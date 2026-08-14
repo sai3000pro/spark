@@ -11,7 +11,11 @@
  * starts rendering it with no other change anywhere.
  */
 import { NextResponse } from "next/server";
-import { getSplatJob } from "@/lib/splatJobs";
+import path from "node:path";
+
+import { collectFromKiri } from "@/lib/reconstruction/collect";
+import { measurePly } from "@/lib/video/plyBounds";
+import { getSplatJob, SPLAT_DIR } from "@/lib/splatJobs";
 import { attachSplat } from "@/lib/uploadedTrips";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +25,32 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
   const { jobId } = await ctx.params;
-  const job = getSplatJob(jobId);
-  if (!job) {
+  if (!getSplatJob(jobId)) {
     return NextResponse.json({ error: "no such job" }, { status: 404, headers: NO_STORE });
   }
-  return NextResponse.json({ job }, { status: 200, headers: NO_STORE });
+
+  /*
+    Collect a finished KIRI reconstruction, if there is one waiting.
+
+    Polled from the read someone is already making rather than from a worker,
+    for the same reason the status itself is derived rather than stored: no
+    cron, no timer to leak, and a correct answer on a cold read hours later.
+
+    It is a no-op unless this job actually went to KIRI and its splat is not
+    here yet, and it never throws — a slow CDN must not turn "is it ready?"
+    into a 500. When it does land a file, `getSplatJob` below sees it and the
+    job flips to ready with nothing else involved.
+  */
+  const collected = await collectFromKiri(jobId);
+
+  // Re-read AFTER collecting, so a splat that landed during this very call is
+  // reported ready now rather than on the next poll.
+  const job = getSplatJob(jobId)!;
+
+  return NextResponse.json(
+    { job, ...(collected.note ? { kiri: collected.note } : {}) },
+    { status: 200, headers: NO_STORE },
+  );
 }
 
 export async function POST(_request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
@@ -47,7 +72,15 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/splat/jobs
     );
   }
 
-  const attached = attachSplat(job.tripId, job.url);
+  /*
+    Measured, not defaulted. A reconstruction arrives with its own scale and
+    origin — KIRI normalises into a ±50 box, five times the extent of the
+    hand-framed capture this viewer was tuned against — so without a camera
+    derived from the file the splat loads, draws, and looks like nothing at all.
+    See lib/video/plyBounds.ts.
+  */
+  const measured = measurePly(path.join(SPLAT_DIR, `${jobId}.ply`));
+  const attached = attachSplat(job.tripId, job.url, measured?.pointCount, measured?.view);
   return NextResponse.json(
     {
       job,

@@ -25,8 +25,18 @@
  * Step 3 is a copy, not an integration, and that is deliberate — the alternative
  * is this app holding credentials for a box it does not own.
  */
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
+
+import { BROWSER_COPY_SUFFIX } from "./video/remux";
 
 export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
 
@@ -42,6 +52,14 @@ export interface SplatJob {
   /** Set only when status is "ready". Served straight to the splat viewer. */
   url: string | null;
   note: string;
+  /**
+   * KIRI's own handle for this reconstruction, once one has been submitted.
+   *
+   * Without it a dispatch to KIRI is write-only: the clip goes, a credit is
+   * spent, and nothing here can ever ask what became of it. See
+   * lib/reconstruction/collect.ts, which is what turns it back into a .ply.
+   */
+  kiriSerialize: string | null;
 }
 
 /** Uploaded videos. Gitignored — these are large and they are not ours to keep. */
@@ -52,16 +70,128 @@ export const SPLAT_DIR = path.join(process.cwd(), "public", "mock", "splats");
 
 const KEY = Symbol.for("spark.splatJobs.store");
 
+type StoredJob = Omit<SplatJob, "status" | "url">;
+
 interface Store {
-  jobs: Map<string, Omit<SplatJob, "status" | "url">>;
+  jobs: Map<string, StoredJob>;
+  hydrated: boolean;
+}
+
+/**
+ * Job records live on disk beside the clip they describe.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS IS NOT JUST A CACHE
+ *
+ * This map used to be memory only, and a dev-server restart erased it while
+ * leaving every video on disk — so the clips became unreachable: `getSplatJob`
+ * returned null and each route 404'd on bytes that were sitting right there.
+ * Eight restarts in one afternoon orphaned a 105 MB recording that way.
+ *
+ * Worse once KIRI is involved. `kiriSerialize` is the ONLY handle to a
+ * reconstruction that has already cost a credit, and holding it in memory means
+ * a reload turns a paid job into one nobody can ever collect — it then expires
+ * at KIRI untouched. A sidecar makes the restart survivable and costs a few
+ * hundred bytes next to a hundred megabytes of video.
+ *
+ * Same derive-don't-sync spirit as the rest of this file: readiness still comes
+ * from the .ply existing, and this only persists the facts that cannot be
+ * recovered by looking.
+ */
+const RECORD_SUFFIX = ".job.json";
+
+function recordPath(id: string): string {
+  return path.join(UPLOAD_DIR, `${id}${RECORD_SUFFIX}`);
+}
+
+/** Best effort: a record that cannot be written must not fail the upload. */
+function persist(job: StoredJob): void {
+  try {
+    mkdirSync(UPLOAD_DIR, { recursive: true });
+    writeFileSync(recordPath(job.id), JSON.stringify(job, null, 1), "utf8");
+  } catch {
+    // The job still works for this process; only the restart is lost.
+  }
+}
+
+/**
+ * Rebuild the map from disk, once per process.
+ *
+ * Two sources, in order of trust: a sidecar written by a previous run, then any
+ * video with no sidecar at all. The second is what adopts clips uploaded before
+ * records existed — an id is recoverable from the filename, and a job that can
+ * be reached with a guessed source name beats a file nothing can address.
+ */
+function hydrate(s: Store): void {
+  if (s.hydrated) return;
+  s.hydrated = true;
+
+  let entries: string[];
+  try {
+    entries = readdirSync(UPLOAD_DIR);
+  } catch {
+    return; // Nothing uploaded yet.
+  }
+
+  for (const name of entries) {
+    if (!name.endsWith(RECORD_SUFFIX)) continue;
+    try {
+      const raw = JSON.parse(
+        readFileSync(path.join(UPLOAD_DIR, name), "utf8"),
+      ) as Partial<StoredJob>;
+      if (typeof raw?.id !== "string") continue;
+      s.jobs.set(raw.id, {
+        id: raw.id,
+        createdAt: raw.createdAt ?? new Date().toISOString(),
+        sourceName: raw.sourceName ?? raw.id,
+        sourceBytes: raw.sourceBytes ?? 0,
+        tripId: raw.tripId ?? null,
+        note: "",
+        kiriSerialize: raw.kiriSerialize ?? null,
+      });
+    } catch {
+      // A truncated record is not worth taking the process down for.
+    }
+  }
+
+  for (const name of entries) {
+    if (name.endsWith(RECORD_SUFFIX) || name.endsWith(BROWSER_COPY_SUFFIX)) continue;
+    const id = name.slice(0, name.length - path.extname(name).length);
+    if (!id.startsWith("splat_") || s.jobs.has(id)) continue;
+    let bytes = 0;
+    try {
+      const st = statSync(path.join(UPLOAD_DIR, name));
+      bytes = st.size;
+      const adopted: StoredJob = {
+        id,
+        createdAt: new Date(st.mtimeMs).toISOString(),
+        sourceName: name,
+        sourceBytes: bytes,
+        tripId: null,
+        note: "",
+        // Unrecoverable. A clip adopted this way may already have been sent to
+        // KIRI by a previous run, and re-sending it would spend a second credit
+        // — so callers should treat adoption as "reachable again", not "unsent".
+        kiriSerialize: null,
+      };
+      s.jobs.set(id, adopted);
+      persist(adopted);
+    } catch {
+      // Vanished between readdir and stat.
+    }
+  }
 }
 
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
   const existing = g[KEY];
-  if (existing) return existing;
-  const fresh: Store = { jobs: new Map() };
+  if (existing) {
+    hydrate(existing);
+    return existing;
+  }
+  const fresh: Store = { jobs: new Map(), hydrated: false };
   g[KEY] = fresh;
+  hydrate(fresh);
   return fresh;
 }
 
@@ -79,7 +209,9 @@ export function createSplatJob(input: {
     sourceBytes: input.sourceBytes,
     tripId: input.tripId ?? null,
     note: "",
+    kiriSerialize: null,
   });
+  persist(store().jobs.get(id)!);
   sweepUploads();
   return getSplatJob(id)!;
 }
@@ -134,11 +266,29 @@ export function sweepUploads(now = Date.now()): number {
   return removed;
 }
 
+/**
+ * Remember what KIRI called this job, so the result can be collected later.
+ *
+ * Recorded the instant KIRI accepts, because from that moment the credit is
+ * already spent — losing the handle after that point means paying for a
+ * reconstruction nobody can ever download.
+ */
+export function noteKiriSubmission(jobId: string, serialize: string): boolean {
+  const job = store().jobs.get(jobId);
+  if (!job) return false;
+  job.kiriSerialize = serialize;
+  // Straight to disk: from here a credit is already spent, and this string is
+  // the only way back to what it bought.
+  persist(job);
+  return true;
+}
+
 /** Late-binds the walk, since the walk id is only known after the pipeline runs. */
 export function linkJobToTrip(jobId: string, tripId: string): boolean {
   const job = store().jobs.get(jobId);
   if (!job) return false;
   job.tripId = tripId;
+  persist(job);
   return true;
 }
 
@@ -163,6 +313,43 @@ export function listSplatJobs(): SplatJob[] {
   return [...store().jobs.keys()]
     .map((id) => getSplatJob(id)!)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * The stored clip for a job, or null if it is gone.
+ *
+ * The extension is chosen from a whitelist at upload time and is deliberately
+ * NOT recorded on the job, so it is recovered by looking rather than by
+ * trusting anything a caller says. Callers must check `getSplatJob` first: the
+ * job record is the only proof this id was ever minted here, and checking it
+ * keeps a traversal attempt from reaching `readdirSync` at all.
+ *
+ * Returns the absolute path and the bare filename, because `dispatch()` wants
+ * both — the path to read and the name to send onward.
+ */
+export function findUploadFor(jobId: string): { path: string; filename: string } | null {
+  let entries: string[];
+  try {
+    entries = readdirSync(UPLOAD_DIR);
+  } catch {
+    // No .uploads directory yet is the normal cold state, not an error.
+    return null;
+  }
+  // The ORIGINAL VIDEO, and nothing else that shares its prefix.
+  //
+  // Three files can now be called `<jobId>.something`: the recording, the
+  // browser copy remux.ts writes beside it, and this module's own `.job.json`
+  // sidecar. Without both exclusions the answer depended on readdir order —
+  // and picking the sidecar made /video serve a JSON file, which surfaced as a
+  // 415 on a clip that was sitting there perfectly intact.
+  const name = entries.find(
+    (e) =>
+      e.startsWith(`${jobId}.`) &&
+      !e.endsWith(BROWSER_COPY_SUFFIX) &&
+      !e.endsWith(RECORD_SUFFIX),
+  );
+  if (!name) return null;
+  return { path: path.join(UPLOAD_DIR, name), filename: name };
 }
 
 /** Both directories, created on demand — neither is committed. */

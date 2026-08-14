@@ -89,13 +89,22 @@ export function describeTargets(input: {
   hasKiriKey: boolean;
   kiriCredits: number | null;
   /**
+   * KIRI's own words for refusing the stored key, when it has refused it.
+   *
+   * Separate from `kiriCredits` because "this key is not valid" and "this key
+   * has nothing left" are different problems with different fixes, and a menu
+   * that reported the second for the first would send someone hunting for a
+   * billing page over a typo in `.env`.
+   */
+  kiriRejected?: string | null;
+  /**
    * The viewer's own GPU, probed in ITS browser — so this is passed in by the
    * client rather than measured on the server, which has no GPU and is not the
    * machine that would do the work.
    */
   gpu?: { tier: GpuTier; blockedBecause: string | null } | null;
 }): TargetOption[] {
-  const { studio, hasKiriKey, kiriCredits, gpu = null } = input;
+  const { studio, hasKiriKey, kiriCredits, kiriRejected = null, gpu = null } = input;
 
   const outOfCredits = kiriCredits !== null && kiriCredits <= 0;
   const budget = gpu ? budgetFor(gpu.tier) : null;
@@ -146,12 +155,17 @@ export function describeTargets(input: {
       id: "kiri",
       label: "Send to KIRI",
       detail: "Reconstructed in the cloud. Costs one of your KIRI credits.",
-      available: hasKiriKey && !outOfCredits,
+      available: hasKiriKey && !outOfCredits && !kiriRejected,
       blockedBecause: !hasKiriKey
         ? "No KIRI key yet — add one on the laptop."
-        : outOfCredits
-          ? "That KIRI key has no credits left."
-          : null,
+        : kiriRejected
+          ? // Verbatim. kiri.ts already phrases its messages for a person, and
+            // prefixing produced "KIRI rejected that key: KIRI did not accept
+            // that key."
+            kiriRejected
+          : outOfCredits
+            ? "That KIRI key has no credits left."
+            : null,
     },
   ];
 }

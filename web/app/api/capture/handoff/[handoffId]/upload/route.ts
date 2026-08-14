@@ -128,6 +128,8 @@ export async function POST(request: Request, { params }: Ctx) {
     requested,
     filePath: dest,
     filename: `${job.id}.${ext}`,
+    // So a KIRI submission can be collected later rather than being write-only.
+    jobId: job.id,
   });
 
   return NextResponse.json(

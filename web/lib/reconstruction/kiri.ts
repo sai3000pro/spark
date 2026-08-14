@@ -35,10 +35,94 @@
  * No key is ever sent to the browser. See ./keys.ts.
  */
 
+import { unzipSync } from "fflate";
+
 const BASE = "https://api.kiriengine.app/api/v1/open";
 
+/**
+ * Parse an envelope, REPAIRING the malformed ones rather than giving up on them.
+ *
+ * Rule 1 in the header says never `res.json()`, because KIRI's error bodies put
+ * raw control characters inside string literals — the 401 is
+ * `{"code":401, "msg":"Authentication failed. Please check header apikey.<LF>"}`
+ * and the out-of-credit reply does the same. Bailing out on those is safe but
+ * lossy: the code and the message are right there, and discarding them left
+ * this client guessing from the HTTP status alone.
+ *
+ * Escaping is only ever attempted on a body that already failed to parse as it
+ * stands, because escaping first would corrupt the whitespace of a reply that
+ * is merely pretty-printed. A body that is not JSON at all — an HTML error
+ * page, or nothing — still comes back null.
+ */
+function parseEnvelope<T>(text: string): KiriEnvelope<T> | null {
+  try {
+    return JSON.parse(text) as KiriEnvelope<T>;
+  } catch {
+    // Not JSON as it stands. Worth one repair attempt, below.
+  }
+  try {
+    return JSON.parse(escapeControlsInStrings(text)) as KiriEnvelope<T>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Escape control characters, but only INSIDE string literals.
+ *
+ * A newline between tokens is ordinary JSON whitespace; escaping those would
+ * break a pretty-printed reply that was already valid.
+ */
+function escapeControlsInStrings(text: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+
+  for (const character of text) {
+    if (escaped) {
+      out += character;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      out += character;
+      escaped = true;
+      continue;
+    }
+    if (character === '"') {
+      inString = !inString;
+      out += character;
+      continue;
+    }
+    const code = character.charCodeAt(0);
+    out +=
+      inString && code < 0x20 ? `\\u${code.toString(16).padStart(4, "0")}` : character;
+  }
+
+  return out;
+}
+
+/**
+ * Codes that mean success. Both, because KIRI is not consistent across
+ * endpoints: `/balance` answers 200 and the documented convention is 0.
+ */
+const SUCCESS_CODES = new Set([0, 200]);
+
 /** Codes where a different account would fail identically. Do not fail over. */
-const TERMINAL_CODES = new Set([2004, 2005, 2007, 2009, 2010]);
+const TERMINAL_CODES = new Set([
+  2004, 2005, 2007, 2009, 2010,
+  // Authentication failure, and the most terminal answer there is: no retry,
+  // no backoff and no other clip will ever make a wrong key right.
+  //
+  // These live here because KIRI puts them in the BODY, not just the status
+  // line — a bad key answers `{"code":401,"msg":"Authentication failed..."}`,
+  // which is perfectly parseable and therefore takes the business-code branch
+  // below rather than the unparseable-body branch that already knew about 401.
+  // Without them a rejected key came back `terminal: false`, which reads as
+  // "try again later" — so the menu kept offering KIRI, and the truth only
+  // arrived after someone had uploaded a 100 MB clip to it.
+  401, 403,
+]);
 
 export interface KiriResult<T> {
   ok: boolean;
@@ -97,19 +181,20 @@ async function call<T>(
 
   // Rule 1. Not res.json() — see the header.
   const raw = await res.text().catch(() => "");
-  let body: KiriEnvelope<T> | null = null;
-  try {
-    body = JSON.parse(raw) as KiriEnvelope<T>;
-  } catch {
-    body = null;
-  }
+  const body = parseEnvelope<T>(raw);
 
   if (!body) {
     return {
       ok: false,
       code: null,
       data: null,
-      terminal: false,
+      // Only reached now when the body is not JSON even after repair — an HTML
+      // error page, or an empty response. KIRI's 401 and out-of-credit replies
+      // both parse via `parseEnvelope`, so they take the business-code branch
+      // below and arrive with KIRI's own wording intact.
+      //
+      // A 401/403 here is still a credential that will never work.
+      terminal: res.status === 401 || res.status === 403,
       raw,
       // An unparseable body is not automatically a mystery. The two cases that
       // actually happen are a rejected key — whose 401 body is not JSON at all —
@@ -125,18 +210,59 @@ async function call<T>(
     };
   }
 
-  // Rule 2. The status line is not the answer; the code is.
+  // Rule 2. The status line is not the answer; the ENVELOPE is.
   const code = typeof body.code === "number" ? body.code : null;
   const message = body.msg ?? body.message ?? "";
 
-  if (code !== null && code !== 0) {
+  /*
+    ─────────────────────────────────────────────────────────────────────────
+    KIRI SIGNALS SUCCESS AS `code: 200`, NOT `code: 0`.
+
+    Measured against the live API with a real key:
+
+        {"code":200,"msg":"success","data":{"balance":9},"ok":true}
+
+    This client keyed on `code === 0` and therefore read EVERY successful
+    response as a business error. The consequences were not cosmetic: a video
+    KIRI had accepted came back as a failed dispatch, so `noteCreditSpent` and
+    `noteKiriSubmission` never ran — the credit was gone, the reconstruction was
+    running, and the handle needed to collect it was discarded. The user was
+    then invited to "send it again", which would have spent a second credit for
+    a second copy of the same job.
+
+    Success is therefore `code` in {0, 200}. See the note below on why the
+    `ok` flag is not trusted despite looking like the obvious answer.
+    ─────────────────────────────────────────────────────────────────────────
+  */
+  /*
+    `body.ok` is NOT consulted, and that is deliberate. It looks like the
+    obvious signal and it lies:
+
+        {"code":500,"msg":"No static resource ...","data":"ERR_500","ok":true}
+
+    A hard server error carries `ok: true`. Rule 2 in this file's header says
+    the status line is not the answer and the CODE is; that was right all along,
+    and the only thing wrong with the original was its idea of which codes mean
+    success. A response with no code at all falls back to the HTTP status,
+    which is all there is left to go on.
+  */
+  const succeeded = code !== null ? SUCCESS_CODES.has(code) : res.ok;
+
+  if (succeeded) {
+    return { ok: true, code: code ?? 0, data: body.data ?? null, message, terminal: false };
+  }
+
+  if (code !== null && !SUCCESS_CODES.has(code)) {
     return {
       ok: false,
       code,
       data: null,
       raw,
       terminal: TERMINAL_CODES.has(code),
-      message: message || `KIRI rejected this (code ${code}).`,
+      // Trimmed: KIRI ends several messages with a raw newline, which is what
+      // made the body unparseable in the first place and which shows up as a
+      // stray blank line wherever this is rendered.
+      message: message.trim() || `KIRI rejected this (code ${code}).`,
     };
   }
 
@@ -147,7 +273,9 @@ async function call<T>(
       code: null,
       data: null,
       raw,
-      terminal: false,
+      // Same reasoning as the auth codes above: a 401/403 status with no body
+      // code is still a credential that will never work.
+      terminal: res.status === 401 || res.status === 403,
       message:
         res.status === 401 || res.status === 403
           ? "KIRI did not accept that key."
@@ -196,9 +324,22 @@ export async function submitVideo(
 ): Promise<KiriResult<KiriSubmission>> {
   const form = new FormData();
   form.append("videoFile", video, filename);
-  // 3DGS rather than photogrammetry — this app wants splats, not meshes.
-  form.append("modelQuality", "0");
-  form.append("textureQuality", "0");
+  /*
+    `isMesh` and `isMask`, both documented as REQUIRED by /3dgs/video.
+    https://docs.kiriengine.app/3dgs-scan/video-upload
+
+    This used to send `modelQuality` and `textureQuality`, which belong to the
+    photogrammetry endpoints and mean nothing here — so the two fields this call
+    actually requires were absent and the submission would have been rejected on
+    arrival, after the whole video had been uploaded. Never exercised against a
+    live key, so nothing said otherwise until it was compared with a working
+    integration of the same API.
+
+    Both zero: we want the splat, not a mesh, and masking would need per-frame
+    subject selection this flow never collects.
+  */
+  form.append("isMesh", "0");
+  form.append("isMask", "0");
 
   return call<KiriSubmission>("/3dgs/video", key, { method: "POST", body: form });
 }
@@ -227,21 +368,155 @@ export async function getStatus(key: string, serialize: string): Promise<KiriRes
   });
 }
 
-/** KIRI's numeric status, as words. 0 uploading · 1 processing · 2 failed · 3 done. */
+/**
+ * KIRI's own status numbers.
+ * https://docs.kiriengine.app/model/retrieve-3d-model-status
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THESE WERE WRONG, AND WRONG IN THE WORST POSSIBLE WAY
+ *
+ * This file previously read `0 uploading · 1 processing · 2 failed · 3 done`,
+ * which is off by one against the real table below in a way that INVERTS the
+ * two answers that matter: 2 is **successful** and was being reported as "KIRI
+ * could not reconstruct this clip", while 3 is **queuing** and was being
+ * reported as "Ready". A finished reconstruction would have been thrown away
+ * and a job that had not started would have been treated as a result.
+ *
+ * Caught by comparing against a second, working integration of the same API
+ * (../../../atlas/src/lib/kiri.ts), which had the documented values. Nothing
+ * here was ever exercised against a live key, so nothing contradicted it.
+ *
+ * The negative value is real: -1 means KIRI is still receiving the upload.
+ */
+export const KIRI_STATUS = {
+  uploading: -1,
+  processing: 0,
+  failed: 1,
+  successful: 2,
+  queuing: 3,
+  expired: 4,
+} as const;
+
 export function describeStatus(n: number | undefined): {
-  stage: "queued" | "running" | "failed" | "ready" | "unknown";
+  stage: "queued" | "running" | "failed" | "ready" | "expired" | "unknown";
   label: string;
 } {
   switch (n) {
-    case 0:
-      return { stage: "queued", label: "Uploaded — waiting for a slot" };
-    case 1:
+    case KIRI_STATUS.uploading:
+      return { stage: "queued", label: "KIRI is still receiving the video" };
+    case KIRI_STATUS.processing:
       return { stage: "running", label: "Reconstructing" };
-    case 2:
+    case KIRI_STATUS.failed:
       return { stage: "failed", label: "KIRI could not reconstruct this clip" };
-    case 3:
+    case KIRI_STATUS.successful:
       return { stage: "ready", label: "Ready" };
+    case KIRI_STATUS.queuing:
+      return { stage: "queued", label: "Queued at KIRI" };
+    case KIRI_STATUS.expired:
+      // Distinct from failed: the reconstruction worked, and the download
+      // window closed before anything collected it. That is our bug, not
+      // KIRI's, and calling it "failed" would hide a fixable mistake.
+      return { stage: "expired", label: "Expired before the result was downloaded" };
     default:
       return { stage: "unknown", label: "Waiting for KIRI" };
+  }
+}
+
+/**
+ * Collect the finished reconstruction: the PLY, out of KIRI's zip.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS HALF OF THE LOOP DID NOT EXIST
+ *
+ * The client could submit a clip and poll its status, and then stopped — the
+ * only documented way to get a result into the app was to copy a file into
+ * public/mock/splats by hand. So a KIRI reconstruction that succeeded produced
+ * nothing a user could see, which makes spending the credit pointless.
+ *
+ * Two calls, because KIRI does not serve the model directly: `/model/getModelZip`
+ * hands back a short-lived `modelUrl`, and the archive is fetched from there.
+ * That URL EXPIRES — see KIRI_STATUS.expired, which is what a job looks like
+ * once nothing collected it in time.
+ *
+ * The archive's manifest is undocumented, so the PLY is found by extension
+ * rather than by a fixed name.
+ */
+export interface KiriModelZip {
+  modelUrl?: string;
+  serialize?: string;
+}
+
+export async function getModelZipUrl(
+  key: string,
+  serialize: string,
+): Promise<KiriResult<KiriModelZip>> {
+  return call<KiriModelZip>(
+    `/model/getModelZip?serialize=${encodeURIComponent(serialize)}`,
+    key,
+    { method: "GET", signal: AbortSignal.timeout(60_000) },
+  );
+}
+
+export type PlyFetch =
+  | { ok: true; name: string; bytes: Uint8Array }
+  | { ok: false; message: string; terminal: boolean };
+
+/**
+ * Status → zip url → archive → the .ply inside it.
+ *
+ * Never throws, for the same reason dispatch never throws: this runs after a
+ * credit has already been spent, and an exception here would turn a finished
+ * reconstruction into a stack trace instead of a sentence someone can act on.
+ */
+export async function fetchSplatPly(key: string, serialize: string): Promise<PlyFetch> {
+  const zip = await getModelZipUrl(key, serialize);
+  if (!zip.ok || !zip.data?.modelUrl) {
+    return {
+      ok: false,
+      message: zip.message || "KIRI gave no download link for that reconstruction.",
+      terminal: zip.terminal,
+    };
+  }
+
+  let archive: Uint8Array;
+  try {
+    // Not a KIRI endpoint — this is their CDN, so no Authorization header and
+    // no envelope. A plain fetch, and a plain failure if the link has expired.
+    const res = await fetch(zip.data.modelUrl, { cache: "no-store" });
+    if (!res.ok) {
+      return {
+        ok: false,
+        message: `Could not download the model zip (HTTP ${res.status}). The link may have expired.`,
+        terminal: false,
+      };
+    }
+    archive = new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Could not reach KIRI's download host: ${err instanceof Error ? err.message : String(err)}`,
+      terminal: false,
+    };
+  }
+
+  try {
+    const files = unzipSync(archive);
+    const entry = Object.entries(files).find(([name]) => name.toLowerCase().endsWith(".ply"));
+    if (!entry) {
+      return {
+        ok: false,
+        // Naming what WAS in there, because "no ply" with no list is
+        // unactionable and this archive's layout is undocumented.
+        message: `No .ply in KIRI's archive (it held: ${Object.keys(files).join(", ") || "nothing"}).`,
+        terminal: true,
+      };
+    }
+    return { ok: true, name: entry[0], bytes: entry[1] };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `KIRI's archive could not be read: ${err instanceof Error ? err.message : String(err)}`,
+      terminal: true,
+    };
   }
 }
