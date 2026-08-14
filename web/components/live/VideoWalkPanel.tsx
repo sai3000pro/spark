@@ -22,7 +22,10 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SaveToAlbum } from "@/components/album/SaveToAlbum";
+import { SetPlace } from "@/components/live/SetPlace";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
+import { ReconstructionWatch } from "@/components/live/ReconstructionWatch";
+import { TryAnyway } from "@/components/live/TryAnyway";
 import { DETECTOR_MODELS, formatBytes, type ProgressInfo } from "@/lib/detector";
 import { WHISPER_APPROX_MB } from "@/lib/audio/transcribe";
 import { buildWalkFromVideo, type BuiltWalk, type WalkPhase } from "@/lib/video/buildWalk";
@@ -49,6 +52,53 @@ export function VideoWalkPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const busy = phase !== "idle" && phase !== "done" && phase !== "error";
+
+  /**
+   * The job opened lazily by "try anyway", so pressing it twice does not upload
+   * a 100 MB clip twice. A ref rather than state because nothing renders from
+   * it — it exists only to make the second press cheap.
+   */
+  const lazyJobRef = useRef<string | null>(null);
+
+  /**
+   * The same id, as state, once something has actually dispatched it.
+   *
+   * The ref above exists to stop a second upload; this exists to render a
+   * watcher. They are deliberately separate — a job that was opened but never
+   * dispatched has nothing to watch yet.
+   */
+  const [watchJobId, setWatchJobId] = useState<string | null>(null);
+
+  /**
+   * The job whose clip the server holds, uploading it now if it does not.
+   *
+   * Unlike the phone path, this panel may never have sent the video at all —
+   * leaving it in the tab is the entire point of the "also reconstruct" box
+   * being off by default. So a change of mind afterwards costs one upload, and
+   * only the first time.
+   */
+  const resolveJobId = useCallback(async (): Promise<string> => {
+    const already = found?.splatJobId ?? lazyJobRef.current;
+    if (already) return already;
+    if (!file) {
+      throw new Error("that video is no longer open in this tab — choose it again");
+    }
+    const form = new FormData();
+    form.append("video", file);
+    // Attach it to the walk that was just built, so the reconstruction lands on
+    // the right trip rather than floating loose.
+    if (found) form.append("tripId", found.tripId);
+
+    const res = await fetch("/api/splat/jobs", { method: "POST", body: form });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `the upload was refused (${res.status})`);
+    }
+    const id = ((await res.json()) as { job?: { id?: string } }).job?.id;
+    if (!id) throw new Error("the server took the video but opened no job");
+    lazyJobRef.current = id;
+    return id;
+  }, [file, found]);
 
   const run = useCallback(
     async (video: File) => {
@@ -149,8 +199,12 @@ export function VideoWalkPanel() {
           </button>
         ))}
 
+        {/* `w-full`, matching the transcribe row below. This used to be `ml-auto`,
+            which parked it at the right edge of the model-chip row — correct when
+            it was the only option, wrong the moment a second one appeared beneath
+            it, because two peer checkboxes then hung off opposite margins. */}
         <label
-          className={`fnote ml-auto flex cursor-pointer items-center gap-2 text-[10px] ${
+          className={`fnote flex w-full cursor-pointer items-center gap-2 text-[10px] ${
             reconstruct ? "text-clay" : "text-ink-faint"
           }`}
           title="Sends the video to /api/splat/jobs. Reconstruction runs on the GPU box, not here."
@@ -271,11 +325,53 @@ export function VideoWalkPanel() {
             )}
           </p>
 
+          {/* The scorer's own words for the rejection. Without this the panel can
+              say only "nothing cleared the line", which is the one sentence that
+              does NOT distinguish a clip too short to reconstruct from a clip
+              that scored 0.44 against a 0.62 bar — and those want opposite
+              responses. Shown whenever anything was discarded, including runs
+              that still kept something: a walk that kept one and threw four away
+              is exactly when the threshold is worth looking at. */}
+          {found.discardReasons.length > 0 && (
+            <ul className="mt-2.5 space-y-1">
+              {found.discardReasons.map((r) => (
+                <li key={r} className="fnote text-[9.5px] leading-relaxed text-ink-faint">
+                  [ discarded · {r} ]
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* A dropped file never reaches the server, so its metadata is never
+              read — which makes typing the place the ONLY way this path can
+              know one. */}
+          <SetPlace tripId={found.tripId} />
+
+          {/* Live, not a static line. This is the only thing that asks KIRI
+              whether the job finished and pulls the splat down when it has —
+              see components/live/ReconstructionWatch.tsx. The old note just
+              told you where to copy a file by hand. */}
           {found.splatJobId && (
-            <p className="fnote mt-2 text-[9.5px] text-lagoon">
-              [ reconstruction queued · {found.splatJobId} · drop the result at
-              public/mock/splats/{found.splatJobId}.ply ]
-            </p>
+            <ReconstructionWatch jobId={found.splatJobId} href={found.href} />
+          )}
+
+          {/* Overrule the scorer. Offered only when no reconstruction is already
+              in flight — a second copy of the same clip on the GPU box is not a
+              second chance, it is the same errand run twice. */}
+          {!found.splatJobId && watchJobId && (
+            <ReconstructionWatch jobId={watchJobId} href={found.href} />
+          )}
+
+          {!found.splatJobId && (
+            <TryAnyway
+              onDispatched={setWatchJobId}
+              resolveJobId={resolveJobId}
+              prompt={
+                found.moments > 0
+                  ? "reconstruct this place too · sends the video"
+                  : "the scorer kept nothing · build the place anyway · sends the video"
+              }
+            />
           )}
 
           {/* The same filing step the phone path gets, for the same reason: a

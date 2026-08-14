@@ -69,6 +69,16 @@ import {
   readRendererPreference,
   rendererFor,
 } from "../lib/splat/renderer";
+import { attachSplat, createUploadedWalk } from "../lib/uploadedTrips";
+import { parseISO6709 } from "../lib/video/iso6709";
+import { parseCoordinates } from "../lib/geo/parsePlace";
+import { KNOWN_PLACES, findKnownPlace } from "../lib/geo/knownPlaces";
+import { DEFAULT_RECON_TARGET, isKnownTarget } from "../lib/reconstruction/preference";
+import {
+  RECON_TARGETS,
+  fallbackFor,
+  type TargetOption,
+} from "../lib/reconstruction/targets";
 import { PointTracker, toGray } from "../lib/tracking";
 import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
 import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
@@ -192,7 +202,12 @@ function verifyWaterlooPark() {
     check("every moment has objects", noObjects === 0, `${noObjects} without`);
     check("every moment has its keyframes", noKeyframes === 0, `${noKeyframes} wrong`);
     check("sightings reference a real keyframe and stay in span", badSighting === 0, `${badSighting} bad`);
-    check("every moment has a transcript", trip.moments.every((m) => m.transcript.length > 0));
+    // Inverted deliberately. These moments are AUTHORED, so any dialogue on
+    // them was written rather than heard — and the panel renders authored lines
+    // and Whisper output identically, with nothing to tell a reader which is
+    // which. A real transcript arrives from lib/audio/ on a real capture.
+    check("no authored moment carries invented speech",
+      trip.moments.every((m) => m.transcript.length === 0));
   }
 
   section("Splat status coverage (all three states must exist)");
@@ -369,13 +384,13 @@ function verifyEveryTrip() {
   {
     let noObjects = 0;
     let noKeyframes = 0;
-    let noTranscript = 0;
+    let withTranscript = 0;
     let badSighting = 0;
     for (const spec of TRIP_SPECS) {
       for (const m of buildTrip(spec).trip.moments) {
         if (!m.objects.length) noObjects++;
         if (m.keyframes.length !== PIPELINE_CONFIG.keyframesPerMoment) noKeyframes++;
-        if (!m.transcript.length) noTranscript++;
+        if (m.transcript.length) withTranscript++;
         const kfIds = new Set(m.keyframes.map((k) => k.id));
         for (const o of m.objects) {
           if (!kfIds.has(o.keyframeId)) badSighting++;
@@ -385,7 +400,7 @@ function verifyEveryTrip() {
     }
     check("every moment has objects", noObjects === 0, `${noObjects} without`);
     check("every moment has its keyframes", noKeyframes === 0, `${noKeyframes} wrong`);
-    check("every moment has a transcript", noTranscript === 0, `${noTranscript} without`);
+    check("no authored moment carries invented speech", withTranscript === 0, `${withTranscript} with`);
     check("sightings reference a real keyframe and stay in span", badSighting === 0, `${badSighting} bad`);
   }
 
@@ -1674,6 +1689,277 @@ function verifyRendererChoice() {
   }));
 }
 
+/**
+ * Where a clip is asked to go, and what happens when the ask is nonsense.
+ *
+ * The stored preference is untrusted input: it comes from localStorage, which a
+ * previous build wrote, a user can edit, and an extension can corrupt. The one
+ * property that matters is that a bad value can never become a destination —
+ * it must fall back to the local, free one rather than to the one that spends
+ * a credit.
+ */
+function verifyReconTarget() {
+  section("A stored target, validated");
+  check("a shipped target is accepted", isKnownTarget("kiri") && isKnownTarget("studio-batch"));
+  check("a target we do not ship is not", !isKnownTarget("dall-e"));
+  check("neither is a non-string", !isKnownTarget(null) && !isKnownTarget(7) && !isKnownTarget({}));
+  // The default is read on every cold start, so it has to be a real target or
+  // every first-time reader dispatches to nowhere.
+  check("the default is itself a shipped target", isKnownTarget(DEFAULT_RECON_TARGET));
+  // The one that costs money must never be reached by accident.
+  check("the default never spends a credit", DEFAULT_RECON_TARGET !== "kiri", DEFAULT_RECON_TARGET);
+
+  section("Degrading, when the ask is unavailable");
+  const noneUp: TargetOption[] = RECON_TARGETS.map((id) => ({
+    id, label: id, detail: "", available: false, blockedBecause: "nothing is running",
+  }));
+  check("nothing available means nowhere, not a guess",
+    RECON_TARGETS.every((t) => fallbackFor(t, noneUp) === null));
+
+  const onlyBatch = noneUp.map((o) =>
+    o.id === "studio-batch" ? { ...o, available: true, blockedBecause: null } : o);
+  check("live falls back to batch on the same machine",
+    fallbackFor("studio-live", onlyBatch) === "studio-batch");
+  check("browser falls back to the local studio", fallbackFor("browser", onlyBatch) === "studio-batch");
+
+  // The property this whole fallback chain exists for: wanting something local
+  // and free must never silently become a paid cloud submission.
+  const onlyKiri = noneUp.map((o) =>
+    o.id === "kiri" ? { ...o, available: true, blockedBecause: null } : o);
+  check("a local ask never degrades into spending a credit",
+    (["browser", "studio-live", "studio-batch"] as const).every(
+      (t) => fallbackFor(t, onlyKiri) !== "kiri"));
+  check("but asking for kiri directly still works", fallbackFor("kiri", onlyKiri) === "kiri");
+}
+
+/**
+ * A reconstruction that arrives for a walk the scorer left empty.
+ *
+ * This is the exact shape of "reconstruct it anyway": a clip whose windows all
+ * scored under promoteThreshold, sent to a reconstructor regardless because the
+ * person who was there disagreed. `attachSplat` used to loop over an empty
+ * moments array and report success, so the splat landed on disk with no moment
+ * anywhere to open it from — a silent, total loss of something already paid for.
+ */
+function verifySplatRescue() {
+  section("A splat for a walk that kept nothing");
+
+  // Detections engineered to clear the WINDOW bar but not the promote bar: one
+  // repeated label, no faces, no audio, so novelty fires once and nothing else
+  // does. Same shape as the clip that motivated this.
+  const detections = Array.from({ length: 24 }, (_, i) => ({
+    id: `det_r_${i}`,
+    tripId: "trip_upload_pending",
+    frameId: `f${i}`,
+    t: 0.5 + i * 1.5,
+    label: "chair",
+    confidence: 0.6,
+    bbox: [0.4, 0.4, 0.2, 0.2] as [number, number, number, number],
+    trackId: "trk_chair",
+    source: "onboard" as const,
+  }));
+
+  const walk = createUploadedWalk({ detections, durationSec: 40, sourceName: "rescue.mp4" });
+  check("the scorer kept nothing, as designed",
+    walk.built.trip.moments.length === 0,
+    `${walk.built.trip.moments.length} moment(s)`);
+  check("but it did find a candidate to reject", walk.built.trip.candidates.length > 0);
+
+  const ok = attachSplat(walk.id, "/mock/splats/rescue.ply", 1234);
+  check("attaching a splat reports success", ok);
+  // The property that matters: a splat is never delivered to nowhere.
+  check("and the walk now has a moment to open it from",
+    walk.built.trip.moments.length === 1,
+    `${walk.built.trip.moments.length} moment(s)`);
+  check("that moment points at the reconstruction",
+    walk.built.trip.moments[0]?.splat?.status === "ready" &&
+      walk.built.trip.moments[0]?.splat?.url === "/mock/splats/rescue.ply");
+  // Identifiable as a rescue, not passed off as a moment that earned its place.
+  check("and it is identifiable as a rescue, not a scorer verdict",
+    walk.built.trip.moments[0]?.id === "m_up_rescued",
+    walk.built.trip.moments[0]?.id);
+  check("the candidate it came from is no longer marked discarded",
+    walk.built.trip.candidates.every((c) => c.discardReason === undefined || c.status === "discarded"));
+
+  // A walk that DID keep moments must be untouched by any of this.
+  const rich = createUploadedWalk({
+    detections: detections.map((d, i) => ({ ...d, id: `det_x_${i}`, label: `thing_${i % 9}` })),
+    durationSec: 40,
+    sourceName: "rich.mp4",
+  });
+  const before = rich.built.trip.moments.length;
+  attachSplat(rich.id, "/mock/splats/rich.ply");
+  check("a walk that kept moments gains no extra one",
+    rich.built.trip.moments.length === before,
+    `${before} → ${rich.built.trip.moments.length}`);
+}
+
+/**
+ * Coordinates read off a video file.
+ *
+ * A wrong coordinate is worse than none: the globe draws a guess and a fix with
+ * identical confidence, so everything here fails CLOSED — anything that is not
+ * unambiguously a location comes back null and the caller keeps its fallback.
+ */
+function verifyISO6709() {
+  section("Reading a fix out of a QuickTime tag");
+  const toronto = parseISO6709("+43.6406-079.4019+076.320/");
+  check("latitude and longitude, with altitude to ignore",
+    toronto?.lat === 43.6406 && toronto?.lng === -79.4019, JSON.stringify(toronto));
+  const london = parseISO6709("+51.5074-000.1278/");
+  check("no altitude", london?.lat === 51.5074 && london?.lng === -0.1278);
+  const sydney = parseISO6709("-33.8688+151.2093/");
+  check("southern and eastern signs", sydney?.lat === -33.8688 && sydney?.lng === 151.2093);
+
+  section("What must never become a pin");
+  // The sign IS the delimiter, so a malformed string can parse to something
+  // plausible-looking. Each of these would put a confident marker somewhere real.
+  check("null island is treated as absent", parseISO6709("+00.0000+000.0000/") === null);
+  check("an impossible latitude is rejected, not clamped",
+    parseISO6709("+91.0000+000.0000/") === null);
+  check("an impossible longitude too", parseISO6709("+45.0000+181.0000/") === null);
+  check("prose is not a coordinate", parseISO6709("somewhere near the park") === null);
+  check("an empty tag is not a coordinate", parseISO6709("") === null);
+}
+
+/**
+ * What an uploaded walk claims about when and where it happened.
+ *
+ * Both of these were invented before the file was ever asked: `startedAt` was
+ * the upload time, and `origin` was a hardcoded Toronto street corner that
+ * every upload on earth pinned to with total confidence.
+ */
+function verifyWalkProvenance() {
+  const detections = Array.from({ length: 12 }, (_, i) => ({
+    id: `det_p_${i}`,
+    tripId: "trip_upload_pending",
+    frameId: `f${i}`,
+    t: 0.5 + i * 1.5,
+    label: "chair",
+    confidence: 0.6,
+    bbox: [0.4, 0.4, 0.2, 0.2] as [number, number, number, number],
+    trackId: "trk_chair",
+    source: "onboard" as const,
+  }));
+
+  section("When it was filmed");
+  // Exactly what ffmpeg reads off the clip that motivated this:
+  // com.apple.quicktime.creationdate: 2026-08-09T12:37:41-0400
+  const dated = createUploadedWalk({
+    detections, durationSec: 36, recordedAt: "2026-08-09T12:37:41-0400",
+  });
+  check("the walk starts when the camera says, not when it was uploaded",
+    dated.built.trip.startedAt === "2026-08-09T12:37:41-0400",
+    dated.built.trip.startedAt);
+  check("and the offset survives, so it reads in local time",
+    offsetSurvives(dated.built.trip.startedAt));
+  check("the end is the start plus the clip's own length",
+    Date.parse(dated.built.trip.endedAt) - Date.parse(dated.built.trip.startedAt) === 36_000);
+
+  const undatedWalk = createUploadedWalk({ detections, durationSec: 36 });
+  check("a file with no timestamp still yields a valid start",
+    Number.isFinite(Date.parse(undatedWalk.built.trip.startedAt)));
+  const garbage = createUploadedWalk({ detections, durationSec: 36, recordedAt: "not a date" });
+  check("and an unparseable one does not become an invalid date",
+    Number.isFinite(Date.parse(garbage.built.trip.startedAt)));
+
+  section("Where it was filmed");
+  const placed = createUploadedWalk({
+    detections, durationSec: 36, origin: { lat: 48.8584, lng: 2.2945 },
+  });
+  check("a real fix is used verbatim",
+    placed.built.trip.place.origin.lat === 48.8584 &&
+      placed.built.trip.place.origin.lng === 2.2945);
+  check("and is marked as measured", placed.built.trip.place.originMeasured === true);
+  // The property that matters: a placeholder must never pass for a measurement.
+  check("a walk with no fix is NOT marked measured",
+    undatedWalk.built.trip.place.originMeasured === false);
+}
+
+/** The offset is the whole point — a bare Z would lose the local reading. */
+function offsetSurvives(iso: string): boolean {
+  return /[+-]\d{2}:?\d{2}$/.test(iso);
+}
+
+/**
+ * What someone typed into the "where was this?" box.
+ *
+ * The stakes are the same as reading a fix off a file: a wrong coordinate is
+ * drawn by the globe with exactly the confidence of a right one. So anything
+ * ambiguous must come back null and be treated as a place NAME instead, where
+ * a geocoder can at least say it found nothing.
+ */
+function verifyTypedPlace() {
+  section("Coordinates someone pasted");
+  const t = parseCoordinates("43.6406, -79.4019");
+  check("decimal, comma separated", t?.lat === 43.6406 && t?.lng === -79.4019, JSON.stringify(t));
+  check("decimal, space separated",
+    parseCoordinates("43.6406 -79.4019")?.lng === -79.4019);
+  check("southern hemisphere", parseCoordinates("-33.8688, 151.2093")?.lat === -33.8688);
+
+  section("Degrees, minutes and seconds");
+  const dms = parseCoordinates("43°38'26.2\"N 79°24'06.8\"W");
+  check("hemisphere letters carry the sign",
+    dms !== null && Math.abs(dms.lat - 43.6406) < 0.001 && Math.abs(dms.lng + 79.4019) < 0.001,
+    JSON.stringify(dms));
+  // The trap this ordering exists to avoid: read as decimal, 43°38' becomes
+  // 43.0, 38.0 — a confident pin in the Mediterranean.
+  check("DMS is not misread as two decimals",
+    dms !== null && Math.abs(dms.lng) > 1);
+
+  section("What must fall through to the geocoder");
+  check("a place name is not a coordinate", parseCoordinates("Stackt Market, Toronto") === null);
+  check("whole numbers are a typo, not a coordinate", parseCoordinates("1, 2") === null);
+  check("out of range is rejected", parseCoordinates("91.0, 12.0") === null);
+  check("longitude out of range too", parseCoordinates("45.0, 181.0") === null);
+  check("null island is not a capture", parseCoordinates("0.0, 0.0") === null);
+  check("empty is nothing", parseCoordinates("   ") === null);
+}
+
+/**
+ * The curated gazetteer — places OpenStreetMap does not have.
+ *
+ * Every entry is a supplied fact, so the risk is not a bad coordinate but a bad
+ * MATCH: something typed loosely resolving to an entry it did not mean. These
+ * assertions pin the matching down and, just as importantly, pin down what must
+ * still fall through to the geocoder.
+ */
+function verifyKnownPlaces() {
+  section("Places the geocoder does not know");
+  const stackt = findKnownPlace("Stackt Market, Toronto");
+  check("the canonical name resolves",
+    stackt?.lat === 43.64088443911673 && stackt?.lng === -79.4017196836839,
+    stackt ? `${stackt.lat}, ${stackt.lng}` : "null");
+  check("case and punctuation do not matter",
+    findKnownPlace("stackt market toronto")?.label === stackt?.label &&
+      findKnownPlace("STACKT MARKET, TORONTO")?.label === stackt?.label);
+  check("a short alias works", findKnownPlace("stackt")?.label === "Stackt Market, Toronto");
+  check("extra whitespace is folded",
+    findKnownPlace("  stackt   market  ")?.label === "Stackt Market, Toronto");
+
+  section("What must still reach the geocoder");
+  // A gazetteer that matched loosely would silently capture real queries and
+  // answer them with the wrong coordinate — worse than not knowing the place.
+  check("a different market does not match", findKnownPlace("Kensington Market") === null);
+  check("a substring is not a match", findKnownPlace("the stackt market at night") === null);
+  check("an unrelated city does not match", findKnownPlace("Toronto") === null);
+  check("empty matches nothing", findKnownPlace("   ") === null);
+
+  section("Every entry is usable");
+  check("all coordinates are in range and none is null island",
+    KNOWN_PLACES.every(
+      (p) =>
+        Math.abs(p.lat) <= 90 &&
+        Math.abs(p.lng) <= 180 &&
+        !(p.lat === 0 && p.lng === 0) &&
+        p.label.length > 0,
+    ));
+  // A label that parses as a coordinate would never be reached — parseCoordinates
+  // runs first — so this catches an entry that could never match.
+  check("no entry is shadowed by the coordinate parser",
+    KNOWN_PLACES.every((p) => parseCoordinates(p.label) === null));
+}
+
 verifyWaterlooPark();
 verifyEveryTrip();
 verifyGeoAndGlobalIndex();
@@ -1682,6 +1968,12 @@ verifyLiveTrip();
 verifyDetectionQuality();
 verifyCoverage();
 verifyRendererChoice();
+verifyReconTarget();
+verifySplatRescue();
+verifyISO6709();
+verifyWalkProvenance();
+verifyTypedPlace();
+verifyKnownPlaces();
 
 console.log(
   failures === 0

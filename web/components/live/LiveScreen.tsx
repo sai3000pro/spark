@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 
 import { LiveTripProvider, useLiveTrip } from "@/components/shell/LiveTripProvider";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
+import { PendingReconstructions } from "@/components/live/PendingReconstructions";
 import { VideoWalkPanel } from "@/components/live/VideoWalkPanel";
 import type { ActiveTripSnapshot } from "@/lib/liveTrip";
 
@@ -49,6 +50,12 @@ export function LiveScreen({ initial }: { initial: ActiveTripSnapshot | null }) 
       <PhoneHandoffSection />
 
       <VideoWalkPanel />
+
+      {/* Renders itself away when nothing is outstanding. Its other job is to
+          be somewhere the KIRI collector can run: a reconstruction is only
+          polled by a read of /api/splat/jobs/<id>, so a clip nobody is looking
+          at is a clip whose splat never lands. */}
+      <PendingReconstructions />
     </LiveTripProvider>
   );
 }
@@ -192,7 +199,10 @@ function PhoneHandoffSection() {
 function KiriKeyField() {
   const [key, setKey] = useState("");
   const [state, setState] = useState<
-    { k: "idle" } | { k: "saving" } | { k: "saved"; tail: string; credits: number | null } | { k: "error"; why: string }
+    | { k: "idle" }
+    | { k: "saving" }
+    | { k: "saved"; tail: string; credits: number | null; source: "env" | "pasted" | null }
+    | { k: "error"; why: string }
   >({ k: "idle" });
 
   useEffect(() => {
@@ -201,9 +211,19 @@ function KiriKeyField() {
       try {
         const res = await fetch("/api/reconstruction/key", { cache: "no-store" });
         if (!alive || !res.ok) return;
-        const body = (await res.json()) as { present: boolean; tail: string | null; credits: number | null };
+        const body = (await res.json()) as {
+          present: boolean;
+          tail: string | null;
+          credits: number | null;
+          source?: "env" | "pasted" | null;
+        };
         if (alive && body.present && body.tail) {
-          setState({ k: "saved", tail: body.tail, credits: body.credits });
+          setState({
+            k: "saved",
+            tail: body.tail,
+            credits: body.credits,
+            source: body.source ?? null,
+          });
         }
       } catch {
         // No key configured is the normal case, not an error to announce.
@@ -232,7 +252,12 @@ function KiriKeyField() {
       // Out of the field the instant it is stored, so it is not sitting in a
       // form that a screenshot or an autofill dump would pick up.
       setKey("");
-      setState({ k: "saved", tail: body.tail ?? "····", credits: body.credits ?? null });
+      setState({
+        k: "saved",
+        tail: body.tail ?? "····",
+        credits: body.credits ?? null,
+        source: "pasted",
+      });
     } catch {
       setState({ k: "error", why: "Could not reach the server." });
     }
@@ -247,13 +272,17 @@ function KiriKeyField() {
     return (
       <p className="fnote mt-4 flex flex-wrap items-center gap-2 text-[10px] text-ink-faint">
         [ kiri key ····{state.tail}
-        {state.credits !== null ? ` · ${state.credits} credits` : ""} ]
+        {state.credits !== null ? ` · ${state.credits} credits` : ""}
+        {/* Where it came from changes what the button beside this can promise.
+            An env key is the machine's, not the session's — see the note in
+            lib/reconstruction/keys.ts. */}
+        {state.source === "env" ? " · from .env" : ""} ]
         <button
           type="button"
           onClick={() => void forget()}
           className="underline underline-offset-2 transition-colors hover:text-ink"
         >
-          forget it
+          {state.source === "env" ? "ignore it until restart" : "forget it"}
         </button>
       </p>
     );

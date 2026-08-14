@@ -35,6 +35,9 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { SaveToAlbum } from "@/components/album/SaveToAlbum";
+import { SetPlace } from "@/components/live/SetPlace";
+import { ReconstructionWatch } from "@/components/live/ReconstructionWatch";
+import { TryAnyway } from "@/components/live/TryAnyway";
 import { DETECTOR_MODELS } from "@/lib/detector";
 import { WHISPER_APPROX_MB } from "@/lib/audio/transcribe";
 import {
@@ -128,6 +131,15 @@ export function CapturedWalk({
           [ {walk.detections.toLocaleString()} detections · {walk.candidates} candidates ·{" "}
           {walk.discarded} discarded ]
         </p>
+        {/* The scorer's reason, not just the count. "1 discarded" is the one
+            number that tells you nothing about what to do next; the sentence
+            behind it separates "too short to reconstruct" from "scored under
+            the bar", which want different footage and a different knob. */}
+        {walk.discardReasons.map((r) => (
+          <p key={r} className="fnote text-[9.5px] leading-relaxed text-ink-faint">
+            [ why · {r} ]
+          </p>
+        ))}
         {walk.moments > 0 && (
           <Link
             href={walk.href}
@@ -139,6 +151,31 @@ export function CapturedWalk({
         {/* Only worth filing if something came of it. An empty walk in an album
             is a promise the album cannot keep. */}
         {walk.moments > 0 && <SaveToAlbum journeyId={walk.tripId} />}
+
+        {/* The clip's own metadata is the better source and is often empty —
+            location services off, or stripped in sharing. This is the fallback
+            that is still true: somebody who was there, saying so. */}
+        <SetPlace tripId={walk.tripId} />
+
+        {/* The phone's clip already has a job, and the destination picker may
+            have dispatched it at upload time — so watch it regardless of
+            whether the button below is ever pressed. */}
+        <ReconstructionWatch jobId={jobId} href={walk.href} />
+
+        {/* The clip is already on this server — the phone wrote it to
+            .uploads/<jobId> before the walk was ever built — so this sends
+            bytes that are sitting here rather than asking for the video again.
+            Offered whatever the scorer decided: a walk with no promoted moment
+            is exactly the case where "no minute stood out" gets mistaken for
+            "not worth reconstructing", and they are different claims. */}
+        <TryAnyway
+          resolveJobId={async () => jobId}
+          prompt={
+            walk.moments > 0
+              ? "reconstruct this place too"
+              : "the scorer kept nothing · build the place anyway"
+          }
+        />
       </div>
     );
   }
