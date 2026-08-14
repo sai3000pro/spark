@@ -21,6 +21,9 @@
  * Runs under tsx, NOT under Next. Nothing reachable from here may import next/*
  * or server-only — see the header of lib/pipeline.ts.
  */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import { buildTrip, type TripSpec } from "../lib/mock/buildTrip";
 import { dropContained, fuseBoxes, type Box, type ScoredBox } from "../lib/detect/boxes";
 import { assignTracks } from "../lib/detect/track";
@@ -76,12 +79,14 @@ import { KNOWN_PLACES, findKnownPlace } from "../lib/geo/knownPlaces";
 import { DEFAULT_RECON_TARGET, isKnownTarget } from "../lib/reconstruction/preference";
 import {
   RECON_TARGETS,
+  describeTargets,
   fallbackFor,
+  type StudioProbe,
   type TargetOption,
 } from "../lib/reconstruction/targets";
 import { PointTracker, toGray } from "../lib/tracking";
 import { intrinsicsFor, transformFromRotation } from "../lib/liveRecon";
-import { budgetFor, REFERENCE_SCORE, tierFor } from "../lib/gpu";
+import { budgetFor, REFERENCE_SCORE, tierFor, type GpuTier } from "../lib/gpu";
 import {
   audioEventsFrom,
   cleanSegments,
@@ -99,6 +104,14 @@ import {
   listAlbums,
   MAX_TITLE,
 } from "../lib/albums";
+import { choose, rank, summarise } from "../lib/storage/placement";
+import {
+  NoCapacityError,
+  type ProviderCapacity,
+  type StorageClass,
+  type StorageProvider,
+  type StorageProviderId,
+} from "../lib/storage/provider";
 
 let failures = 0;
 
@@ -1960,6 +1973,562 @@ function verifyKnownPlaces() {
     KNOWN_PLACES.every((p) => parseCoordinates(p.label) === null));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The reconstruction MENU, as opposed to the stored preference
+//
+// verifyReconTarget above checks what happens to a target once one has been
+// chosen. This checks the list someone chooses FROM, and it exists because
+// lib/reconstruction/targets.ts opens by promising something it is the only
+// thing enforcing: "NOTHING IS OFFERED THAT IS NOT REACHABLE."
+//
+// That promise was broken once already, in the most expensive way available. The
+// "browser" option used to be gated on the GPU probe alone — so on exactly the
+// good machines it appeared enabled, accepted the clip, and the dispatcher
+// answered "Saved. Reconstruction runs in your browser" for work that would
+// never start, because no in-browser trainer is shipped. Nothing anywhere would
+// ever have contradicted that message. BROWSER_TRAINER_AVAILABLE is the constant
+// that now stands between the menu and that outcome, and a constant is exactly
+// the kind of thing a later refactor deletes as redundant.
+//
+// So the invariants here are swept over every input combination that can be
+// constructed rather than spot-checked: describeTargets is pure, its inputs are
+// four small enumerable sets, and 168 menus is cheap.
+//
+// WHAT CANNOT BE CHECKED HERE: whether a studio that reports `reachable` really
+// answers, or whether a KIRI key really has credits. Both need a network, so
+// probeStudio() is deliberately not called — this asserts the menu is honest
+// ABOUT ITS INPUTS, which is the half that is pure logic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function verifyReconTargetMenu() {
+  heading("The reconstruction menu");
+
+  const studios: StudioProbe[] = [
+    { reachable: false, live: false },
+    { reachable: true, live: false },
+    { reachable: true, live: true },
+    // Not a shape probeStudio() can return. Included because describeTargets is
+    // handed this object by callers and must not depend on that guarantee.
+    { reachable: false, live: true },
+  ];
+  const gpus: Array<{ tier: GpuTier; blockedBecause: string | null } | null> = [
+    null,
+    { tier: "none", blockedBecause: "This browser has no WebGPU." },
+    { tier: "none", blockedBecause: null },
+    { tier: "weak", blockedBecause: null },
+    { tier: "modest", blockedBecause: null },
+    { tier: "strong", blockedBecause: null },
+  ];
+  const REJECTED = "KIRI did not accept that key.";
+  const kiris = [
+    { hasKiriKey: false, kiriCredits: null, kiriRejected: null },
+    { hasKiriKey: false, kiriCredits: 5, kiriRejected: REJECTED },
+    { hasKiriKey: true, kiriCredits: null, kiriRejected: null },
+    { hasKiriKey: true, kiriCredits: 0, kiriRejected: null },
+    { hasKiriKey: true, kiriCredits: 5, kiriRejected: null },
+    { hasKiriKey: true, kiriCredits: 5, kiriRejected: REJECTED },
+    { hasKiriKey: true, kiriCredits: 0, kiriRejected: REJECTED },
+  ];
+
+  const menus: TargetOption[][] = [];
+  for (const studio of studios) {
+    for (const gpu of gpus) {
+      for (const kiri of kiris) menus.push(describeTargets({ studio, gpu, ...kiri }));
+    }
+  }
+  const browserOptions = menus.map((m) => m.find((o) => o.id === "browser")!);
+
+  section("The menu is the same shape whatever the machine");
+  check("every combination is covered", menus.length === 4 * 6 * 7, `${menus.length} menus`);
+  check("every menu lists every shipped target, in order",
+    menus.every((m) =>
+      m.length === RECON_TARGETS.length && m.every((o, i) => o.id === RECON_TARGETS[i])));
+  check("every option is labelled and described, including the ones that are off",
+    menus.every((m) => m.every((o) => o.label.trim().length > 0 && o.detail.trim().length > 0)));
+
+  section("Nothing is offered that is not reachable");
+  // THE one that matters. There is no trainer in this repo; an enabled "browser"
+  // option accepts a clip and silently never trains it.
+  check("the browser target is never offered, on any GPU, on any machine",
+    browserOptions.every((o) => o.available === false),
+    `${browserOptions.filter((o) => o.available).length} of ${browserOptions.length} offered it`);
+  // Stated as its own claim because this is the exact gate that regressed: the
+  // probe answering yes is not the same fact as an engine existing, and the
+  // machines the probe passes are precisely the ones that used to be lied to.
+  const capableMenus = (["weak", "modest", "strong"] as GpuTier[]).flatMap((tier) =>
+    studios.map((studio) =>
+      describeTargets({ studio, hasKiriKey: true, kiriCredits: 5, gpu: { tier, blockedBecause: null } })));
+  check("a GPU that passes the probe still does not unlock it",
+    capableMenus.length === 12 &&
+      capableMenus.every((m) => m.find((o) => o.id === "browser")?.available === false),
+    `${capableMenus.length} capable machines`);
+  check("and it is still listed, greyed, rather than quietly dropped",
+    menus.every((m) => m.some((o) => o.id === "browser")));
+
+  section("Every closed door says why");
+  // The header's promise, restated as an assertion: greyed out is acceptable,
+  // greyed out with no reason is not — it is indistinguishable from a bug.
+  const unexplained = menus
+    .flatMap((m) => m)
+    .filter((o) => !o.available && (o.blockedBecause ?? "").trim().length === 0);
+  check("every unavailable option carries a non-empty reason",
+    unexplained.length === 0,
+    unexplained.map((o) => o.id).join(", "));
+  // The other direction, which keeps a stale reason from being shown next to a
+  // working option — "no studio running" under a button that dispatches fine.
+  const contradictory = menus.flatMap((m) => m).filter((o) => o.available && o.blockedBecause !== null);
+  check("and no available option carries a leftover one",
+    contradictory.length === 0,
+    contradictory.map((o) => o.id).join(", "));
+
+  section("Whose fault the browser option is");
+  const noGpu = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+    gpu: null,
+  })[0];
+  // The server has no GPU and is not the machine that would train, so "still
+  // checking" would be a lie it can never resolve.
+  check("a machine that cannot answer the GPU question is told where the option lives",
+    /laptop/i.test(noGpu.blockedBecause ?? ""), noGpu.blockedBecause ?? "null");
+
+  const weakMachine = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+    gpu: { tier: "none", blockedBecause: "WebGPU is disabled in this browser." },
+  })[0];
+  check("a machine that genuinely cannot do it gets its own words back",
+    weakMachine.blockedBecause === "WebGPU is disabled in this browser.",
+    weakMachine.blockedBecause ?? "null");
+  const silentMachine = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+    gpu: { tier: "none", blockedBecause: null },
+  })[0];
+  check("and a machine that failed without saying why still gets a reason",
+    (silentMachine.blockedBecause ?? "").trim().length > 0);
+
+  const capable = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+    gpu: { tier: "strong", blockedBecause: null },
+  })[0];
+  check("a capable machine is not blamed for our missing engine",
+    /engine/i.test(capable.blockedBecause ?? ""), capable.blockedBecause ?? "null");
+  check("and is pointed at the two destinations that do exist",
+    /studio/i.test(capable.blockedBecause ?? "") && /KIRI/.test(capable.blockedBecause ?? ""));
+  check("the good machine and the hopeless one are not told the same thing",
+    capable.blockedBecause !== weakMachine.blockedBecause);
+
+  section("The two studio doors are told apart");
+  const oldStudio = describeTargets({
+    studio: { reachable: true, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+  });
+  check("a studio with no live endpoint blocks live and allows batch",
+    oldStudio[1].available === false && oldStudio[2].available === true);
+  check("and blames the build rather than the network",
+    /build|endpoint/i.test(oldStudio[1].blockedBecause ?? ""),
+    oldStudio[1].blockedBecause ?? "null");
+
+  section("A bad key and an empty one are different problems");
+  const rejected = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: true,
+    kiriCredits: 0,
+    kiriRejected: REJECTED,
+  })[3];
+  // Reporting "no credits left" for a typo in .env sends someone to a billing
+  // page over a config error, so the rejection wins and is repeated verbatim.
+  check("a rejected key is reported as a rejected key, not an empty wallet",
+    rejected.blockedBecause === REJECTED, rejected.blockedBecause ?? "null");
+  const noKey = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: 5,
+    kiriRejected: REJECTED,
+  })[3];
+  check("and having no key at all outranks both", /No KIRI key/i.test(noKey.blockedBecause ?? ""),
+    noKey.blockedBecause ?? "null");
+
+  section("Falling back out of a menu the machine actually produced");
+  // verifyReconTarget covers fallbackFor against hand-built options. This runs
+  // it against every menu describeTargets can really emit, which is the input it
+  // gets in production.
+  const bad: string[] = [];
+  for (const menu of menus) {
+    for (const wanted of RECON_TARGETS) {
+      const got = fallbackFor(wanted, menu);
+      if (got === null) continue;
+      if (!menu.find((o) => o.id === got)?.available) bad.push(`${wanted}→${got}`);
+    }
+  }
+  check("a fallback is never a destination the same menu calls unavailable",
+    bad.length === 0, bad.slice(0, 5).join(", "));
+  check("and is therefore never the browser",
+    menus.every((m) => RECON_TARGETS.every((t) => fallbackFor(t, m) !== "browser")));
+
+  // The whole reason "browser" degrades to the studio rather than to KIRI: the
+  // user asked for their own machine, and a credit they did not choose to spend
+  // is not a graceful degradation.
+  const studioUpKiriUp = describeTargets({
+    studio: { reachable: true, live: true },
+    hasKiriKey: true,
+    kiriCredits: 5,
+  });
+  check("a browser ask degrades to the local studio, not the cloud",
+    fallbackFor("browser", studioUpKiriUp) === "studio-batch");
+  const onlyCloud = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: true,
+    kiriCredits: 5,
+  });
+  check("and when there is no studio it degrades to nothing rather than to a credit",
+    fallbackFor("browser", onlyCloud) === null);
+  check("while an explicit KIRI ask is still honoured",
+    fallbackFor("kiri", onlyCloud) === "kiri");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The storage fleet — B2, placement, and the enum that has to know about it
+//
+// Three separate things are asserted here and only the middle one is obvious.
+//
+//   1. B2 REPORTS ITSELF HONESTLY. lib/storage/providers/backblaze.ts is new and
+//      had no assertions at all. Two of its decisions are load-bearing and both
+//      are invisible at the call site: `freeEgress: false`, which is what keeps
+//      a hot SPZ off a metered tier, and the quota fallback, which must never
+//      resolve to 0 (refuses every write) or NaN (every comparison in
+//      placement.ts silently becomes false, so the provider vanishes).
+//
+//   2. PLACEMENT PUTS COLD BYTES ON THE METERED TIER. That inversion is the
+//      whole reason B2 buys capacity rather than just adding a name.
+//
+//   3. THE APP STILL RUNS WITH ONLY KIRI_API_KEY SET. Every provider is
+//      registered unconditionally (see createFleet), so an unconfigured one is
+//      inert rather than absent — and "inert" is a claim about placement, not
+//      about the constructor. It is asserted against the real provider object.
+//
+// WHAT CANNOT BE CHECKED HERE: anything that writes a byte. put/get/head/delete
+// and the presigner all need real B2 credentials and a network, so none of them
+// is touched. `capacity()` is the only method that answers from the environment
+// alone, which is exactly why it is the one worth asserting DOM-free.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type BackblazeModule = typeof import("../lib/storage/providers/backblaze");
+
+/**
+ * Load the B2 adapter, which begins with `import "server-only"`.
+ *
+ * That package resolves to an empty module under the `react-server` condition
+ * and to one that throws on sight under every other, which is precisely its job:
+ * it is a tripwire for importing server code into a client bundle. tsx sets no
+ * such condition, so the import would abort this whole script.
+ *
+ * Seeding an empty module into the require cache under the same resolved path is
+ * what Next does by resolution rather than by force, and it is scoped to this
+ * one marker package — nothing else about the module graph is touched, and the
+ * adapter itself is the real, unmodified one. If this ever stops working (tsx
+ * moving .ts to the ESM loader would do it) the checks below fail loudly instead
+ * of quietly passing; see the catch.
+ */
+function loadBackblaze(): BackblazeModule {
+  const marker = require.resolve("server-only");
+  require.cache[marker] ??= {
+    id: marker,
+    path: marker,
+    filename: marker,
+    loaded: true,
+    exports: {},
+    children: [],
+    paths: [],
+  } as unknown as NonNullable<(typeof require.cache)[string]>;
+  // Deliberately require() rather than import: an ES import is hoisted above the
+  // cache seeding above, which would defeat the whole point of it.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("../lib/storage/providers/backblaze") as BackblazeModule;
+}
+
+/**
+ * Run `fn` with these environment variables forced, then put the environment
+ * back exactly as it was. Sequential by construction — B2's config is read from
+ * process.env on every call, so two of these in flight at once would read each
+ * other's values.
+ */
+async function withEnv<T>(
+  vars: Record<string, string | undefined>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const before: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    before[k] = process.env[k];
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [k, v] of Object.entries(before)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+async function verifyStorageFleet(): Promise<void> {
+  heading("Storage — where the bytes land");
+
+  const GB = 1024 * 1024 * 1024;
+  const B2_FREE_TIER = 10 * GB;
+  const SPZ = 8 * 1024 * 1024;
+  const PLY = 144 * 1024 * 1024;
+  const SOURCE_VIDEO = 300 * 1024 * 1024;
+
+  /** rank/choose/summarise read nothing off a provider but `.id`. */
+  const provider = (id: StorageProviderId) => ({ id }) as unknown as StorageProvider;
+  const cap = (
+    quotaBytes: number | null,
+    usedBytes: number,
+    freeEgress: boolean,
+    available = true,
+  ): ProviderCapacity => ({ quotaBytes, usedBytes, freeEgress, available });
+  const entry = (id: StorageProviderId, capacity: ProviderCapacity) => ({
+    provider: provider(id),
+    capacity,
+  });
+  const ids = (decisions: ReturnType<typeof rank>) => decisions.map((d) => d.provider.id);
+
+  let b2mod: BackblazeModule | null = null;
+  try {
+    b2mod = loadBackblaze();
+  } catch (err) {
+    check("the B2 adapter can be loaded outside Next", false, String(err));
+  }
+
+  if (b2mod) {
+    // Nothing below writes, so a ledger that reports an empty account is enough
+    // and never touches a database.
+    const ledger: Parameters<BackblazeModule["createBackblazeProvider"]>[0] = {
+      usedBytes: async () => 0,
+      record: async () => {},
+      forget: async () => {},
+    };
+    const b2 = b2mod.createBackblazeProvider(ledger);
+    const UNSET = {
+      B2_KEY_ID: undefined,
+      B2_APPLICATION_KEY: undefined,
+      B2_REGION: undefined,
+      B2_QUOTA_BYTES: undefined,
+    };
+    const CONFIGURED = {
+      B2_KEY_ID: "0026abcdef0000000000000",
+      B2_APPLICATION_KEY: "K002notarealsecretatall",
+      B2_REGION: "us-west-004",
+    };
+
+    section("Backblaze B2 reports itself honestly");
+    const bare = await withEnv(UNSET, () => b2.capacity());
+    check("with nothing configured, B2 stands itself down", bare.available === false);
+    check("and names the variables an operator would have to set",
+      (bare.unavailableReason ?? "").includes("B2_KEY_ID"), bare.unavailableReason ?? "none");
+    // Metered whether it is on or off. Reporting true here is the one mistake
+    // placement.ts exists to prevent — see point 2 of the adapter's header.
+    check("egress is metered, configured or not", bare.freeEgress === false);
+    check("the free tier it plans around is ten gigabytes",
+      bare.quotaBytes === B2_FREE_TIER, String(bare.quotaBytes));
+
+    const noRegion = await withEnv(
+      { ...UNSET, B2_KEY_ID: CONFIGURED.B2_KEY_ID, B2_APPLICATION_KEY: CONFIGURED.B2_APPLICATION_KEY },
+      () => b2.capacity(),
+    );
+    // The region is in the hostname AND in the SigV4 credential scope, so there
+    // is no cluster it could defensibly guess.
+    check("a missing region alone is enough to stand it down", noRegion.available === false);
+
+    const up = await withEnv({ ...UNSET, ...CONFIGURED }, () => b2.capacity());
+    check("fully configured, it is available and stops explaining itself",
+      up.available === true && up.unavailableReason === undefined);
+    check("and still says its egress is metered", up.freeEgress === false);
+
+    section("A malformed quota must not take the provider out");
+    // Each of these is something a real .env has contained. `Number()` turns the
+    // first four into NaN or a non-positive number, and either one would be a
+    // silent outage: 0 refuses every write, NaN makes usedBytes + bytes <= quota
+    // false forever, so placement drops B2 without ever saying why.
+    const junk = ["banana", "10GB", "NaN", " ", "0", "-1", "1e400"];
+    const parsed: Array<{ raw: string; quotaBytes: number | null }> = [];
+    for (const raw of junk) {
+      const c = await withEnv({ ...UNSET, ...CONFIGURED, B2_QUOTA_BYTES: raw }, () => b2.capacity());
+      parsed.push({ raw, quotaBytes: c.quotaBytes });
+    }
+    check("a malformed quota falls back rather than refusing every write",
+      parsed.every((p) => p.quotaBytes === B2_FREE_TIER),
+      parsed.filter((p) => p.quotaBytes !== B2_FREE_TIER).map((p) => `${p.raw}→${p.quotaBytes}`).join(", "));
+    check("it never becomes NaN, which would poison every comparison in placement",
+      parsed.every((p) => p.quotaBytes !== null && Number.isFinite(p.quotaBytes)));
+    check("and never becomes zero, which would refuse every write",
+      parsed.every((p) => (p.quotaBytes ?? 0) > 0));
+    // The fallback would be worthless if it swallowed good values too: a paid B2
+    // account has no 10 GB ceiling and pretending it does refuses real writes.
+    const paid = await withEnv(
+      { ...UNSET, ...CONFIGURED, B2_QUOTA_BYTES: String(50 * GB) },
+      () => b2.capacity(),
+    );
+    check("a real override is still honoured", paid.quotaBytes === 50 * GB, String(paid.quotaBytes));
+
+    section("One storage tier, two buckets");
+    // B2 has no Glacier equivalent, so hot and cold share a bucket and the split
+    // that matters is made by placement. Source media is separate because it is
+    // deleted by a lifecycle rule.
+    check("delivery and archive share a bucket", b2.bucketFor("delivery") === b2.bucketFor("archive"));
+    check("source media does not sit in it", b2.bucketFor("ephemeral") !== b2.bucketFor("archive"));
+    check("every storage class resolves to a real bucket name",
+      (["delivery", "archive", "ephemeral"] as StorageClass[]).every(
+        (c) => b2.bucketFor(c).trim().length > 0));
+
+    section("The demo machine, where only KIRI_API_KEY is set");
+    // The invariant the whole app's runnability rests on: an unconfigured
+    // provider is registered, inert, and visible — never a write destination.
+    const demo = [
+      entry("r2", cap(10 * GB, 0, true)),
+      { provider: provider("b2"), capacity: bare },
+      entry("supabase", cap(1 * GB, 0, false)),
+    ];
+    check("an unconfigured provider is never ranked, for any storage class",
+      (["delivery", "archive", "ephemeral"] as StorageClass[]).every(
+        (c) => !ids(rank(c, demo, SPZ)).includes("b2")));
+    check("hot bytes still land on free egress", choose("delivery", demo, SPZ).provider.id === "r2");
+    check("and cold ones on the metered tier that IS configured",
+      choose("archive", demo, PLY).provider.id === "supabase");
+    check("it still appears in the fleet report, so /settings can offer to switch it on",
+      summarise(demo).byProvider.some((p) => p.id === "b2" && !p.capacity.available));
+    check("but contributes no capacity while it is off",
+      summarise(demo).totalQuotaBytes === 11 * GB, String(summarise(demo).totalQuotaBytes));
+  }
+
+  section("Where a cold master goes once B2 is on");
+  const fleet = [
+    entry("r2", cap(10 * GB, 0, true)),
+    entry("b2", cap(10 * GB, 0, false)),
+    entry("supabase", cap(1 * GB, 0, false)),
+  ];
+  const coldOrder = ids(rank("archive", fleet, PLY));
+  check("a PLY master goes to the metered tier first",
+    choose("archive", fleet, PLY).provider.id === "b2", coldOrder.join(" → "));
+  // Nothing in placement.ts names B2 or Supabase. This ordering falls out of
+  // ranking on headroom within a tier — 10 GB against 1 — which is the whole
+  // reason adding B2 required no placement rule.
+  check("and B2 outranks Supabase there on headroom alone",
+    coldOrder.slice(0, 2).join(",") === "b2,supabase", coldOrder.join(" → "));
+  check("free-egress space is kept for the hot bytes", coldOrder[2] === "r2");
+  check("which is not a degradation — cold bytes belong there",
+    choose("archive", fleet, PLY).degraded === false);
+  check("a delivery SPZ still goes to free egress",
+    choose("delivery", fleet, SPZ).provider.id === "r2");
+  check("and so does a source video", choose("ephemeral", fleet, SOURCE_VIDEO).provider.id === "r2");
+
+  section("What happens when R2 fills");
+  const r2Full = [
+    entry("r2", cap(10 * GB, 10 * GB, true)),
+    entry("b2", cap(10 * GB, 0, false)),
+    entry("supabase", cap(1 * GB, 0, false)),
+  ];
+  const spill = choose("delivery", r2Full, SPZ);
+  check("a hot object spills to B2 rather than to the 1 GB tier", spill.provider.id === "b2");
+  check("and the spill is flagged rather than hidden", spill.degraded === true);
+  check("and says so in words worth logging", /WARNING/.test(spill.reason), spill.reason);
+
+  section("Nothing is ever filled to its stated limit");
+  // HEADROOM_RESERVE absorbs ledger drift. Going over on a free tier does not
+  // queue — it errors — so the reserve is a correctness margin, not politeness.
+  const solo = [entry("b2", cap(10 * GB, 0, false))];
+  check("an object the exact size of the quota is refused", rank("archive", solo, 10 * GB).length === 0);
+  check("but nine tenths of it is accepted", rank("archive", solo, 9 * GB).length === 1);
+
+  const full = [
+    entry("r2", cap(10 * GB, 10 * GB, true)),
+    entry("b2", cap(10 * GB, 10 * GB, false)),
+    entry("supabase", cap(1 * GB, 1 * GB, false)),
+  ];
+  let refusal: unknown = null;
+  try {
+    choose("archive", full, PLY);
+  } catch (err) {
+    refusal = err;
+  }
+  check("a full fleet refuses by name rather than picking anyway",
+    refusal instanceof NoCapacityError &&
+      ["r2", "b2", "supabase"].every((id) => String(refusal).includes(id)),
+    String(refusal));
+
+  section("What the fleet tells a user before they wait through an upload");
+  const two = [entry("r2", cap(1 * GB, 0, true)), entry("b2", cap(1 * GB, 0, false))];
+  const report = summarise(two);
+  // One object goes to ONE provider, so 900 MB free on each of two does not
+  // accept a 1.5 GB file. Summing would tell someone to start an upload that
+  // cannot finish.
+  check("the largest acceptable object is the biggest single remainder, not the sum",
+    Math.abs(report.largestAcceptableBytes - 0.9 * GB) < 1,
+    `${(report.largestAcceptableBytes / GB).toFixed(2)} GB`);
+  check("and an object that big is genuinely placeable",
+    rank("archive", two, Math.floor(report.largestAcceptableBytes)).length > 0);
+  check("while one byte more is not",
+    rank("archive", two, Math.ceil(report.largestAcceptableBytes) + 1).length === 0);
+  check("an empty fleet accepts nothing rather than everything",
+    summarise([]).largestAcceptableBytes === 0);
+
+  section("The ledger enum knows every provider");
+  // A provider id with no value in the storage_provider enum is the worst shape
+  // of failure available here: put() succeeds remotely, the ledger insert is
+  // rejected, and the bytes are real, billed, and invisible to the accounting
+  // that decides where the next ones go. Parsed from the SQL because the
+  // migrations, not a TypeScript constant, are what the database will run.
+  const dir = join(__dirname, "..", "supabase", "migrations");
+  const sql = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((f) => readFileSync(join(dir, f), "utf8"))
+    // Strip line comments first — 009's header discusses 'b2' in prose, and the
+    // enum this compares against must come from statements, not from commentary.
+    .map((s) => s.replace(/--[^\n]*/g, ""))
+    .join("\n");
+
+  const declared = /create\s+type\s+public\.storage_provider\s+as\s+enum\s*\(([^)]*)\)/i.exec(sql);
+  const enumValues = new Set<string>(
+    [...(declared?.[1] ?? "").matchAll(/'([^']+)'/g)].map((m) => m[1]),
+  );
+  for (const m of sql.matchAll(
+    /alter\s+type\s+public\.storage_provider\s+add\s+value\s+(?:if\s+not\s+exists\s+)?'([^']+)'/gi,
+  )) {
+    enumValues.add(m[1]);
+  }
+
+  // Typed as a Record over the union, so adding a provider id and forgetting
+  // this list is a typecheck error rather than a check that quietly still passes.
+  const PROVIDER_IDS: Record<StorageProviderId, true> = {
+    r2: true,
+    supabase: true,
+    firebase: true,
+    b2: true,
+  };
+  const shipped = Object.keys(PROVIDER_IDS);
+
+  check("the migrations declare the enum at all", enumValues.size > 0,
+    [...enumValues].join(", "));
+  check("migration 009 added b2 to it", enumValues.has("b2"));
+  const missing = shipped.filter((id) => !enumValues.has(id));
+  check("every provider id has an enum value to be recorded under",
+    missing.length === 0, missing.join(", "));
+  const orphaned = [...enumValues].filter((v) => !shipped.includes(v));
+  check("and the enum holds no value no provider answers to",
+    orphaned.length === 0, orphaned.join(", "));
+}
+
 verifyWaterlooPark();
 verifyEveryTrip();
 verifyGeoAndGlobalIndex();
@@ -1974,10 +2543,23 @@ verifyISO6709();
 verifyWalkProvenance();
 verifyTypedPlace();
 verifyKnownPlaces();
+verifyReconTargetMenu();
 
-console.log(
-  failures === 0
-    ? "\nAll invariants hold.\n"
-    : `\n${failures} check(s) failed.\n`,
-);
-process.exit(failures === 0 ? 0 : 1);
+// The storage section is the only asynchronous one — `capacity()` returns a
+// promise — so the tally moves inside it. Printing "All invariants hold." before
+// the last check had run is the single failure mode this file cannot have, so
+// the section is awaited rather than fired and forgotten, and a throw inside it
+// is counted as a failure rather than swallowed by an unhandled rejection.
+verifyStorageFleet()
+  .catch((err) => {
+    failures++;
+    console.error(`  FAIL the storage section threw — ${String(err)}`);
+  })
+  .then(() => {
+    console.log(
+      failures === 0
+        ? "\nAll invariants hold.\n"
+        : `\n${failures} check(s) failed.\n`,
+    );
+    process.exit(failures === 0 ? 0 : 1);
+  });
