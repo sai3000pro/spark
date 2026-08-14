@@ -10,7 +10,7 @@
  * a redirect.
  */
 import { AtlasApp } from "@/components/atlas/AtlasApp";
-import { getGlobeView } from "@/lib/globeData";
+import { getGlobeScopes } from "@/lib/globeData";
 import { isWalkMine, isWalkPosted } from "@/lib/postedWalks";
 import { getAtlasView } from "@/lib/tripData";
 
@@ -34,7 +34,9 @@ export function AtlasScreen({ tripId, momentId, anchor }: Props) {
       // the new walk instead of remounting onto it.
       key={view.trip.id}
       {...view}
-      globe={getGlobeView()}
+      // All three spheres, not one: the scope toggle in the plate is a change
+      // of mind, and re-rendering the server for it would make it a page load.
+      globe={getGlobeScopes()}
       mine={isWalkMine(view.trip.id)}
       posted={isWalkPosted(view.trip.id)}
       initialMomentId={momentId ?? null}

@@ -33,7 +33,7 @@ import {
 import { distance, duration, shortDate } from "@/lib/format";
 import { formatGeo, geoToVec3 } from "@/lib/globe/geo";
 import { inkForMoment, type MomentInk } from "@/lib/theme";
-import type { GlobePin, GlobeView } from "@/lib/globeData";
+import type { GlobePin, GlobeScope, GlobeScopes } from "@/lib/globeData";
 
 /** Idle spin resumes this long after the user lets go of the sphere. */
 const AUTOROTATE_RESUME_MS = 4000;
@@ -41,10 +41,57 @@ const AUTOROTATE_RESUME_MS = 4000;
 /** How long the paper wash takes to cover the dive before the landing fires. */
 const WASH_MS = 420;
 
+/**
+ * The toggle, and the honest sentence for a scope that has nothing in it.
+ *
+ * A scope with no walks is offered DISABLED with its reason rather than
+ * silently swapped for a neighbouring set — an empty Earth that says why is
+ * worth more than a full one showing the wrong thing.
+ */
+const SCOPES: {
+  key: GlobeScope;
+  label: string;
+  caption: string;
+  whenEmpty: string;
+}[] = [
+  {
+    key: "world",
+    label: "world",
+    caption: "every banner is a walk somebody posted",
+    whenEmpty: "nothing has been posted to the sphere",
+  },
+  {
+    key: "mine",
+    label: "mine",
+    caption: "your walks · posted or not",
+    whenEmpty: "no walk here is yours yet",
+  },
+  {
+    key: "posted",
+    label: "posted",
+    caption: "yours, out on the world's sphere",
+    whenEmpty: "you haven't put a walk on the globe yet",
+  },
+];
+
+/** Where the walk beneath the plate stands on the world's sphere. */
+interface Standing {
+  /** Yours to post at all. Someone else's walk is here because THEY put it here. */
+  mine: boolean;
+  posted: boolean;
+  busy: boolean;
+  error: string | null;
+}
+
 interface Props {
-  view: GlobeView;
+  /** Every sphere the plate can show — the toggle picks between them. */
+  scopes: GlobeScopes;
+  scope: GlobeScope;
+  onScope: (scope: GlobeScope) => void;
   /** The walk open beneath the plate — its pin breathes, and clicking it just closes. */
   currentTripId: string;
+  standing: Standing;
+  onPost: (posted: boolean) => void;
   onClose: () => void;
 }
 
@@ -54,8 +101,17 @@ interface Flight {
   tripId: string;
 }
 
-export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
+export function GlobeOverlay({
+  scopes,
+  scope,
+  onScope,
+  currentTripId,
+  standing,
+  onPost,
+  onClose,
+}: Props) {
   const router = useRouter();
+  const view = scopes[scope];
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [flight, setFlight] = useState<Flight | null>(null);
   const [washing, setWashing] = useState(false);
@@ -148,6 +204,8 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
   };
 
   const activeKey = hoveredKey ?? flight?.key ?? null;
+  /** The chosen scope's own copy. SCOPES is exhaustive, so the fallback is unreachable. */
+  const here = SCOPES.find((s) => s.key === scope) ?? SCOPES[0];
 
   return (
     <div
@@ -244,26 +302,104 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
           <p className="tag tnum mt-2 text-[13px] text-ink-soft">
             {view.albums.length} walks · {countries} countries · one sphere
           </p>
-          <p className="fnote mt-1 text-[8.5px] text-ink-faint">
-            [ every banner is a kept walk ]
-          </p>
+
+          {/* ── Whose sphere ─────────────────────────────────────────────── */}
+          {/* Three sets, all of them answerable from what this machine knows.
+              A scope with nothing in it is shown disabled with its reason
+              underneath, because "there is nothing of yours out there" is an
+              answer and quietly showing everybody's instead is not. */}
+          <div
+            role="group"
+            aria-label="What the sphere shows"
+            className="mt-2.5 flex flex-wrap items-center gap-1.5"
+          >
+            {SCOPES.map((s) => {
+              const count = scopes[s.key].albums.length;
+              const chosen = s.key === scope;
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  // Mid-flight the camera is already diving into a walk;
+                  // swapping the pins out from under it lands nowhere.
+                  disabled={count === 0 || !!flight}
+                  aria-pressed={chosen}
+                  title={count === 0 ? s.whenEmpty : undefined}
+                  onClick={() => {
+                    setHoveredKey(null);
+                    onScope(s.key);
+                  }}
+                  className={
+                    chosen
+                      ? "pill-brass px-3 py-1.5 text-[12px] disabled:opacity-40"
+                      : "pill-ghost bg-vellum/70 px-3 py-1.5 text-[12px] text-ink-soft disabled:opacity-35"
+                  }
+                >
+                  {s.label}
+                  <span className="fnote tnum ml-1.5 text-[9px] opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="fnote mt-1.5 text-[8.5px] text-ink-faint">[ {here.caption} ]</p>
+          {SCOPES.filter((s) => scopes[s.key].albums.length === 0).map((s) => (
+            <p key={s.key} className="fnote mt-0.5 text-[8.5px] text-ink-faint">
+              [ {s.label} · {s.whenEmpty} ]
+            </p>
+          ))}
         </div>
 
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          className="pill-ghost rise-in pointer-events-auto bg-vellum/80 px-3.5 py-2 text-[13px] text-ink"
+        <div
+          className="rise-in pointer-events-auto flex flex-col items-end gap-2"
           style={{ "--i": 1 } as React.CSSProperties}
         >
-          Back to the map
-          <kbd
-            className="fnote rounded-[3px] px-1.5 py-0.5 text-[10px] text-ink-faint"
-            style={{ boxShadow: "var(--ring-ink)" }}
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            className="pill-ghost bg-vellum/80 px-3.5 py-2 text-[13px] text-ink"
           >
-            esc
-          </kbd>
-        </button>
+            Back to the map
+            <kbd
+              className="fnote rounded-[3px] px-1.5 py-0.5 text-[10px] text-ink-faint"
+              style={{ boxShadow: "var(--ring-ink)" }}
+            >
+              esc
+            </kbd>
+          </button>
+
+          {/* ── This walk's standing on the world's sphere ───────────────── */}
+          {/* The whole point of the flag: a walk reaches the shared globe only
+              when its owner puts it there. Someone else's walk gets the
+              sentence rather than a button that would only ever be refused. */}
+          {standing.mine ? (
+            <button
+              type="button"
+              onClick={() => onPost(!standing.posted)}
+              disabled={standing.busy}
+              className="pill-ghost bg-vellum/70 px-3 py-1.5 text-[12px] text-ink-soft disabled:opacity-40"
+            >
+              {standing.busy
+                ? standing.posted
+                  ? "Taking it off…"
+                  : "Putting it up…"
+                : standing.posted
+                  ? "Take this walk off the globe"
+                  : "Put this walk on the globe"}
+            </button>
+          ) : (
+            <p className="fnote max-w-[230px] text-right text-[8.5px] leading-relaxed text-ink-faint">
+              [ someone else&apos;s walk · it is on the globe because they put it there ]
+            </p>
+          )}
+
+          {standing.error && (
+            <p className="fnote max-w-[230px] text-right text-[8.5px] leading-relaxed text-clay">
+              [ {standing.error} ]
+            </p>
+          )}
+        </div>
       </header>
 
       {/* ── The gazetteer — the journal's index of walks ─────────────────── */}
@@ -327,6 +463,13 @@ export function GlobeOverlay({ view, currentTripId, onClose }: Props) {
                     <span className="tag tnum block truncate text-[10.5px] text-ink-faint">
                       {album.id === currentTripId && (
                         <span className="fnote mr-1 text-[8.5px] text-clay">[ here ]</span>
+                      )}
+                      {/* Only ever shows under `mine` — the other two scopes are
+                          posted walks by definition, so the flag is silent there. */}
+                      {!album.posted && (
+                        <span className="fnote mr-1 text-[8.5px] text-ink-faint">
+                          [ not posted ]
+                        </span>
                       )}
                       {album.placeLabel} · {shortDate(album.startedAt)} · {distance(album.distanceM)}
                     </span>

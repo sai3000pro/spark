@@ -8,7 +8,7 @@
 import { albumForJourney } from "./albums";
 import { haversineM } from "./globe/geo";
 import { computeTripStats } from "./pipeline";
-import { isWalkPosted } from "./postedWalks";
+import { isWalkMine, isWalkPosted } from "./postedWalks";
 import { listAllTrips, type TripThumb } from "./tripData";
 import { listUploadedWalks } from "./uploadedTrips";
 import type { GeoPoint } from "./types";
@@ -25,6 +25,14 @@ export interface GlobeAlbum {
   durationSec: number;
   distanceM: number;
   cover: TripThumb | null;
+  /**
+   * Every walk behind this album is yours. Carried per album rather than
+   * inferred on the client because "is this mine" is a server fact
+   * (lib/postedWalks.ts) and the client has no way to ask.
+   */
+  mine: boolean;
+  /** At least one of its walks has been put on the shared sphere. */
+  posted: boolean;
 }
 
 /** One or more albums sharing a point on the sphere. */
@@ -41,6 +49,23 @@ export interface GlobeView {
 }
 
 /**
+ * The three ways to look at the sphere.
+ *
+ *   world   every walk anyone has posted — the shared globe, unchanged
+ *   mine    every walk that is yours, whether or not it is out there
+ *   posted  yours AND out there — the ones you actually put on the world's globe
+ *
+ * These are the only three that can be answered from what this machine knows.
+ * A "friends" or "group" scope is a different phase: it needs the memberships in
+ * supabase/migrations/002, and there is no database provisioned, so it is not
+ * offered here at all rather than offered and quietly wrong.
+ */
+export type GlobeScope = "world" | "mine" | "posted";
+
+/** One sphere per scope, so switching is a click and not a round trip. */
+export type GlobeScopes = Record<GlobeScope, GlobeView>;
+
+/**
  * Albums closer together than this collapse into one pin.
  *
  * 220 km is roughly "same metro area at a glance": at the default camera
@@ -50,18 +75,32 @@ export interface GlobeView {
  */
 const CLUSTER_RADIUS_KM = 220;
 
-export function getGlobeView(): GlobeView {
-  // listAllTrips, not listTrips. `/globe` belongs to the aurora landing's route
-  // group and its whole point is EVERY journey placed on the Earth — the New
-  // York cluster above needs two trips to exist at all. The journal's
-  // single-trip listTrips() would put one pin on the globe and never exercise
-  // the clustering. Nothing in the journal reads getGlobeView, so this is the
-  // aurora side choosing its own source.
-  // Only what has been POSTED reaches the sphere. The seeded specs default to
-  // posted (they are the "everybody else" this plate amalgamates); an uploaded
-  // walk appears here only after its owner posts it from the map. The flag lives
-  // in lib/postedWalks.ts.
-  const albums: GlobeAlbum[] = [
+/**
+ * Which walks each scope keeps, in ONE place.
+ *
+ * Read per WALK, before albums are merged. Filtering after the merge would let
+ * an unposted walk's distance and duration into the world's totals through an
+ * album that also holds a posted one — the pin would be public and its numbers
+ * would be partly private. So each scope narrows first and groups afterwards,
+ * which is why the three spheres are built separately rather than sliced out of
+ * one list on the client.
+ */
+const KEEPS: Record<GlobeScope, (walk: GlobeAlbum) => boolean> = {
+  world: (walk) => walk.posted,
+  mine: (walk) => walk.mine,
+  posted: (walk) => walk.mine && walk.posted,
+};
+
+/**
+ * Every walk this machine could place on the Earth, before any scope narrows it.
+ *
+ * listAllTrips, not listTrips: the sphere's whole point is EVERY journey placed
+ * on the Earth — the New York cluster needs two trips to exist at all, and the
+ * journal's single-trip listTrips() would put one pin on the globe and never
+ * exercise the clustering.
+ */
+function everyWalk(): GlobeAlbum[] {
+  return [
     ...listAllTrips().map(
       (trip): GlobeAlbum => ({
         id: trip.id,
@@ -75,6 +114,8 @@ export function getGlobeView(): GlobeView {
         durationSec: trip.stats.durationSec,
         distanceM: trip.stats.distanceM,
         cover: trip.momentThumbs[0] ?? null,
+        mine: isWalkMine(trip.id),
+        posted: isWalkPosted(trip.id),
       }),
     ),
     // Uploaded walks were invisible to the globe before posting existed; now the
@@ -96,11 +137,45 @@ export function getGlobeView(): GlobeView {
         durationSec: stats.durationSec,
         distanceM: stats.distanceM,
         cover: key ? { seed: key.placeholderSeed, hue: key.hue, url: key.url } : null,
+        mine: isWalkMine(trip.id),
+        posted: isWalkPosted(trip.id),
       };
     }),
-  ].filter((album) => isWalkPosted(album.id));
+  ];
+}
 
-  const grouped = groupByAlbum(albums);
+/**
+ * The sphere as one scope sees it.
+ *
+ * Defaults to `world`, which is exactly what this returned before scopes
+ * existed: only what has been POSTED reaches the shared globe. The seeded specs
+ * default to posted (they are the "everybody else" the plate amalgamates); an
+ * uploaded walk appears there only after its owner posts it from the map. The
+ * flag lives in lib/postedWalks.ts.
+ */
+export function getGlobeView(scope: GlobeScope = "world"): GlobeView {
+  return viewOf(everyWalk(), scope);
+}
+
+/**
+ * All three spheres at once, off ONE pass over the walks.
+ *
+ * The walk screen hands the client every scope rather than re-querying on each
+ * toggle: the whole set is a few hundred bytes of titles and coordinates, and a
+ * scope switch that costs a round trip would feel like a page load for what is
+ * really a change of mind.
+ */
+export function getGlobeScopes(): GlobeScopes {
+  const walks = everyWalk();
+  return {
+    world: viewOf(walks, "world"),
+    mine: viewOf(walks, "mine"),
+    posted: viewOf(walks, "posted"),
+  };
+}
+
+function viewOf(walks: GlobeAlbum[], scope: GlobeScope): GlobeView {
+  const grouped = groupByAlbum(walks.filter(KEEPS[scope]));
 
   const pins = clusterByProximity(grouped, CLUSTER_RADIUS_KM).map((cluster) => ({
     key: cluster.items.map((a) => a.id).sort().join("+"),
@@ -132,7 +207,9 @@ function groupByAlbum(walks: GlobeAlbum[]): GlobeAlbum[] {
   for (const walk of walks) {
     const album = albumForJourney(walk.id);
     if (!album) {
-      out.push(walk);
+      // A copy, not the walk: the three scopes are grouped from one shared list
+      // and the merge below writes into whatever it is handed.
+      out.push({ ...walk });
       continue;
     }
 
@@ -147,6 +224,12 @@ function groupByAlbum(walks: GlobeAlbum[]): GlobeAlbum[] {
     existing.momentCount += walk.momentCount;
     existing.durationSec += walk.durationSec;
     existing.distanceM += walk.distanceM;
+    // An album is yours only if every walk in it is; it is on the sphere as
+    // soon as any one of them is. Both readings are the cautious one — the
+    // post toggle refuses an album holding someone else's walk, and a pin that
+    // is out there is never labelled private.
+    existing.mine &&= walk.mine;
+    existing.posted ||= walk.posted;
     // Earliest start, so the album reads as "since then" rather than as
     // whichever walk happened to be enumerated first.
     if (walk.startedAt < existing.startedAt) existing.startedAt = walk.startedAt;

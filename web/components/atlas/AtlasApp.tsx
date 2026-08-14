@@ -10,9 +10,12 @@
  * clicking a search result land inside the right splat.
  */
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Search } from "lucide-react";
 import { FieldMap } from "@/components/atlas/FieldMap";
+import { GlobeOverlay } from "@/components/atlas/GlobeOverlay";
+import { PocketGlobe } from "@/components/atlas/PocketGlobe";
 import { NavBrandSwitch } from "@/components/shell/NavBrandSwitch";
 import { DayBar } from "@/components/atlas/DayBar";
 import { FindPalette } from "@/components/find/FindPalette";
@@ -20,24 +23,33 @@ import { ReliveOverlay } from "@/components/relive/ReliveOverlay";
 import { clockTime, distance, duration, tripDate } from "@/lib/format";
 import { makeGeo } from "@/lib/geo";
 import { formatGeo } from "@/lib/globe/geo";
-import type { GlobeView } from "@/lib/globeData";
+import type { GlobeScope, GlobeScopes } from "@/lib/globeData";
 import type { AtlasView, TripView } from "@/lib/tripData";
 import type { Vec2 } from "@/lib/types";
 
 /** A 95-minute walk replays in ~48 seconds. */
 const REPLAY_SPEED = 120;
 
+/** "Client or server?" never changes after hydration, so this store never fires. */
+const NEVER_CHANGES = () => () => {};
+
 interface Props extends AtlasView {
   initialMomentId?: string | null;
   initialAnchor?: string | null;
   /**
-   * Passed by AtlasScreen for the posting work, and deliberately not consumed
-   * here yet: the toggle these three feed — a walk reaches the shared globe only
-   * when its owner puts it there — is still being built. Declared rather than
-   * dropped from the call site so that wiring survives, and left undestructured
-   * so nothing here pretends to use them.
+   * The posting three, now consumed.
+   *
+   * A walk reaches the shared globe only when its owner puts it there, and
+   * these are the three facts that sentence needs: every sphere the plate can
+   * show (`globe`), whether THIS walk is yours to post at all (`mine`), and
+   * whether it is out there right now (`posted`). The plate carries both
+   * controls — the scope toggle that chooses which sphere, and the post button
+   * that decides whether this walk is on the world's one.
+   *
+   * Optional because the props arrive only from AtlasScreen; a caller that
+   * renders the map without a globe gets a map without a door to one.
    */
-  globe?: GlobeView;
+  globe?: GlobeScopes;
   mine?: boolean;
   posted?: boolean;
 }
@@ -50,13 +62,88 @@ export function AtlasApp({
   geo,
   initialMomentId,
   initialAnchor,
+  globe,
+  mine,
+  posted,
 }: Props) {
+  const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(
     initialMomentId && moments.some((m) => m.id === initialMomentId) ? initialMomentId : null,
   );
   const [anchor, setAnchor] = useState<string | null>(initialAnchor ?? null);
   const [findOpen, setFindOpen] = useState(false);
+
+  // ── The globe plate ────────────────────────────────────────────────────
+  const [globeOpen, setGlobeOpen] = useState(false);
+  const [scope, setScope] = useState<GlobeScope>("world");
+  /**
+   * The plate's door is a WebGL instrument and `useWebGLSupport` can only
+   * answer in the browser, so the pocket globe renders nothing on the server
+   * and something on the client — a hydration mismatch if it went up in the
+   * first pass. This is false through hydration and true after, which is the
+   * same trick (and the same getServerSnapshot) paperGlobe's useReducedMotion
+   * uses to read a browser-only fact without an effect.
+   */
+  const doorReady = useSyncExternalStore(NEVER_CHANGES, () => true, () => false);
+
+  /**
+   * Posting is a server fact and the button must never get ahead of it.
+   *
+   * `posted` arrives from AtlasScreen; this holds the answer the POST came back
+   * with so the button flips the moment the server agrees, and `router.refresh()`
+   * re-renders the spheres behind it so the pin actually appears or leaves. Null
+   * until something is posted — the prop is the truth until then.
+   */
+  const [postedNow, setPostedNow] = useState<boolean | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  const isPosted = postedNow ?? !!posted;
+
+  const post = useCallback(
+    async (next: boolean) => {
+      setPosting(true);
+      setPostError(null);
+      try {
+        const res = await fetch(`/api/trips/${trip.id}/posted`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ posted: next }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          posted?: boolean;
+          error?: string;
+        };
+        if (!res.ok || typeof body.posted !== "boolean") {
+          setPostError(body.error ?? `The server said ${res.status}.`);
+          return;
+        }
+        setPostedNow(body.posted);
+        router.refresh();
+      } catch (err) {
+        setPostError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setPosting(false);
+      }
+    },
+    [router, trip.id],
+  );
+
+  /**
+   * A scope that has emptied out falls back to the world.
+   *
+   * Withdrawing your last posted walk while looking at the `posted` sphere
+   * would otherwise leave a bare Earth with no explanation. The world is never
+   * empty — the seeded specs are other people's, and you cannot unpost those.
+   */
+  const activeScope: GlobeScope =
+    globe && globe[scope].albums.length > 0 ? scope : "world";
+
+  /** The door hints at the room: the same walks the plate would open on. */
+  const doorStops = useMemo(
+    () => globe?.[activeScope].albums.map((a) => a.origin) ?? [],
+    [globe, activeScope],
+  );
 
   // ── The replay ─────────────────────────────────────────────────────────
   const [playhead, setPlayhead] = useState<number | null>(null);
@@ -191,6 +278,21 @@ export function AtlasApp({
             </Link>
           </span>
 
+          {/* The plate's other door. The pocket globe below needs a corner the
+              day bar is not already standing in, which only exists from lg up —
+              so under that width the way in is a word instead of an instrument. */}
+          {globe && (
+            <span className="lg:hidden">
+              <button
+                type="button"
+                onClick={() => setGlobeOpen(true)}
+                className="pill-ghost bg-vellum/80 px-3.5 py-2 text-[13px] text-ink"
+              >
+                The globe
+              </button>
+            </span>
+          )}
+
           <span className="hidden sm:block">
             <span
               className="chip chip-live fnote pointer-events-auto whitespace-nowrap py-2 text-[10px]"
@@ -212,6 +314,18 @@ export function AtlasApp({
           <span className="tag rounded-[6px] bg-vellum/85 px-3 py-1.5 text-[12px] text-ink-soft" style={{ boxShadow: "var(--ring-ink)" }}>
             Every pin is a kept moment — click one to step inside
           </span>
+        </div>
+      )}
+
+      {/* ── The door to the plate ────────────────────────────────────────── */}
+      {/* Bottom right, which is where GlobeOverlay's takeover grows from. Only
+          at lg: below that the day bar's 3xl plate reaches into this corner. */}
+      {globe && doorReady && !globeOpen && (
+        <div
+          className="rise-in pointer-events-none absolute bottom-5 right-5 z-20 hidden lg:block"
+          style={{ "--i": 4 } as React.CSSProperties}
+        >
+          <PocketGlobe stops={doorStops} onOpen={() => setGlobeOpen(true)} />
         </div>
       )}
 
@@ -260,6 +374,19 @@ export function AtlasApp({
             const next = openIndex + dir;
             if (next >= 0 && next < moments.length) open(moments[next].id);
           }}
+        />
+      )}
+
+      {/* ── The plate: the pocket globe, opened to a full page ───────────── */}
+      {globe && globeOpen && (
+        <GlobeOverlay
+          scopes={globe}
+          scope={activeScope}
+          onScope={setScope}
+          currentTripId={trip.id}
+          standing={{ mine: !!mine, posted: isPosted, busy: posting, error: postError }}
+          onPost={(next) => void post(next)}
+          onClose={() => setGlobeOpen(false)}
         />
       )}
 
