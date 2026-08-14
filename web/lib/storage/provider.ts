@@ -29,6 +29,7 @@
  * KNOWN CAPACITIES, as of 2026-08. Verify before relying on them; they move.
  *
  *   r2        10 GB stored · unlimited free egress · 1M class-A + 10M class-B ops
+ *   b2        10 GB stored · egress free to 3x stored bytes/month, then metered
  *   supabase   1 GB stored ·  5 GB egress/month, SHARED with API egress
  *   firebase  NOT AVAILABLE without a billing account. Since 2024-10-30 a new
  *             project cannot provision a bucket on the free Spark plan, and
@@ -41,11 +42,16 @@
  * volume. Supabase's 5 GB/month is shared with API egress, so roughly 600
  * downloads of a 8 MB SPZ would consume the entire month's budget for the whole
  * application, API calls included. It is overflow, not a peer.
+ *
+ * B2 sits between them: as much stored space as R2, but metered egress once it
+ * exceeds 3x what is stored, so it reports `freeEgress: false` and placement
+ * treats it the way it treats Supabase — cold archives first, hot bytes only
+ * when R2 is full. Ten more gigabytes of cold storage is the point of it.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 /** Providers this app knows how to address. Persisted — never renumber. */
-export type StorageProviderId = "r2" | "supabase" | "firebase";
+export type StorageProviderId = "r2" | "supabase" | "firebase" | "b2";
 
 /**
  * What an object is FOR, which is what decides where it should go.

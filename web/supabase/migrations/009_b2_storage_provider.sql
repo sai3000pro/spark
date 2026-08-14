@@ -1,0 +1,37 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 009 · Backblaze B2 joins the storage fleet
+--
+-- lib/storage/providers/backblaze.ts implements the StorageProvider interface
+-- against B2's S3-compatible API, and createFleet() registers it. Without this
+-- migration that provider can put a byte in a bucket and then fail to record it:
+-- storage_objects.provider is the enum declared in 006, createDbLedger writes the
+-- provider id straight into that column, and 'b2' is not one of its values. The
+-- write succeeds remotely and the ledger row is rejected — the worst shape of
+-- failure available here, because the bytes are then real, billed, and unknown to
+-- the accounting that decides where the next ones go.
+--
+-- WHY B2 IS WORTH A MIGRATION
+--
+--   10 GB stored, free, no card. That is ten times Supabase Storage's free tier,
+--   which is the other metered-egress option in the fleet. Egress is capped at
+--   3× stored bytes per month, so it is not a delivery tier — the CDN worker
+--   fronts R2 for anything hot. What B2 is for is COLD: finished PLYs nobody is
+--   currently looking at. A single KIRI reconstruction lands at ~144 MB, so the
+--   1 GB Supabase tier holds about seven of them and this holds seventy.
+--
+--   placement.ts ranks on headroom within a tier, so adding B2 alongside Supabase
+--   means archive-class objects go to B2 first without any rule saying so.
+--
+-- ADDITIVE ONLY. A new enum value cannot invalidate an existing row, so nothing
+-- needs backfilling and nothing already written changes meaning.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- `if not exists` so re-running the migration set on a database that already has
+-- the value is a no-op rather than an error. Postgres 12+; Supabase is well past.
+--
+-- Note for anyone extending this later: ALTER TYPE ... ADD VALUE cannot run
+-- inside a transaction block on older Postgres, so this deliberately stands alone
+-- as the first statement of its own migration rather than being appended to 006.
+-- Editing 006 in place would also have worked only for databases that had never
+-- applied it, which is not a property a migration set should rely on.
+alter type public.storage_provider add value if not exists 'b2';

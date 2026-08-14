@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createDbLedger, createMemoryLedger, type UsageLedger } from "./ledger";
 import { choose, rank, summarise, type FleetCapacity } from "./placement";
+import { createBackblazeProvider } from "./providers/backblaze";
 import { createR2Provider } from "./providers/r2";
 import { createSupabaseStorageProvider } from "./providers/supabaseStorage";
 import {
@@ -66,7 +67,18 @@ export interface Fleet {
  */
 export function createFleet(db?: SupabaseClient): Fleet {
   const ledger: UsageLedger = db ? createDbLedger(db) : createMemoryLedger();
-  const providers = [createR2Provider(ledger), createSupabaseStorageProvider(ledger)];
+  // Every provider is registered unconditionally, configured or not. Each one
+  // reports its own availability through `capacity()`, and placement filters on
+  // that — so an unconfigured provider is inert rather than absent, and
+  // /settings/storage can say "B2: not configured" instead of silently omitting
+  // capacity the operator could switch on in a minute. This is also why none of
+  // the constructors may read credentials eagerly: with only KIRI_API_KEY set,
+  // building the fleet must still succeed.
+  const providers = [
+    createR2Provider(ledger),
+    createBackblazeProvider(ledger),
+    createSupabaseStorageProvider(ledger),
+  ];
   const byId = new Map(providers.map((p) => [p.id, p]));
 
   const entries = async () =>
