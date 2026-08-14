@@ -13,6 +13,8 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 
+import { getCurrentUser } from "@/lib/auth/session";
+import { fanOutJobStatus } from "@/lib/firebase/fanout";
 import { collectFromKiri } from "@/lib/reconstruction/collect";
 import { measurePly } from "@/lib/video/plyBounds";
 import { getSplatJob, SPLAT_DIR } from "@/lib/splatJobs";
@@ -23,7 +25,7 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-export async function GET(_request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
   const { jobId } = await ctx.params;
   if (!getSplatJob(jobId)) {
     return NextResponse.json({ error: "no such job" }, { status: 404, headers: NO_STORE });
@@ -46,6 +48,31 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/splat/jobs/
   // Re-read AFTER collecting, so a splat that landed during this very call is
   // reported ready now rather than on the next poll.
   const job = getSplatJob(jobId)!;
+
+  /*
+    Tell everyone who is not this caller.
+
+    This read is the ONLY moment the server learns anything about a
+    reconstruction — there is no worker and no event, by design — so it is the
+    only place a progress frame can come from. See lib/firebase/fanout.ts for
+    what that buys: the phone that recorded the clip, and the three other tabs
+    on this job, get the answer without each running their own poll and their
+    own splat download.
+
+    `?channel=` is the reader's own RTDB path segment, sent by the watcher once
+    its anonymous sign-in resolves. Absent — no Firebase, a curl, the first poll
+    before sign-in returns — nothing is published and everything still works,
+    because the response below has always been the authoritative answer.
+
+    Awaited rather than fired and forgotten: with no service account this is two
+    null checks and returns immediately, and on a serverless host an unawaited
+    promise is a promise that gets killed with the response.
+  */
+  await fanOutJobStatus(job, {
+    channel: new URL(request.url).searchParams.get("channel"),
+    userId: (await getCurrentUser())?.id ?? null,
+    detail: collected.note,
+  });
 
   return NextResponse.json(
     { job, ...(collected.note ? { kiri: collected.note } : {}) },

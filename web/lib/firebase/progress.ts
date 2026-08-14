@@ -60,6 +60,30 @@ export const progressPath = (userId: string, jobId: string): string =>
   `progress/${userId}/${jobId}`;
 
 /**
+ * Is this string safe to splice into an RTDB path?
+ *
+ * The channel id arrives from the browser — it is whatever `auth.uid` the
+ * client's anonymous sign-in produced, and the server takes the client's word
+ * for it, because nothing here is authoritative (see the header). Taking a
+ * caller's word is fine; splicing a caller's string into a path is not.
+ *
+ * RTDB keys may not contain `.`, `$`, `#`, `[`, `]`, `/` or control characters,
+ * and `..` in a path segment is not a parent reference in RTDB but it IS in
+ * every reader's mental model, which is its own hazard. An unvalidated segment
+ * would also turn `publishProgress` into a write-anywhere primitive: pass
+ * `../../` and the frame lands outside `/progress` entirely, where the rules in
+ * RTDB_RULES do not apply. So the shape is asserted rather than escaped —
+ * a Firebase uid is 28 URL-safe characters and a Postgres uuid is 36, so
+ * nothing legitimate is excluded by being strict.
+ *
+ * Shared by the client (which sends it) and the server (which trusts it only
+ * this far), which is why it lives in the module both already import.
+ */
+export function isChannelId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(value);
+}
+
+/**
  * The security rules this layout requires. Kept in the repo rather than only in
  * the Firebase console, because a console-only rule is invisible in review and
  * silently resets when a project is recreated.

@@ -109,6 +109,15 @@ export interface PushInput {
   /** Deep link opened when the notification is tapped. */
   url: string;
   tokens: string[];
+  /**
+   * The job this is about, carried so the service worker can collapse repeats.
+   *
+   * Notifications are tagged `spark-job-<id>`, which makes a retry replace its
+   * predecessor in the shade rather than stack beside it — one line per capture,
+   * not one per attempt. Optional: without it every message gets the same tag
+   * and the newest simply wins, which is a worse but not wrong outcome.
+   */
+  jobId?: string;
 }
 
 /**
@@ -131,7 +140,7 @@ export async function notify(
       notification: { title: input.title, body: input.body },
       // Also in `data` so the service worker can route the click. `notification`
       // alone is rendered by the browser and does not reach our handler.
-      data: { url: input.url },
+      data: { url: input.url, ...(input.jobId ? { jobId: input.jobId } : {}) },
       webpush: {
         fcmOptions: { link: input.url },
         notification: { icon: "/icon-192.png", requireInteraction: false },
