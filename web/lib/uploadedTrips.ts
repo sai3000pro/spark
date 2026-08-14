@@ -43,7 +43,7 @@ import { estimateCameraPath } from "./video/estimateMotion";
 import { estimateWorldPos } from "./video/trackFrames";
 import type { BuiltTrip } from "./mock/buildTrip";
 import type { KeywordHit } from "./pipeline";
-import type { AudioEvent, Detection, GeoPoint, Moment, TrackPoint, TranscriptSegment, Trip, Vec2 } from "./types";
+import type { AudioEvent, Detection, GeoPoint, Moment, SplatView, TrackPoint, TranscriptSegment, Trip, Vec2 } from "./types";
 
 import { forgetJourney } from "./albums";
 
@@ -54,7 +54,21 @@ export interface UploadedWalkInput {
   placeLabel?: string;
   region?: string;
   country?: string;
+  /**
+   * Where the camera was, read from the file's own metadata.
+   *
+   * Only ever set when the video actually carried a fix. Absent is the common
+   * case — see lib/video/probeMetadata.ts — and absent must NOT become a
+   * coordinate, which is what the old hardcoded fallback did.
+   */
   origin?: GeoPoint;
+  /**
+   * When it was filmed, with its original UTC offset, from the container.
+   *
+   * `startedAt` used to be `new Date()`, so a clip filmed on Saturday became a
+   * walk that happened at upload time and sorted wrongly in the album.
+   */
+  recordedAt?: string;
   /** Filename, shown so you can tell two uploads apart. */
   sourceName?: string;
   /** The reconstruction job this walk is waiting on, if one was started. */
@@ -116,12 +130,114 @@ export function listUploadedWalks(): UploadedWalk[] {
 
 /** Attach the splat once the reconstruction lands. Every moment shares it —
  *  one video reconstructs to one scene, not one per moment. */
-export function attachSplat(tripId: string, url: string, pointCount?: number): boolean {
+export function attachSplat(
+  tripId: string,
+  url: string,
+  pointCount?: number,
+  view?: SplatView,
+): boolean {
   const walk = store().walks.get(tripId);
   if (!walk) return false;
-  for (const moment of walk.built.trip.moments) {
-    moment.splat = { status: "ready", url, pointCount };
+
+  // A reconstruction arrived for a walk the scorer left empty.
+  //
+  // This loop used to run over nothing and report success, which is the worst
+  // shape a bug can take: the splat was on disk, the job said `ready`, and
+  // there was no moment anywhere to open it from. Precisely the case someone
+  // reaches by pressing "reconstruct it anyway" — they have already overruled
+  // the scorer once, and the pipeline then quietly overruled them back.
+  //
+  // So promote the best candidate it threw away. Nothing is invented: the
+  // window, its detections and its labels were all measured, and the only thing
+  // that changes is the verdict — which a person has now explicitly disagreed
+  // with. See the `rescued` note on the moment, which says so on the page.
+  if (walk.built.trip.moments.length === 0) {
+    const rescued = rescueOneMoment(walk);
+    if (rescued) walk.built.trip.moments.push(rescued);
   }
+
+  for (const moment of walk.built.trip.moments) {
+    // `view` is what stops a collected splat rendering as an empty box. An
+    // authored capture has a hand-measured camera; this one has a measured one.
+    // See lib/video/plyBounds.ts.
+    moment.splat = { status: "ready", url, pointCount, ...(view ? { view } : {}) };
+  }
+  return true;
+}
+
+/**
+ * Turn the strongest discarded candidate into a moment, so a splat has a door.
+ *
+ * Picks by score rather than by length: the highest-scoring window is the one
+ * the scorer came closest to keeping, and it is where the interesting part of
+ * the clip almost certainly is. Returns null only when there was no candidate
+ * at all, which means the footage genuinely held nothing — not even a near miss.
+ */
+function rescueOneMoment(walk: UploadedWalk): Moment | null {
+  const { trip } = walk.built;
+  const best = [...trip.candidates].sort((a, b) => b.score - a.score)[0];
+  if (!best) return null;
+
+  const inWindow = trip.detections.filter((d) => d.t >= best.tStart && d.t <= best.tEnd);
+  const labels = rankLabels(inWindow);
+  // The camera trace is not retained on the trip, so the moment sits at the
+  // origin rather than at a guessed position. Honest: the map already warns
+  // that distance is estimated and direction is not estimated at all.
+  const pos: Vec2 = [0, 0];
+
+  const content: MomentContent = {
+    id: "m_up_rescued",
+    title: labels.length ? titleFor(labels) : "The place itself",
+    summary: labels.length
+      ? summaryFor(labels, best.tEnd - best.tStart)
+      : "No single minute stood out, so the whole walk is kept as one place.",
+    place: { label: `${fmtClock(best.tStart)}–${fmtClock(best.tEnd)}`, pos },
+    people: [],
+    transcript: [],
+    splat: {
+      status: "processing",
+      note: "Reconstructed on request, after the scorer kept nothing.",
+    },
+    vibe: {
+      mood: "quiet",
+      energy: 0,
+      tags: labels.slice(0, 4).map((l) => l.label),
+    },
+    hue: hueFor(labels),
+  };
+
+  best.status = "promoted";
+  best.discardReason = undefined;
+  return promoteToMoment(best, trip.detections, content);
+}
+
+/**
+ * Say where a walk happened, after the fact.
+ *
+ * The file's own metadata is the best source and often absent — location
+ * services off, or stripped in sharing — so this is the fallback that is still
+ * TRUE: a person who was there typing it in. Marked `originMeasured` exactly as
+ * a metadata fix would be, because both are statements of fact about the same
+ * thing; what the flag distinguishes is a claim from the hardcoded placeholder,
+ * not one source of claim from another.
+ *
+ * Moves the trip only. Moment positions come from the camera trace and stay
+ * relative to the origin, so re-anchoring the walk carries them along and
+ * nothing has to be recomputed.
+ */
+export function setWalkPlace(
+  tripId: string,
+  place: { origin: GeoPoint; label?: string; region?: string; country?: string },
+): boolean {
+  const walk = store().walks.get(tripId);
+  if (!walk) return false;
+
+  const p = walk.built.trip.place;
+  p.origin = place.origin;
+  p.originMeasured = true;
+  if (place.label) p.label = place.label;
+  if (place.region) p.region = place.region;
+  if (place.country) p.country = place.country;
   return true;
 }
 
@@ -268,7 +384,10 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
     }
   }
 
-  const startedAt = new Date().toISOString();
+  // The file's own timestamp when it has one, and only then the clock. A parse
+  // failure falls through to now rather than producing an invalid date.
+  const stamped = input.recordedAt ? Date.parse(input.recordedAt) : NaN;
+  const startedAt = Number.isFinite(stamped) ? input.recordedAt! : new Date().toISOString();
   const trip: Trip = {
     id: tripId,
     title: input.sourceName ? `From ${input.sourceName}` : "From an uploaded video",
@@ -278,7 +397,17 @@ function buildWalkFromDetections(tripId: string, input: UploadedWalkInput): Buil
       label: input.placeLabel ?? "Uploaded footage",
       region: input.region ?? "—",
       country: input.country ?? "—",
+      /*
+        The real fix when the file carried one — see lib/video/probeMetadata.ts.
+
+        The fallback is still a coordinate, because the globe has to draw the
+        trip somewhere. What changes is that it no longer passes for a
+        measurement: `originMeasured` below says which of the two this is, so a
+        placeholder can be labelled or hidden instead of pinning every upload on
+        earth to one Toronto street corner with total confidence.
+      */
       origin: input.origin ?? { lat: 43.6415, lng: -79.4046 },
+      originMeasured: Boolean(input.origin),
     },
     path,
     moments,

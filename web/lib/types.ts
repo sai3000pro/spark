@@ -273,6 +273,17 @@ export interface Trip {
      * nothing else in the contract moves.
      */
     origin: GeoPoint;
+    /**
+     * Whether `origin` was MEASURED or is a placeholder.
+     *
+     * Uploaded walks fall back to a fixed coordinate so the globe has somewhere
+     * to draw them, and without this flag that placeholder is indistinguishable
+     * from a real fix — every upload on earth pinning to one Toronto street
+     * corner with the same confidence as a trip that knows where it was.
+     *
+     * Absent means authored, which is as good as measured for the mock trips.
+     */
+    originMeasured?: boolean;
   };
   path: TrackPoint[];
   moments: Moment[];

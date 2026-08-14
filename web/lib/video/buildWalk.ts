@@ -61,6 +61,14 @@ export interface BuiltWalk {
   candidates: number;
   discarded: number;
   moments: number;
+  /**
+   * The scorer's own sentence for each rejection, deduped — "score 0.44 under
+   * 0.62 threshold", "only 8s of signal", "visual signal only, robot never
+   * stopped". Empty when nothing was discarded.
+   *
+   * A count of discards says something was rejected; this says what to change.
+   */
+  discardReasons: string[];
 }
 
 export interface BuildWalkInput {
@@ -200,7 +208,13 @@ export async function buildWalkFromVideo(input: BuildWalkInput): Promise<BuiltWa
   const built = (await res.json()) as {
     tripId: string;
     href: string;
-    found: { detections: number; candidates: number; discarded: number; moments: number };
+    found: {
+      detections: number;
+      candidates: number;
+      discarded: number;
+      moments: number;
+      discardReasons?: string[];
+    };
   };
 
   return {
@@ -210,6 +224,8 @@ export async function buildWalkFromVideo(input: BuildWalkInput): Promise<BuiltWa
     candidates: built.found.candidates,
     discarded: built.found.discarded,
     moments: built.found.moments,
+    // Optional on the wire so an older server does not break this client.
+    discardReasons: built.found.discardReasons ?? [],
   };
 }
 

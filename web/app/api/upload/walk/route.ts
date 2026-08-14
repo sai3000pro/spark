@@ -13,9 +13,10 @@
  * and the transcript are not.
  */
 import { NextResponse } from "next/server";
-import { linkJobToTrip } from "@/lib/splatJobs";
+import { findUploadFor, linkJobToTrip } from "@/lib/splatJobs";
 import { createUploadedWalk } from "@/lib/uploadedTrips";
 import { validateDetections } from "@/lib/validate";
+import { probeVideoMetadata } from "@/lib/video/probeMetadata";
 import type { KeywordHit } from "@/lib/pipeline";
 import type { AudioEvent, TranscriptSegment } from "@/lib/types";
 
@@ -63,6 +64,9 @@ export async function POST(request: Request) {
     placeLabel: str(body.placeLabel),
     region: str(body.region),
     country: str(body.country),
+    // Read off the file, never taken from the request: the client cannot be
+    // trusted to say where a video was shot, and the container already knows.
+    ...(await metadataFor(str(body.splatJobId))),
     splatJobId: str(body.splatJobId),
     audioEvents,
     keywordHits,
@@ -72,18 +76,36 @@ export async function POST(request: Request) {
   if (walk.splatJobId) linkJobToTrip(walk.splatJobId, walk.id);
 
   const { trip, distanceM } = walk.built;
-  const discarded = trip.candidates.filter((c) => c.status === "discarded").length;
+  const rejected = trip.candidates.filter((c) => c.status === "discarded");
+
+  // WHY each one was thrown out, not just how many. The scorer already writes
+  // this on the candidate — see discardReasonFor in lib/pipeline.ts, whose own
+  // comment says it exists to be surfaced — and it was dying here, leaving the
+  // caller to print a generic "nothing cleared the keep line" that cannot tell
+  // "12s too short" from "score 0.44 against a 0.62 bar". Those two want
+  // opposite responses: different footage, or a different threshold.
+  //
+  // Deduped and capped: fifteen candidates rejected for the same reason is one
+  // fact, and the panel that renders these has a paragraph to spend, not a page.
+  const discardReasons = Array.from(
+    new Set(rejected.map((c) => c.discardReason).filter((r): r is string => Boolean(r))),
+  ).slice(0, 4);
 
   return NextResponse.json(
     {
       tripId: walk.id,
-      href: `/walk?trip=${walk.id}`,
+      // `/trip/<id>`, NOT `/walk?trip=<id>`. `/walk` is the global map of
+      // pinned moments and ignores the query entirely, so every "Open the walk"
+      // button since this route was written has landed on an empty map saying
+      // "no pinned moments" — for a walk that was sitting there fully built.
+      href: `/trip/${walk.id}`,
       found: {
         detections: trip.detections.length,
         candidates: trip.candidates.length,
-        discarded,
+        discarded: rejected.length,
         moments: trip.moments.length,
         distanceM: Math.round(distanceM),
+        discardReasons,
       },
       // Said in the payload, not only in a comment, because a caller that shows
       // these numbers has to be able to label them.
@@ -132,6 +154,30 @@ export function GET() {
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+
+/**
+ * When and where the clip was filmed, from the clip.
+ *
+ * Only possible when the video reached this machine — the laptop drop path
+ * keeps the file in the tab by design, and that privacy property is worth more
+ * than a timestamp. So this returns nothing rather than asking for the file.
+ *
+ * Every field is omitted when absent, so `createUploadedWalk` keeps its own
+ * fallbacks and a missing tag never becomes an invented value.
+ */
+async function metadataFor(
+  splatJobId: string | undefined,
+): Promise<{ origin?: { lat: number; lng: number }; recordedAt?: string }> {
+  if (!splatJobId) return {};
+  const found = findUploadFor(splatJobId);
+  if (!found) return {};
+
+  const meta = await probeVideoMetadata(found.path);
+  return {
+    ...(meta.location ? { origin: meta.location } : {}),
+    ...(meta.recordedAt ? { recordedAt: meta.recordedAt } : {}),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The audio pass, checked before it is believed
