@@ -17,6 +17,7 @@ import { LiveTripProvider, useLiveTrip } from "@/components/shell/LiveTripProvid
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
 import { PendingReconstructions } from "@/components/live/PendingReconstructions";
 import { VideoWalkPanel } from "@/components/live/VideoWalkPanel";
+import { MultiVideoPanel } from "@/components/journey/MultiVideoPanel";
 import type { ActiveTripSnapshot } from "@/lib/liveTrip";
 
 export function LiveScreen({ initial }: { initial: ActiveTripSnapshot | null }) {
@@ -50,6 +51,15 @@ export function LiveScreen({ initial }: { initial: ActiveTripSnapshot | null }) 
       <PhoneHandoffSection />
 
       <VideoWalkPanel />
+
+      {/* One clip is a walk; several are a journey. Deliberately a SEPARATE
+          panel rather than a `multiple` attribute on the one above, because the
+          two make different promises: that one finds moments inside a video,
+          and this one works out the route BETWEEN videos from what the files
+          stamped on themselves. Folding them together would put a route editor
+          in front of someone who dropped a single clip and has nothing to
+          order. See lib/journey/clips.ts for what the route refuses to invent. */}
+      <MultiVideoPanel />
 
       {/* Renders itself away when nothing is outstanding. Its other job is to
           be somewhere the KIRI collector can run: a reconstruction is only
