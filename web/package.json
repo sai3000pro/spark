@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "tsx scripts/verify-pipeline.ts",
     "verify:flow": "tsx scripts/verify-capture-flow.ts",
+    "verify:journey": "tsx scripts/verify-journey.ts",
     "build:sprites": "tsx scripts/build-blob-sprites.ts",
     "build:icons": "tsx scripts/build-icons.ts",
     "build:frames": "tsx scripts/build-capture-frames.ts",
