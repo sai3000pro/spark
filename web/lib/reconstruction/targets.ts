@@ -168,7 +168,14 @@ export function describeTargets(input: {
       detail: "The splat builds while you film. Needs the GPU studio running.",
       available: studio.reachable && studio.live,
       blockedBecause: !studio.reachable
-        ? "No reconstruction studio is running on the laptop."
+        ? // Naming the command matters more here than anywhere else in this
+          // menu. Every other blocked reason is a fact the reader can do
+          // nothing about from where they are standing — no GPU, no key, no
+          // credits. This one is a thing they can fix in ten seconds, and
+          // "no studio is running" on its own reads as a defect in the app
+          // rather than as a process that has not been started yet.
+          "No reconstruction studio is running on the laptop. Start one with " +
+          "`python -m spark_studio serve` from tools/ — see tools/spark_studio/README.md."
         : !studio.live
           ? "The studio is running but this build has no live endpoint."
           : null,
