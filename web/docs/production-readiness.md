@@ -31,6 +31,8 @@ configured.
 | ✅ Local splat, **your footage** | **119/119 frames placed, 16,671 tie points, 0.73 px** |
 | ✅ PLY compatible with the app | `measurePly` accepts it; 59 float32 props, stride 236, `dataOffset + count*stride` == file size **exactly** |
 | ✅ Studio HTTP surface | every endpoint `lib/studio.ts` expects; `/file?path=` traversal → 403 |
+| ✅ Capture-flow suite | run against a **live dev server** — "The capture flow holds." |
+| ✅ App ↔ studio integration | with the studio up, `/api/reconstruction/targets` reports `studio-batch` available |
 
 ### Measured cost, Intel laptop, no CUDA
 
@@ -98,7 +100,24 @@ against.
 `app/page.tsx` and `/trip/[tripId]` render nine authored walks from
 `lib/mock/trips/`. Fine for a demo, and it is the first thing a real user sees.
 
-### 4. Four screens still need a studio running
+### 4. Live capture is architecturally ready and **not wired**
+
+`studio-live` is correctly reported as unavailable, and it took a deliberate
+revert to keep it that way. The browser's live path (`lib/liveRecon.ts`) sends
+frames to `ws://localhost:8765/ws/phone` — `tools/live_capture_server` — which
+stores binary payloads keyed by `(frame_id, payload_type)`. `spark_studio`'s
+`LiveSession` reads `frame_*.jpg` from `<work>/live_sessions/<id>/images`.
+
+**Two layouts, two directories, two processes that have never been introduced.**
+
+The bridge is small: teach `LiveSession` to read the capture server's layout, or
+teach the capture server to also write a jpg per RGB payload. Until then
+`/api/live_splat` deliberately answers 404 for an unknown session, because
+`probeStudio()` reads that as "no live endpoint" — and offering a live mode that
+silently reconstructs nothing is the exact failure `dispatch.ts` was corrected
+for.
+
+### 5. Four screens still need a studio running
 
 `/album`, `/capture`, `/library`, `/walk` read from `STUDIO_URL`. That is now
 satisfiable — `python -m spark_studio serve` — where before it required a
