@@ -86,6 +86,38 @@ def capture_reachable(base_url: str) -> bool:
         return False
 
 
+#: Origins allowed to talk to this server from a browser.
+#:
+#: WHY NOT `*`, WHICH IS WHAT THIS SHIPPED WITH FOR AN HOUR TONIGHT
+#:
+#: This process listens on localhost and serves, among other things,
+#: `/file?path=` -- fenced to directories it owns, which is exactly where a
+#: person's video frames and finished splats live -- and `POST /api/live/delete`.
+#: With `Access-Control-Allow-Origin: *`, ANY page the user happens to visit can
+#: issue those requests from their browser and READ THE RESPONSES. Not a
+#: theoretical CSRF where an attacker fires blind: a wildcard makes the response
+#: body readable, so a random site could enumerate someone's captures, pull the
+#: frames out of them, and delete sessions.
+#:
+#: The fence on `/file` stops path traversal. It does not stop the wrong ORIGIN
+#: asking politely for files this server is happy to serve.
+#:
+#: So the default is the only origin that legitimately talks to a studio on
+#: localhost: a Next app on localhost. `--allow-origin` widens it for a deployed
+#: front end, which is a decision someone makes explicitly rather than one they
+#: inherit from a convenience default.
+_LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$")
+
+
+def origin_allowed(origin: str, extra: tuple[str, ...]) -> bool:
+    """Localhost always; anything else only when it was named explicitly."""
+    if not origin:
+        return False
+    if _LOCAL_ORIGIN.match(origin):
+        return True
+    return origin in extra
+
+
 def lan_ip() -> str:
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -319,6 +351,7 @@ class Handler(BaseHTTPRequestHandler):
     watcher: Watcher
     port: int
     capture_url: str
+    allowed_origins: tuple[str, ...] = ()
 
     def log_message(self, fmt: str, *args) -> None:  # quieter than the default
         return
@@ -332,8 +365,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "content-type")
+        # Echo the origin back only when it is allowed. A request with no Origin
+        # -- curl, the Next server proxying on the user's behalf -- gets no CORS
+        # header at all, which is correct: CORS governs browsers, and a header
+        # nobody asked for is one more thing that can be wrong.
+        origin = self.headers.get("Origin", "")
+        if origin and origin_allowed(origin, self.allowed_origins):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "content-type")
         self.end_headers()
         self.wfile.write(body)
 
@@ -479,6 +519,7 @@ def serve(
     host: str = "127.0.0.1",
     sessions_root: Optional[Path] = None,
     capture_url: str = DEFAULT_CAPTURE_URL,
+    allowed_origins: tuple[str, ...] = (),
 ) -> None:
     """Run the studio until interrupted."""
     paths = Paths(
@@ -499,6 +540,7 @@ def serve(
     Handler.watcher = watcher
     Handler.port = port
     Handler.capture_url = capture_url
+    Handler.allowed_origins = tuple(allowed_origins)
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"  spark studio   http://{host}:{port}")

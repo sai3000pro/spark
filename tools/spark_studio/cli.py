@@ -138,6 +138,12 @@ def main(argv: list[str] | None = None) -> int:
              "somewhere nothing reads",
     )
     parser.add_argument(
+        "--allow-origin", action="append", default=[],
+        help="serve: an extra browser origin allowed to call this studio. "
+             "localhost is always allowed; anything else has to be named here, "
+             "because a wildcard would let any site you visit read your captures",
+    )
+    parser.add_argument(
         "--capture-url", default="http://127.0.0.1:8765",
         help="serve: where tools/live_capture_server listens. Live capture is "
              "only offered when this answers, because it is what receives frames",
@@ -200,6 +206,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             sessions_root=Path(args.sessions).expanduser() if args.sessions else None,
             capture_url=args.capture_url,
+            allowed_origins=tuple(args.allow_origin),
         )
         return 0
 
