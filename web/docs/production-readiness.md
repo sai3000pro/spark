@@ -28,7 +28,7 @@ configured.
 | ✅ Existing suites | verify-pipeline, verify-journey — "All invariants hold" |
 | ✅ New persistence suite | `verify-persistence`, **56 checks, 0 failures** |
 | ✅ Local splat, synthetic | 24/24 frames placed, 45,533 gaussians, 10.2 MB |
-| ✅ Local splat, **your footage** | **119/119 frames placed, 16,671 tie points, 0.73 px** |
+| ✅ Local splat, **your footage, end to end** | **119/119 frames, 10,000 steps, 56.3 MB, 1h 4m** — published to `public/mock/splats/`, job flipped to `ready`, `/splat/<id>` serves 200 |
 | ✅ PLY compatible with the app | `measurePly` accepts it; 59 float32 props, stride 236, `dataOffset + count*stride` == file size **exactly** |
 | ✅ Studio HTTP surface | every endpoint `lib/studio.ts` expects; `/file?path=` traversal → 403 |
 | ✅ Capture-flow suite | run against a **live dev server** — "The capture flow holds." |
@@ -41,7 +41,7 @@ configured.
 | Feature extraction, 119 frames @1080×1920 | ~2.5 min (~6.5k features/frame) |
 | Full COLMAP solve, 60 synthetic frames | 135 s @ 0.41 px |
 | Training | ~9 min per 2,000 steps at 1600px |
-| **Realistic total for one clip** | **45–60 min at the `fast` preset** |
+| **Measured total, one real 20 s clip** | **1h 4m at the `fast` preset** |
 
 This is the number the research doc flagged as most-needed and never measured.
 It is *far* better than the 30 min–2 h extrapolation for the pose half.
