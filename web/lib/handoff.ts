@@ -160,6 +160,31 @@ interface Store {
   items: Map<string, Stored>;
 }
 
+/**
+ * IN MEMORY ON PURPOSE, unlike journeys, walks, albums and posted state.
+ *
+ * lib/persist.ts was added because a `globalThis` store meant a restart erased
+ * things people had made — an album they named, a journey whose link they had
+ * already sent someone. The obvious next move is to give every remaining store
+ * the same treatment. This one does not want it, for three reasons that happen
+ * to line up:
+ *
+ *   · A HANDOFF EXPIRES IN TEN MINUTES. `TTL_MS` above. Persisting it across a
+ *     restart preserves, at most, the tail of a session that was about to end
+ *     on its own.
+ *   · NOTHING IRREPLACEABLE IS IN HERE. The clip a phone uploads is written to
+ *     `.uploads` and recorded by lib/splatJobs.ts, which HAS been durable since
+ *     long before persist.ts existed. Losing a handoff loses the coordination,
+ *     never the footage.
+ *   · IT IS A LIVE CHANNEL BETWEEN TWO DEVICES THAT ARE BOTH PRESENT. Signals
+ *     are pushed and drained continuously while a capture is running, so
+ *     write-through would mean a disk write per poll for state whose whole
+ *     purpose is to be current. And the recovery is already good: the laptop is
+ *     showing a QR code, and the phone rescans it.
+ *
+ * A restart here costs a rescan. That is a recoverable, legible failure, and it
+ * is not the same kind of thing as losing an album.
+ */
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
   return (g[KEY] ??= { items: new Map() });

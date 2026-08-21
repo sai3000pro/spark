@@ -63,8 +63,8 @@ It is *far* better than the 30 min–2 h extrapolation for the pose half.
 | `postedWalks` | privacy choices reverted | ✅ durable |
 | `reconstruction/keys` | in memory | ⚠️ **deliberately left** — see below |
 | `push/registry` | in memory | ⚠️ durable, but **not covered by the suite** — the module imports `server-only` (correctly: it holds the service-role key), so it cannot run under `tsx`. Verified by `npm run build` and by following the tested `postedWalks` shape. A weaker guarantee than the rest; said plainly here. |
-| `storage/ledger` | in memory | ❌ risks orphaning paid objects |
-| `handoff` | in memory | ❌ breaks a phone mid-handoff |
+| `storage/ledger` | in memory | ❌ risks orphaning paid objects — but inert today, since no storage provider is configured. Do it in the Supabase swap. |
+| `handoff` | in memory | ✅ **correct as-is** — expires in 10 min anyway, the uploaded clip is already durable via `splatJobs`, and a restart costs a QR rescan rather than data |
 | `liveTrip` | in memory | correct as-is — genuinely ephemeral |
 
 **`keys.ts` is excluded on purpose and should stay excluded.** It holds a live
