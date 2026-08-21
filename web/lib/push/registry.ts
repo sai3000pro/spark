@@ -43,6 +43,7 @@ import "server-only";
  * the query narrows to that user and this paragraph stops applying.
  */
 import { adminDb } from "@/lib/db/admin";
+import { __wipeStore, hydrate, persist } from "@/lib/persist";
 
 export type PushPlatform = "web" | "ios" | "android";
 
@@ -56,18 +57,81 @@ interface LocalRegistration {
 }
 
 /**
- * Survives a hot reload, not a restart.
+ * Survives a hot reload AND a restart, but is still not Postgres.
  *
  * Same `Symbol.for` trick as lib/splatJobs.ts's store, for the same reason: in
  * development every edit re-evaluates this module, and a plain module-level Map
- * would drop every registration on each keystroke.
+ * would drop every registration on each keystroke. It is now written through to
+ * `.data/push/` as well, because the whole point of a push token is a promise
+ * made in advance -- "we will tell you when this finishes" -- and a promise that
+ * a deploy silently cancels is worse than one never made. A reconstruction can
+ * easily outlast the process that started it; that is the normal case, not the
+ * edge one.
+ *
+ * `durable` on RegisterResult still means POSTGRES, not this. The distinction
+ * survives because it is the one that matters for more than one instance: a
+ * sidecar is readable by the process that wrote it and by nothing else.
  */
 const KEY = Symbol.for("spark.push.registry");
 
+/** Sidecar directory under `.data/`. See lib/persist.ts. */
+const STORE_NAME = "push";
+
+/** One record for the whole map: these are read together, never individually. */
+const RECORD_ID = "tokens";
+
+interface LocalStoreState {
+  tokens: Map<string, LocalRegistration>;
+  hydrated: boolean;
+}
+
+function localState(): LocalStoreState {
+  const g = globalThis as unknown as Record<symbol, LocalStoreState | undefined>;
+  const s = (g[KEY] ??= { tokens: new Map(), hydrated: false });
+  if (!s.hydrated) {
+    s.hydrated = true; // set first -- a throw below must not retry forever
+    const [record] = hydrate<Record<string, unknown>>(STORE_NAME, (raw) =>
+      typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null,
+    );
+    for (const [token, value] of Object.entries(record ?? {})) {
+      const r = value as Partial<LocalRegistration>;
+      // A malformed entry is dropped rather than repaired. A token is an opaque
+      // endpoint handed to a push service; a half-understood one produces a
+      // delivery failure at the worst moment rather than an error here.
+      if (typeof r.token !== "string" || r.token !== token) continue;
+      if (r.platform !== "web" && r.platform !== "ios" && r.platform !== "android") continue;
+      s.tokens.set(token, {
+        token,
+        platform: r.platform,
+        userAgent: typeof r.userAgent === "string" ? r.userAgent : null,
+        seenAt: typeof r.seenAt === "number" ? r.seenAt : Date.now(),
+        revokedAt: typeof r.revokedAt === "number" ? r.revokedAt : null,
+      });
+    }
+  }
+  return s;
+}
+
 function localStore(): Map<string, LocalRegistration> {
-  const g = globalThis as unknown as Record<symbol, Map<string, LocalRegistration> | undefined>;
-  g[KEY] ??= new Map();
-  return g[KEY];
+  return localState().tokens;
+}
+
+/** Best effort, like everything in lib/persist.ts. */
+function persistLocal(): void {
+  persist(STORE_NAME, RECORD_ID, Object.fromEntries(localState().tokens));
+}
+
+/** Tests only -- memory cleared, disk left alone, which is what a restart is. */
+export function __simulatePushRestart(): void {
+  const g = globalThis as unknown as Record<symbol, LocalStoreState | undefined>;
+  g[KEY] = { tokens: new Map(), hydrated: false };
+}
+
+/** Tests only -- clears both halves. */
+export function __resetPushRegistry(): void {
+  __wipeStore(STORE_NAME);
+  const g = globalThis as unknown as Record<symbol, LocalStoreState | undefined>;
+  g[KEY] = { tokens: new Map(), hydrated: true };
 }
 
 /*
@@ -147,9 +211,16 @@ export async function registerPushToken(input: {
     seenAt: Date.now(),
     revokedAt: null,
   });
+  persistLocal();
   return {
+    // Still false: `durable` means Postgres, and a sidecar is readable only by
+    // the machine that wrote it. The note no longer says "until this server
+    // restarts" because that stopped being true -- but it must not overclaim
+    // either, so it says exactly which machine the promise is good on.
     durable: false,
-    note: "This browser will be told when a reconstruction finishes — until this server restarts.",
+    note:
+      "This browser will be told when a reconstruction finishes, as long as it is " +
+      "this laptop doing the telling.",
   };
 }
 
@@ -196,10 +267,20 @@ export async function revokePushTokens(tokens: string[]): Promise<void> {
 
   const now = Date.now();
   const local = localStore();
+  let touched = false;
   for (const token of tokens) {
     const existing = local.get(token);
-    if (existing) existing.revokedAt = now;
+    if (existing) {
+      existing.revokedAt = now;
+      touched = true;
+    }
   }
+  // Revocation has to stick for the same reason unposting a walk does: it is
+  // the direction that must never silently undo itself. A token is revoked
+  // because the push service told us it is dead or because someone turned
+  // notifications off, and a restart that resurrected it would send to a
+  // dead endpoint forever, or to a person who asked us to stop.
+  if (touched) persistLocal();
 
   const db = adminDb();
   if (!db) return;

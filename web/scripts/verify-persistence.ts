@@ -324,6 +324,26 @@ ok("forgetting what is not there is not an error", forget("__probe", "abc-123_XY
 __wipeStore("__probe");
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// NOT COVERED HERE: lib/push/registry.ts, and it is worth saying why rather
+// than leaving a hole someone has to rediscover.
+//
+// That module was given the same durable treatment as the stores above -- a
+// push token is a promise made in advance, and a reconstruction routinely
+// outlasts the process that started it -- but it imports `server-only` on its
+// first line, so requiring it under tsx throws before a single check runs.
+//
+// The guard is CORRECT: that module reaches Postgres with the service-role
+// key, which is exactly what `server-only` exists to keep out of a browser
+// bundle. Deleting it to make this file greener would trade a real safety
+// boundary for a test, which is the wrong way round.
+//
+// So its persistence is verified by `npm run build` and by following the
+// same shape as postedWalks (one record, whole-map, validated on the way in)
+// which IS covered here -- and that is a weaker guarantee than the rest of
+// this file provides. Stated plainly so nobody reads 56 green checks as
+// covering it.
+
 console.log(`\n${passed} ok, ${failures.length} failed`);
 if (failures.length) {
   for (const f of failures) console.log(`  - ${f}`);

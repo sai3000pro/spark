@@ -60,7 +60,7 @@ It is *far* better than the 30 min–2 h extrapolation for the pose half.
 | `albums` | user-named albums lost | ✅ durable, delete means delete |
 | `postedWalks` | privacy choices reverted | ✅ durable |
 | `reconstruction/keys` | in memory | ⚠️ **deliberately left** — see below |
-| `push/registry` | in memory | ❌ notifications stop after restart |
+| `push/registry` | in memory | ⚠️ durable, but **not covered by the suite** — the module imports `server-only` (correctly: it holds the service-role key), so it cannot run under `tsx`. Verified by `npm run build` and by following the tested `postedWalks` shape. A weaker guarantee than the rest; said plainly here. |
 | `storage/ledger` | in memory | ❌ risks orphaning paid objects |
 | `handoff` | in memory | ❌ breaks a phone mid-handoff |
 | `liveTrip` | in memory | correct as-is — genuinely ephemeral |
