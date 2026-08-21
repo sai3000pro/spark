@@ -26,11 +26,22 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * WHAT THIS STORE DOES NOT DO. Read before trusting anything it hands back.
  *
- *   · It does NOT persist. globalThis singleton, exactly the discipline in
- *     lib/uploadedTrips.ts, lib/albums.ts and lib/liveTrip.ts: it survives dev
- *     module reloads, it does NOT survive a server restart, it is single
- *     process, and nothing touches disk. A journey here is gone the moment the
- *     process is. Every route that returns one says so in words.
+ *   · It DOES now survive a restart, and it did not used to. A journey hands
+ *     out a link — `/journey/<id>` — and while this was a bare `globalThis`
+ *     singleton that link 404'd after any restart or redeploy. Handing someone
+ *     a URL you know will stop working is the same class of unkeepable promise
+ *     the rest of this module is arranged against, so each journey is now
+ *     written to `.data/journeys/<id>.json` and read back on first use. See
+ *     lib/persist.ts, and lib/splatJobs.ts for the pattern it generalises.
+ *
+ *     Two things this does NOT buy, both of which matter:
+ *       — It is single process and single machine. On a serverless host with an
+ *         ephemeral filesystem it buys nothing at all; that case needs the
+ *         Supabase schema in supabase/migrations/, which is written and not yet
+ *         wired. `hydrate`/`persist`/`forget` is the seam that swap replaces.
+ *       — Persistence is BEST EFFORT. A write that fails is swallowed, because
+ *         a full disk should not turn a journey someone just built into a 500.
+ *         So a link is durable in the ordinary case and not guaranteed to be.
  *   · It does NOT verify that a `tripId` exists. A leg naming `trip_upload_x`
  *     is a leg that CLAIMS a walk, and this file never goes and looks. It can
  *     be a walk that was evicted past uploadedTrips' MAX_WALKS, or one from
@@ -50,6 +61,7 @@
  * be imported. `__resetJourneys` exists for them.
  */
 import { normaliseTitle } from "../albums";
+import { __wipeStore, forget, hydrate, persist } from "../persist";
 import type { DerivedRoute } from "./clips";
 
 /**
@@ -92,9 +104,39 @@ export const isJourneyId = (id: string): boolean => id.startsWith(JOURNEY_ID_PRE
 
 interface Store {
   journeys: Map<string, Journey>;
+  /** Whether the disk sidecars have been read back into this process yet. */
+  hydrated: boolean;
 }
 
 const KEY = Symbol.for("spark.journeys.store");
+
+/** Sidecar directory name under `.data/`. See lib/persist.ts. */
+const STORE_NAME = "journeys";
+
+/**
+ * Is this parsed JSON a journey we are willing to serve?
+ *
+ * Deliberately structural rather than exhaustive. It checks the fields that
+ * every consumer dereferences without guarding — an id, a createdAt to sort by,
+ * a route with a clips array, and legs — and lets the rest through as written.
+ * A DerivedRoute is a large shape and re-validating all of it here would put a
+ * second, drifting definition of "valid route" next to lib/journey/clips.ts.
+ *
+ * What matters is the rule: anything that fails is DROPPED, not repaired. A
+ * half-understood journey is reachable at `/journey/<id>`, and a page that
+ * renders a route we could not vouch for is worse than a 404.
+ */
+function parseJourney(raw: unknown): Journey | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const j = raw as Partial<Journey>;
+  if (typeof j.id !== "string" || !isJourneyId(j.id)) return null;
+  if (typeof j.createdAt !== "string" || Number.isNaN(Date.parse(j.createdAt))) return null;
+  if (typeof j.route !== "object" || j.route === null) return null;
+  if (!Array.isArray((j.route as DerivedRoute).clips)) return null;
+  if (!Array.isArray(j.legs)) return null;
+  if (j.title !== null && typeof j.title !== "string") return null;
+  return j as Journey;
+}
 
 /**
  * Beyond this the oldest is dropped.
@@ -115,7 +157,28 @@ export const MAX_JOURNEYS = 32;
 
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
-  return (g[KEY] ??= { journeys: new Map() });
+  const s = (g[KEY] ??= { journeys: new Map(), hydrated: false });
+
+  // Read the sidecars back exactly once per process, on first use rather than
+  // at import: importing this module must stay free, and a route that never
+  // touches journeys should not pay for a directory scan.
+  if (!s.hydrated) {
+    s.hydrated = true; // set first — a throw below must not retry forever
+    const found = hydrate(STORE_NAME, parseJourney);
+    // Oldest first, so the Map's insertion order still means "age" and the
+    // eviction loop in createJourney drops the right one.
+    found.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const journey of found.slice(-MAX_JOURNEYS)) {
+      s.journeys.set(journey.id, journey);
+    }
+    // Anything past the cap on disk is deleted rather than left: it can never
+    // be served from this process, and a sidecar nobody will read is litter
+    // that grows without bound.
+    for (const journey of found.slice(0, Math.max(0, found.length - MAX_JOURNEYS))) {
+      forget(STORE_NAME, journey.id);
+    }
+  }
+  return s;
 }
 
 export function getJourney(id: string): Journey | null {
@@ -177,11 +240,18 @@ export function createJourney(input: CreateJourneyInput): Journey {
 
   const s = store();
   s.journeys.set(id, journey);
+  // Write-through, best effort. A journey that cannot be written to disk is
+  // still correct for this process and still has a working link until the next
+  // restart, so a failure here must not fail the request that created it.
+  persist(STORE_NAME, id, journey);
 
   while (s.journeys.size > MAX_JOURNEYS) {
     // Map iterates in insertion order, so the first key is the oldest.
     const oldest = [...s.journeys.keys()][0];
     s.journeys.delete(oldest);
+    // Evict from disk too, or the next restart would hydrate a journey this
+    // process has already decided is gone -- and the cap would mean nothing.
+    forget(STORE_NAME, oldest);
     // Nothing to unlink: albums file walks, not journeys, and a journey holds
     // ids rather than being held by one. If that ever changes, this is where
     // the dangling-reference cleanup goes — see forgetJourney in lib/albums.ts.
@@ -226,6 +296,25 @@ export function summariseJourney(journey: Journey): JourneySummary {
   };
 }
 
+/**
+ * Drop everything this process holds WITHOUT touching disk, so the next call
+ * hydrates from the sidecars again.
+ *
+ * This is what a server restart actually is, and it is the only way to test
+ * that durability works: `__resetJourneys` wipes both halves, which would make
+ * a persistence test pass against a store that never wrote anything. Tests
+ * only — a route calling this would silently drop journeys mid-request.
+ */
+export function __simulateRestart(): void {
+  const g = globalThis as unknown as Record<symbol, Store | undefined>;
+  g[KEY] = { journeys: new Map(), hydrated: false };
+}
+
 export function __resetJourneys(): void {
-  store().journeys.clear();
+  __wipeStore(STORE_NAME);
+  const s = store();
+  s.journeys.clear();
+  // Re-arm hydration: a test that resets and then writes must not have the
+  // NEXT store() call read back sidecars this one deliberately removed.
+  s.hydrated = true;
 }

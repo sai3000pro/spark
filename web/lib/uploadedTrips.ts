@@ -46,6 +46,10 @@ import type { KeywordHit } from "./pipeline";
 import type { AudioEvent, Detection, GeoPoint, Moment, SplatView, TrackPoint, TranscriptSegment, Trip, Vec2 } from "./types";
 
 import { forgetJourney } from "./albums";
+// Aliased: `forget` alone reads far too close to albums' `forgetJourney` at a
+// call site, and the two mean different things -- one drops a sidecar, the
+// other unlinks a walk from an album.
+import { __wipeStore, forget as forgetRecord, hydrate, persist } from "./persist";
 
 export interface UploadedWalkInput {
   /** Real detections from real frames. `t` is seconds into the video. */
@@ -103,9 +107,34 @@ export const isUploadedTripId = (id: string): boolean => id.startsWith(UPLOAD_ID
 
 interface Store {
   walks: Map<string, UploadedWalk>;
+  /** Whether the disk sidecars have been read back into this process yet. */
+  hydrated: boolean;
 }
 
 const KEY = Symbol.for("spark.uploadedTrips.store");
+
+/** Sidecar directory under `.data/`. See lib/persist.ts. */
+const STORE_NAME = "walks";
+
+/**
+ * Is this parsed JSON a walk we are willing to serve?
+ *
+ * Structural, like parseJourney: it checks what consumers dereference without
+ * guarding and lets the rest through. A walk that fails is dropped rather than
+ * repaired -- `/walk?trip=<id>` would render it, and a trip we could not vouch
+ * for is worse than a missing one.
+ */
+function parseWalk(raw: unknown): UploadedWalk | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const w = raw as Partial<UploadedWalk>;
+  if (typeof w.id !== "string" || !w.id.startsWith(UPLOAD_ID_PREFIX)) return null;
+  if (typeof w.createdAt !== "string" || Number.isNaN(Date.parse(w.createdAt))) return null;
+  if (typeof w.built !== "object" || w.built === null) return null;
+  const built = w.built as BuiltTrip;
+  if (typeof built.trip !== "object" || built.trip === null) return null;
+  if (!Array.isArray(built.trip.moments)) return null;
+  return w as UploadedWalk;
+}
 
 /** Beyond this the oldest is dropped — an unbounded map of 10k-detection trips
  *  is a memory leak with a friendly name. */
@@ -114,10 +143,34 @@ const MAX_WALKS = 8;
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
   const existing = g[KEY];
-  if (existing) return existing;
-  const fresh: Store = { walks: new Map() };
+  if (existing) {
+    hydrateOnce(existing);
+    return existing;
+  }
+  const fresh: Store = { walks: new Map(), hydrated: false };
   g[KEY] = fresh;
+  hydrateOnce(fresh);
   return fresh;
+}
+
+/**
+ * Read the sidecars back exactly once per process.
+ *
+ * A walk carries its detections -- thousands of them -- so these records are
+ * the largest thing lib/persist.ts holds, and MAX_WALKS is 8 precisely because
+ * of that. Reading eight of them once at first use is a cost worth paying to
+ * stop `/walk?trip=<id>` dying at every restart; reading them at import time
+ * would charge every route that never touches a walk.
+ */
+function hydrateOnce(s: Store): void {
+  if (s.hydrated) return;
+  s.hydrated = true; // set first -- a throw below must not retry forever
+  const found = hydrate(STORE_NAME, parseWalk);
+  found.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (const walk of found.slice(-MAX_WALKS)) s.walks.set(walk.id, walk);
+  for (const walk of found.slice(0, Math.max(0, found.length - MAX_WALKS))) {
+    forgetRecord(STORE_NAME, walk.id);
+  }
 }
 
 export function getUploadedWalk(id: string): UploadedWalk | null {
@@ -162,6 +215,10 @@ export function attachSplat(
     // See lib/video/plyBounds.ts.
     moment.splat = { status: "ready", url, pointCount, ...(view ? { view } : {}) };
   }
+  // A splat that survived reconstruction but not a restart would leave the .ply
+  // on disk with no moment anywhere pointing at it -- the exact orphaning
+  // app/splat/[jobId] was created to stop happening.
+  persistWalk(tripId);
   return true;
 }
 
@@ -238,11 +295,37 @@ export function setWalkPlace(
   if (place.label) p.label = place.label;
   if (place.region) p.region = place.region;
   if (place.country) p.country = place.country;
+  persistWalk(tripId);
   return true;
 }
 
+/**
+ * Write one walk through to disk. Best effort, by design -- see lib/persist.ts.
+ *
+ * Called after every mutation rather than only on create, because a walk is
+ * mutated after the fact by attachSplat and setWalkPlace, and a sidecar written
+ * once at create time would come back after a restart having forgotten its
+ * splat and its place. A stale record that looks complete is worse than none.
+ */
+function persistWalk(tripId: string): void {
+  const walk = store().walks.get(tripId);
+  if (walk) persist(STORE_NAME, tripId, walk);
+}
+
 export function __resetUploadedTrips(): void {
-  store().walks.clear();
+  __wipeStore(STORE_NAME);
+  const s = store();
+  s.walks.clear();
+  s.hydrated = true;
+}
+
+/**
+ * Drop what this process holds WITHOUT touching disk -- what a restart actually
+ * is, and the only way to test that durability works. Tests only.
+ */
+export function __simulateRestart(): void {
+  const g = globalThis as unknown as Record<symbol, Store | undefined>;
+  g[KEY] = { walks: new Map(), hydrated: false };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -283,9 +366,14 @@ export function createUploadedWalk(input: UploadedWalkInput): UploadedWalk {
     built,
   });
 
+  persistWalk(id);
+
   while (s.walks.size > MAX_WALKS) {
     const oldest = [...s.walks.keys()][0];
     s.walks.delete(oldest);
+    // Evict from disk in step, or the next restart hydrates a walk this process
+    // already dropped and MAX_WALKS would mean nothing across a boundary.
+    forgetRecord(STORE_NAME, oldest);
     // An album naming an evicted walk would put a pin on the globe with
     // nothing behind it, and show a count that overstates what is there. The
     // album survives; only its reference to this walk goes.

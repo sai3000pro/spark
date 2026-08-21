@@ -55,3 +55,7 @@ scripts/.bake-cache/
 
 # Local dev server output (see the session that added ffmpeg-based remuxing).
 .devserver.log
+
+# Durable sidecars for the in-process stores (lib/persist.ts). Records of one
+# machine's activity, like /.uploads — not source, and not ours to keep.
+/.data/
