@@ -25,16 +25,22 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * STORAGE
  *
- * globalThis singleton, exactly like lib/uploadedTrips.ts, lib/liveTrip.ts and
- * lib/handoff.ts: survives dev module reloads, does NOT survive a restart,
- * single process. Everything goes through the functions below and nothing
- * touches the map, so the swap to Postgres is this one file.
+ * globalThis singleton for the working set, written through to
+ * `.data/albums/<id>.json` so it DOES survive a restart. It did not used to,
+ * and an album is the worst thing in this codebase to lose: it is a decision a
+ * person made and typed a name for, which is the same reason there is no LRU
+ * cap here. Everything goes through the functions below and nothing touches the
+ * map directly, so the swap to Postgres is still this one file — `hydrate` and
+ * `persist` are the two calls it replaces. Still single process and single
+ * machine; see lib/persist.ts for what that does and does not buy.
  *
  * Unlike uploadedTrips there is NO LRU cap here. Evicting someone's album to
  * make room is a different kind of loss from evicting a cached walk — an album
  * is a decision a person made, and the walks it names may already be gone.
  * Albums are tiny (a title and a list of ids); the thing worth capping is bytes.
  */
+
+import { __wipeStore, forget, hydrate, persist } from "./persist";
 
 export interface Album {
   id: string;
@@ -58,13 +64,67 @@ interface Store {
   albums: Map<string, Album>;
   /** journeyId → albumId. Derived, but kept so the lookup is not a scan. */
   byJourney: Map<string, string>;
+  /** Whether the disk sidecars have been read back into this process yet. */
+  hydrated: boolean;
 }
 
 const KEY = Symbol.for("spark.albums.store");
 
+/** Sidecar directory under `.data/`. See lib/persist.ts. */
+const STORE_NAME = "albums";
+
+/**
+ * Is this parsed JSON an album we are willing to serve?
+ *
+ * An album is small and flat, so unlike a journey this can afford to check the
+ * whole shape. `journeyIds` is checked to be an array OF STRINGS rather than
+ * merely an array: those ids are dereferenced against uploadedTrips and end up
+ * as pins on the globe, and a number in there would resolve to nothing at a
+ * point far from here.
+ */
+function parseAlbum(raw: unknown): Album | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const a = raw as Partial<Album>;
+  if (typeof a.id !== "string" || !isAlbumId(a.id)) return null;
+  if (typeof a.title !== "string" || a.title.length === 0) return null;
+  if (typeof a.createdAt !== "string" || Number.isNaN(Date.parse(a.createdAt))) return null;
+  if (typeof a.updatedAt !== "string" || Number.isNaN(Date.parse(a.updatedAt))) return null;
+  if (!Array.isArray(a.journeyIds) || a.journeyIds.some((j) => typeof j !== "string")) return null;
+  if (a.coverJourneyId !== null && typeof a.coverJourneyId !== "string") return null;
+  return a as Album;
+}
+
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
-  return (g[KEY] ??= { albums: new Map(), byJourney: new Map() });
+  const s = (g[KEY] ??= { albums: new Map(), byJourney: new Map(), hydrated: false });
+
+  if (!s.hydrated) {
+    s.hydrated = true; // set first — a throw below must not retry forever
+    const found = hydrate(STORE_NAME, parseAlbum);
+    found.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const album of found) {
+      s.albums.set(album.id, album);
+      // byJourney is DERIVED, so it is rebuilt from the albums rather than
+      // persisted alongside them. Storing it would create a second copy of the
+      // same fact that could come back disagreeing with the first.
+      for (const journeyId of album.journeyIds) s.byJourney.set(journeyId, album.id);
+    }
+  }
+  return s;
+}
+
+/**
+ * Write one album through to disk. Best effort — see lib/persist.ts.
+ *
+ * Called from every mutator rather than only from createAlbum, because an
+ * album is almost entirely made of things that happen afterwards: the walks
+ * filed into it, its cover, its name. A sidecar written once at create time
+ * would come back as an empty album with the right title, which reads as "your
+ * walks were lost" rather than "we failed to save".
+ */
+function persistAlbum(albumId: string): void {
+  const album = store().albums.get(albumId);
+  if (album) persist(STORE_NAME, albumId, album);
 }
 
 /**
@@ -126,6 +186,7 @@ export function createAlbum(input: {
     coverJourneyId: null,
   };
   store().albums.set(id, album);
+  persistAlbum(id);
 
   if (input.journeyId) addToAlbum(id, input.journeyId);
   return { ok: true, album: store().albums.get(id)! };
@@ -155,6 +216,7 @@ export function addToAlbum(albumId: string, journeyId: string): AddResult {
   album.coverJourneyId ??= journeyId;
   album.updatedAt = new Date().toISOString();
   s.byJourney.set(journeyId, albumId);
+  persistAlbum(albumId);
 
   return { ok: true, album };
 }
@@ -176,6 +238,7 @@ export function removeFromAlbum(albumId: string, journeyId: string): boolean {
   }
   album.updatedAt = new Date().toISOString();
   if (s.byJourney.get(journeyId) === albumId) s.byJourney.delete(journeyId);
+  persistAlbum(albumId);
 
   return true;
 }
@@ -192,6 +255,7 @@ export function renameAlbum(albumId: string, raw: string): RenameResult {
 
   album.title = title;
   album.updatedAt = new Date().toISOString();
+  persistAlbum(albumId);
   return { ok: true, album };
 }
 
@@ -204,6 +268,9 @@ export function deleteAlbum(albumId: string): boolean {
     if (s.byJourney.get(journeyId) === albumId) s.byJourney.delete(journeyId);
   }
   s.albums.delete(albumId);
+  // Delete means delete. Leaving the sidecar would resurrect the album at the
+  // next restart, which is the worst possible answer to "I deleted that".
+  forget(STORE_NAME, albumId);
   return true;
 }
 
@@ -219,7 +286,18 @@ export function forgetJourney(journeyId: string): void {
 }
 
 export function __resetAlbums(): void {
+  __wipeStore(STORE_NAME);
   const s = store();
   s.albums.clear();
   s.byJourney.clear();
+  s.hydrated = true;
+}
+
+/**
+ * Drop what this process holds WITHOUT touching disk — what a restart actually
+ * is, and the only way to test durability. Tests only.
+ */
+export function __simulateRestart(): void {
+  const g = globalThis as unknown as Record<symbol, Store | undefined>;
+  g[KEY] = { albums: new Map(), byJourney: new Map(), hydrated: false };
 }

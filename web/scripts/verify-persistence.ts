@@ -34,6 +34,17 @@ import {
   setWalkPlace,
 } from "../lib/uploadedTrips";
 import type { Detection } from "../lib/types";
+import {
+  __resetAlbums,
+  __simulateRestart as __simulateAlbumRestart,
+  addToAlbum,
+  albumForJourney,
+  createAlbum,
+  deleteAlbum,
+  getAlbum,
+  removeFromAlbum,
+  renameAlbum,
+} from "../lib/albums";
 import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -204,6 +215,56 @@ if (attached) {
 
 __resetUploadedTrips();
 ok("resetting walks clears disk too", persistedCount("walks") === 0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+section("An album, its derived index, and what deleting one has to mean");
+
+__resetAlbums();
+
+const created = createAlbum({ title: "  Autumn   walks  " });
+ok("createAlbum normalises the title", created.ok && created.album.title === "Autumn walks");
+const albumId = created.ok ? created.album.id : "";
+
+addToAlbum(albumId, "trip_upload_a");
+addToAlbum(albumId, "trip_upload_b");
+
+__simulateAlbumRestart();
+
+const backAlbum = getAlbum(albumId);
+ok("THE ALBUM SURVIVES A RESTART", backAlbum !== null);
+ok("with its title", backAlbum?.title === "Autumn walks");
+ok("with both walks filed under it", backAlbum?.journeyIds.length === 2);
+ok("and its cover still set", backAlbum?.coverJourneyId !== null);
+
+// byJourney is derived and deliberately NOT persisted — a second copy of the
+// same fact could come back disagreeing with the first. So the real assertion
+// is that it was REBUILT, not that it was stored.
+ok(
+  "the derived journey index is rebuilt, not persisted",
+  albumForJourney("trip_upload_a")?.id === albumId,
+);
+ok("for every member, not just the first", albumForJourney("trip_upload_b")?.id === albumId);
+ok("and not for a walk in no album", albumForJourney("trip_upload_nowhere") === null);
+
+// Renames and removals land after create; a create-time-only sidecar forgets them.
+renameAlbum(albumId, "Winter walks");
+removeFromAlbum(albumId, "trip_upload_a");
+__simulateAlbumRestart();
+ok("a rename survives", getAlbum(albumId)?.title === "Winter walks");
+ok("a removal survives", getAlbum(albumId)?.journeyIds.includes("trip_upload_a") === false);
+ok("the removed walk is unindexed too", albumForJourney("trip_upload_a") === null);
+ok(
+  "and the cover moved off the walk that left",
+  getAlbum(albumId)?.coverJourneyId === "trip_upload_b",
+);
+
+// The one that would be worst to get wrong.
+deleteAlbum(albumId);
+__simulateAlbumRestart();
+ok("DELETE MEANS DELETE — no resurrection at the next restart", getAlbum(albumId) === null);
+ok("and nothing is left on disk", persistedCount("albums") === 0);
+
+__resetAlbums();
 
 // ─────────────────────────────────────────────────────────────────────────────
 section("persist.ts itself");
