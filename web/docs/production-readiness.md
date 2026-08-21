@@ -100,22 +100,39 @@ against.
 `app/page.tsx` and `/trip/[tripId]` render nine authored walks from
 `lib/mock/trips/`. Fine for a demo, and it is the first thing a real user sees.
 
-### 4. Live capture is architecturally ready and **not wired**
+### 4. Live capture is wired — and only offered when it can work
 
-`studio-live` is correctly reported as unavailable, and it took a deliberate
-revert to keep it that way. The browser's live path (`lib/liveRecon.ts`) sends
-frames to `ws://localhost:8765/ws/phone` — `tools/live_capture_server` — which
-stores binary payloads keyed by `(frame_id, payload_type)`. `spark_studio`'s
-`LiveSession` reads `frame_*.jpg` from `<work>/live_sessions/<id>/images`.
+This was the unfinished half, and it is now connected. The browser streams to
+`tools/live_capture_server`, which writes `phone/frames/000001.jpg`;
+`spark_studio` read `images/frame_00001.jpg`. Same JPEGs, two conventions,
+nothing joining them. The bridge turned out to be a directory lookup.
 
-**Two layouts, two directories, two processes that have never been introduced.**
+More importantly, **live is offered only when frames can actually arrive.**
+`probeStudio()` reads the status of `/api/live_splat` as a capability answer, so
+that status is now derived from a measured fact — whether the capture server is
+reachable. `spark_studio` can solve and train a growing session but cannot
+receive a single frame.
 
-The bridge is small: teach `LiveSession` to read the capture server's layout, or
-teach the capture server to also write a jpg per RGB payload. Until then
-`/api/live_splat` deliberately answers 404 for an unknown session, because
-`probeStudio()` reads that as "no live endpoint" — and offering a live mode that
-silently reconstructs nothing is the exact failure `dispatch.ts` was corrected
-for.
+Verified in both directions against the running app:
+
+| | |
+|---|---|
+| capture server up | `studio-live` **available** |
+| capture server killed | `studio-live` **blocked**, with a reason naming what is missing |
+
+**To use it:** run the capture server and point the studio at the same root.
+
+```bash
+python tools/live_capture_server/server.py --port 8765 --root live_sessions
+python -m spark_studio serve --sessions live_sessions
+```
+
+`serve` prints which state it is in at startup rather than leaving it to be
+discovered when a capture produces nothing.
+
+**Still untested with a real phone.** The layout bridge was verified against a
+synthetic capture-server directory, not against frames arriving over the
+WebSocket from an actual device. That is the next thing to try.
 
 ### 5. Four screens still need a studio running
 
