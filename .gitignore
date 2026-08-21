@@ -53,3 +53,10 @@ tools/video_intel/out/
 
 # External tool, cloned locally (125GB nested git repo) — never vendor it
 ComfyUI/
+
+# spark_studio: the local reconstruction toolchain and its working data.
+# The venv holds a 139 MB brush-cli.exe and pycolmap's native libraries; the
+# work directory holds frames, COLMAP databases and multi-megabyte snapshots.
+# Both are rebuildable from tools/spark_studio/README.md and neither is ours to keep.
+.venv-splat/
+.studio/
