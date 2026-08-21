@@ -26,7 +26,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { MAX_TITLE, normaliseTitle, type Album } from "@/lib/albums";
+import { MAX_TITLE, normaliseTitle } from "@/lib/albumTitle";
+import type { Album } from "@/lib/albums";
 
 type State =
   | { k: "loading" }

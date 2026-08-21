@@ -40,6 +40,7 @@
  * Albums are tiny (a title and a list of ids); the thing worth capping is bytes.
  */
 
+import { normaliseTitle } from "./albumTitle";
 import { __wipeStore, forget, hydrate, persist } from "./persist";
 
 export interface Album {
@@ -57,8 +58,17 @@ export const ALBUM_ID_PREFIX = "album_";
 
 export const isAlbumId = (id: string): boolean => id.startsWith(ALBUM_ID_PREFIX);
 
-/** Long enough to be a real name, short enough to sit under a globe pin. */
-export const MAX_TITLE = 60;
+/**
+ * Title rules live in lib/albumTitle.ts and are re-exported here.
+ *
+ * They are the one part of this module the BROWSER needs — the save screen
+ * validates before it POSTs — and this module now imports lib/persist.ts for
+ * durable storage, which imports `node:fs`. A client component reaching through
+ * here for `normaliseTitle` therefore drags `node:fs` into the browser bundle,
+ * which Turbopack answers with a build panic naming an unrelated route. Server
+ * callers keep importing from here; client code must import from albumTitle.
+ */
+export { MAX_TITLE, normaliseTitle } from "./albumTitle";
 
 interface Store {
   albums: Map<string, Album>;
@@ -125,18 +135,6 @@ function store(): Store {
 function persistAlbum(albumId: string): void {
   const album = store().albums.get(albumId);
   if (album) persist(STORE_NAME, albumId, album);
-}
-
-/**
- * Trim, collapse whitespace, cap. Returns null when nothing is left.
- *
- * Exported because the save screen validates before it POSTs, and one
- * implementation of "is this a usable title" beats two that disagree about
- * whether a string of spaces counts.
- */
-export function normaliseTitle(raw: string): string | null {
-  const title = raw.replace(/\s+/g, " ").trim().slice(0, MAX_TITLE);
-  return title.length > 0 ? title : null;
 }
 
 export function listAlbums(): Album[] {

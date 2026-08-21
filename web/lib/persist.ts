@@ -10,10 +10,28 @@
  * safety net for breaking every verification script in the repo, which is the
  * same trade lib/splatJobs.ts already declined for the same reason.
  *
- * The boundary is held by the import graph instead: nothing under
- * `components/` imports a store that imports this, and `node:fs` in a client
- * bundle is a build error rather than a silent leak. Check before adding a
- * caller.
+ * The boundary is held by the import graph instead — and that is a weaker
+ * guarantee than it sounds, so here is exactly how it breaks.
+ *
+ * Adding this module to lib/albums.ts broke the production build, at a route
+ * that has nothing to do with albums:
+ *
+ *     the chunking context (unknown) does not support external modules
+ *     (request: node:fs)  ...  Failed to write app endpoint /live/page
+ *
+ * The path was four hops long: `/live` -> a client component -> another ->
+ * `components/album/SaveToAlbum.tsx` -> `normaliseTitle`, a pure function that
+ * happened to be exported from the same module as the store. Nothing imported
+ * the store. It was enough to import ANYTHING from a module that reaches this.
+ *
+ * Two things follow, and both cost a build to learn:
+ *
+ *   1. `tsc --noEmit` does NOT catch this. It typechecks clean and the bundler
+ *      panics. **The check is `npm run build`.** Run it after adding a caller,
+ *      not just the typechecker.
+ *   2. A function the browser needs must not live in a module the server needs
+ *      disk for, however pure that function is. That is why title validation
+ *      now sits alone in lib/albumTitle.ts.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * THE PROBLEM THIS SOLVES, IN ONE SENTENCE
