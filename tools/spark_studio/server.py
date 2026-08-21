@@ -345,16 +345,36 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "session required"})
             session = self.registry.get(sid, create=False)
             if session is None:
-                # 400, NOT 404, and the distinction is load-bearing.
+                # 404, DELIBERATELY, AND THIS IS NOT AN OVERSIGHT.
                 #
-                # `probeStudio()` in web/lib/reconstruction/targets.ts decides
-                # whether to offer live reconstruction by asking this route
-                # about a deliberately nonsense session id, and reads 404 as
-                # "this build has no live endpoint" while any other status
-                # means "the route is here, that just is not a session". Answer
-                # 404 and the app greys out live capture on a studio that
-                # supports it perfectly well, with a reason that is not true.
-                return self._send(400, {"error": "no such session", "session": sid})
+                # `probeStudio()` in web/lib/reconstruction/targets.ts asks this
+                # route about a nonsense session id and reads 404 as "this build
+                # has no live endpoint", while any other status means "the route
+                # exists, that just is not a session". So answering 400 here --
+                # which I did first, on the reasoning that the route plainly does
+                # exist -- flipped `studio-live` to available in the app's menu.
+                #
+                # It should not be available, because THE FRAMES CANNOT GET HERE.
+                # The live path in the browser is web/lib/liveRecon.ts, which
+                # opens ws://localhost:8765/ws/phone -- tools/live_capture_server
+                # -- and that server stores binary payloads keyed by
+                # (frame_id, payload_type) via protocol.payload_relpath. This
+                # package's LiveSession reads `frame_*.jpg` out of
+                # <work>/live_sessions/<id>/images. Two different layouts in two
+                # different directories written by two different processes that
+                # have never been introduced.
+                #
+                # So live reconstruction is architecturally ready and not wired.
+                # Reporting 400 would put "Render live on the laptop" in front of
+                # someone, take their three-minute walk, and reconstruct none of
+                # it -- the exact failure dispatch.ts was just corrected for, and
+                # it would be me reintroducing it one file over.
+                #
+                # FLIP THIS TO 400 IN THE SAME COMMIT THAT LANDS THE BRIDGE, not
+                # before. The bridge is small: teach LiveSession to read the
+                # capture server's layout, or teach the capture server to also
+                # write a jpg per RGB payload. Either closes it.
+                return self._send(404, {"error": "no live ingest wired", "session": sid})
             status = session.tick()
             return self._send(
                 200,
