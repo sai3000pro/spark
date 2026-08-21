@@ -45,6 +45,13 @@ import {
   removeFromAlbum,
   renameAlbum,
 } from "../lib/albums";
+import {
+  __resetPostedWalks,
+  __simulateRestart as __simulatePostedRestart,
+  isWalkPosted,
+  setWalkPosted,
+} from "../lib/postedWalks";
+import { TRIP_ID } from "../lib/tripData";
 import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -265,6 +272,34 @@ ok("DELETE MEANS DELETE — no resurrection at the next restart", getAlbum(album
 ok("and nothing is left on disk", persistedCount("albums") === 0);
 
 __resetAlbums();
+
+// ─────────────────────────────────────────────────────────────────────────────
+section("Unposting a walk is a privacy choice, so it has to stick");
+
+__resetPostedWalks();
+
+// An uploaded walk defaults to NOT posted, so the meaningful override in that
+// direction is posting one; for a seeded walk it is taking one down.
+setWalkPosted("trip_upload_zzz", true);
+setWalkPosted(TRIP_ID, false);
+
+__simulatePostedRestart();
+
+ok("a walk posted on purpose stays posted", isWalkPosted("trip_upload_zzz") === true);
+ok("A WALK TAKEN DOWN STAYS DOWN", isWalkPosted(TRIP_ID) === false);
+ok(
+  "a walk nobody chose for still follows the default rule",
+  isWalkPosted("trip_upload_never_touched") === false,
+);
+
+// `false` is a real stored value, not an absence. A persistence layer that
+// round-trips it as "missing" would silently republish it.
+__resetPostedWalks();
+setWalkPosted(TRIP_ID, false);
+__simulatePostedRestart();
+ok("false survives as false, not as absent", isWalkPosted(TRIP_ID) === false);
+
+__resetPostedWalks();
 
 // ─────────────────────────────────────────────────────────────────────────────
 section("persist.ts itself");

@@ -17,21 +17,61 @@
  */
 import { TRIP_ID } from "./tripData";
 import { isUploadedTripId } from "./uploadedTrips";
+import { __wipeStore, hydrate, persist } from "./persist";
 
 interface Store {
   /** Explicit choices only; anything absent falls back to the default rule. */
   overrides: Map<string, boolean>;
+  /** Whether the disk sidecar has been read back into this process yet. */
+  hydrated: boolean;
 }
 
 const KEY = Symbol.for("spark.postedWalks.store");
 
+/** Sidecar directory under `.data/`. See lib/persist.ts. */
+const STORE_NAME = "posted";
+
+/**
+ * ONE record for the whole map, not one per walk.
+ *
+ * Unlike journeys, walks and albums, this store holds a handful of booleans
+ * whose total size is smaller than the filesystem overhead of splitting them.
+ * More to the point they are read together and never individually: every call
+ * to `isWalkPosted` consults the same map, so there is no partial-read case a
+ * per-record layout would help with.
+ */
+const RECORD_ID = "overrides";
+
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
   const existing = g[KEY];
-  if (existing) return existing;
-  const fresh: Store = { overrides: new Map() };
+  if (existing) {
+    hydrateOnce(existing);
+    return existing;
+  }
+  const fresh: Store = { overrides: new Map(), hydrated: false };
   g[KEY] = fresh;
+  hydrateOnce(fresh);
   return fresh;
+}
+
+function hydrateOnce(s: Store): void {
+  if (s.hydrated) return;
+  s.hydrated = true; // set first — a throw below must not retry forever
+  // Entries whose value is not a boolean are dropped rather than coerced. A
+  // truthy string here would silently flip a walk to posted, and "posted"
+  // means visible to other people on the globe — not a thing to guess at.
+  const [record] = hydrate<Record<string, unknown>>(STORE_NAME, (raw) =>
+    typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null,
+  );
+  if (!record) return;
+  for (const [tripId, posted] of Object.entries(record)) {
+    if (typeof posted === "boolean") s.overrides.set(tripId, posted);
+  }
+}
+
+function persistOverrides(s: Store): void {
+  persist(STORE_NAME, RECORD_ID, Object.fromEntries(s.overrides));
 }
 
 /**
@@ -50,9 +90,23 @@ export function isWalkPosted(tripId: string): boolean {
 }
 
 export function setWalkPosted(tripId: string, posted: boolean): void {
-  store().overrides.set(tripId, posted);
+  const s = store();
+  s.overrides.set(tripId, posted);
+  // Unposting is a privacy choice. A restart that silently reverted it would
+  // put a walk back on the globe that someone had deliberately taken down,
+  // which is the one direction this must never fail in.
+  persistOverrides(s);
 }
 
 export function __resetPostedWalks(): void {
-  store().overrides.clear();
+  __wipeStore(STORE_NAME);
+  const s = store();
+  s.overrides.clear();
+  s.hydrated = true;
+}
+
+/** Tests only — a restart is memory cleared with the disk left alone. */
+export function __simulateRestart(): void {
+  const g = globalThis as unknown as Record<symbol, Store | undefined>;
+  g[KEY] = { overrides: new Map(), hydrated: false };
 }

@@ -67,6 +67,30 @@ interface Store {
 
 const KEY = Symbol.for("spark.reconstruction.keys");
 
+/**
+ * THIS STORE DELIBERATELY DOES NOT PERSIST, AND MUST NOT BE "FIXED".
+ *
+ * lib/persist.ts was added to stop journeys, walks and albums evaporating at
+ * every restart, and the obvious next step is to give every remaining
+ * globalThis store the same treatment. Not this one.
+ *
+ * `StoredKey.value` is a live KIRI API credential that a person typed in. It
+ * spends real credits and it is not ours. Writing it to `.data/kiri.json` in
+ * plaintext would take a secret that currently lives only in process memory and
+ * put it in a file that survives the process, gets picked up by backups, and
+ * sits one `.gitignore` mistake away from a commit. That is a new exposure
+ * created in the name of a convenience nobody asked for — losing a key at
+ * restart costs one paste, and the key is usually in `.env` anyway, which is
+ * already durable and already handled with the care secrets need.
+ *
+ * If this ever does need to survive a restart, it belongs in the OS keychain or
+ * in Supabase behind RLS with the value encrypted at rest — never in a JSON
+ * sidecar beside the videos.
+ *
+ * `credits` is not persisted either, for a smaller reason: it is re-derivable.
+ * `refreshBalance` asks KIRI, and a remembered count is a number that can only
+ * drift out of date and then be wrong about whether a route will work.
+ */
 function store(): Store {
   const g = globalThis as unknown as Record<symbol, Store | undefined>;
   return (g[KEY] ??= { kiri: null, envDismissed: false });
