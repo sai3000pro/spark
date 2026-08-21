@@ -116,10 +116,42 @@ export async function dispatch(input: {
     };
   }
 
-  // The studio paths do not push: the clip is on disk under .uploads and the
-  // job is registered, which is exactly what the studio's own pipeline and the
-  // manual dev path both consume. `getSplatJob` derives readiness from the
-  // finished .ply appearing, so nothing here has to be told when it lands.
+  /*
+    THE STUDIO PATHS DO NOT PUSH, AND THE NOTE MUST NOT SAY THEY DO.
+
+    Nothing below sends anything. The clip is already on disk under .uploads
+    with its .job.json beside it, and `tools/spark_studio` watches exactly that
+    directory: it picks up any job with no .ply yet, reconstructs it, and writes
+    `public/mock/splats/<jobId>.ply`. `getSplatJob` derives readiness from that
+    file appearing, so the loop closes with no message passing in either
+    direction — which is why this returns without a fetch and why that is
+    correct rather than a stub.
+
+    This note used to read "Streaming to the studio on your laptop — the splat
+    builds as it goes" for studio-live, and it was false in the specific way
+    that costs someone a recording: no socket, no upload, no queue call, and a
+    green success message for work nothing had been asked to do. It survived
+    because `probeStudio()` cannot reach :8899 on a machine with no studio, so
+    the branch was never taken — while `studio-batch` is the PHONE'S DEFAULT
+    TARGET, so on any machine where a studio was running, every phone capture
+    ended in a cheerful lie.
+
+    What is said now is only what is true of a clip that has already finished
+    recording:
+
+    - studio-batch is genuinely queued. `probeStudio()` returned reachable to
+      get us here, so a studio is answering, and its watcher polls this exact
+      directory. "Queued" is a claim about a file being where something is
+      looking, and it is verifiable.
+    - studio-live cannot apply to a finished file. Live means frames arriving
+      while someone films, over the socket in lib/liveRecon.ts — a path that
+      never reaches this function. A completed clip handed to the live target
+      is reconstructed exactly like a batch one, so it says so instead of
+      implying a progressive build that already cannot happen.
+  */
+  const queued =
+    "Queued for the studio on your laptop. It'll appear here when it's built — " +
+    "reconstruction takes a while, and the clip is saved either way.";
   return {
     requested,
     target,
@@ -129,8 +161,12 @@ export async function dispatch(input: {
     terminal: false,
     note:
       target === "studio-live"
-        ? "Streaming to the studio on your laptop — the splat builds as it goes."
-        : "Queued for the studio on your laptop.",
+        ? // Not a failure and not a degradation — the same work happens, just
+          // not progressively. Saying which is the difference between a person
+          // waiting for a viewer that will never populate and one who knows.
+          `This clip has already finished recording, so there is nothing to ` +
+          `stream — it goes to the studio as a normal job. ${queued}`
+        : queued,
   };
 }
 
