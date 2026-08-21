@@ -37,6 +37,7 @@ avoid - so `stale_seconds` is on the status, and the UI is expected to say so.
 
 from __future__ import annotations
 
+import re
 import shutil
 import threading
 import time
@@ -260,6 +261,14 @@ class LiveSession:
             self._lock.release()
 
 
+#: A session id becomes a directory name, and that directory is later handed to
+#: shutil.rmtree by the delete route. Matches _SAFE_SESSION in
+#: tools/live_capture_server/protocol.py, which fences the same ids on the way in
+#: from a phone -- the two halves share these ids, so they must agree on what a
+#: legal one is.
+_SAFE_SESSION = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
 class LiveRegistry:
     """Every live session on this machine, by id."""
 
@@ -269,6 +278,13 @@ class LiveRegistry:
         self._lock = threading.Lock()
 
     def get(self, session_id: str, create: bool = True) -> Optional[LiveSession]:
+        # Defence in depth. No HTTP route creates a session today -- the live
+        # endpoints all pass create=False and `discover` reads names off disk --
+        # but `root / session_id` with "../.." in it escapes the studio root,
+        # and what escapes it is later passed to rmtree. This is one line and it
+        # stops that being one refactor away from true.
+        if not _SAFE_SESSION.match(session_id or ""):
+            return None
         with self._lock:
             existing = self._sessions.get(session_id)
             if existing or not create:
