@@ -131,6 +131,17 @@ def main(argv: list[str] | None = None) -> int:
         "--host", default="127.0.0.1",
         help="serve: bind address. 0.0.0.0 exposes it to the LAN, for a phone",
     )
+    parser.add_argument(
+        "--sessions",
+        help="serve: where live sessions land. Must match the --root that "
+             "tools/live_capture_server was started with, or frames arrive "
+             "somewhere nothing reads",
+    )
+    parser.add_argument(
+        "--capture-url", default="http://127.0.0.1:8765",
+        help="serve: where tools/live_capture_server listens. Live capture is "
+             "only offered when this answers, because it is what receives frames",
+    )
     parser.add_argument("-o", "--out", help="Where to write the finished .ply")
     parser.add_argument(
         "-w", "--work",
@@ -181,7 +192,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"No web directory at {web}. Pass --web.", file=sys.stderr)
             return 2
         work = Path(args.work).expanduser() if args.work else web.parent / ".studio"
-        serve(web=web, work=work, port=args.port, preset=args.preset, host=args.host)
+        serve(
+            web=web,
+            work=work,
+            port=args.port,
+            preset=args.preset,
+            host=args.host,
+            sessions_root=Path(args.sessions).expanduser() if args.sessions else None,
+            capture_url=args.capture_url,
+        )
         return 0
 
     if args.video == "selftest":

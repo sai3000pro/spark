@@ -44,7 +44,9 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
 
 from .live import LiveRegistry
 from .pipeline import RunPaths
@@ -56,6 +58,32 @@ _PROGRESS_RE = re.compile(r"^\s*(\d{1,3})%\s+(.*)$")
 #: speaks to the other.
 PROTOCOL_VERSION = 1
 DEFAULT_PORT = 8899
+
+#: Where tools/live_capture_server listens. It is what web/lib/liveRecon.ts
+#: streams frames to, and therefore the only thing that can make a live session
+#: exist -- see `capture_reachable`.
+DEFAULT_CAPTURE_URL = "http://127.0.0.1:8765"
+#: Short: this is asked while someone waits on a phone screen.
+CAPTURE_PROBE_SECONDS = 1.0
+
+
+def capture_reachable(base_url: str) -> bool:
+    """Is the frame source actually running?
+
+    THIS IS THE CONDITION LIVE RECONSTRUCTION DEPENDS ON, and asking it is the
+    difference between offering live capture and pretending to.
+
+    This package can solve and train a growing session, but it cannot receive a
+    single frame: the browser streams to tools/live_capture_server over a
+    WebSocket, and that server writes the JPEGs we then read. With it down,
+    frames arrive nowhere, a live session never gains an image, and a person
+    films for three minutes into a directory nobody writes.
+    """
+    try:
+        with urlopen(f"{base_url.rstrip('/')}/health", timeout=CAPTURE_PROBE_SECONDS) as r:
+            return 200 <= r.status < 400
+    except (URLError, OSError, ValueError):
+        return False
 
 
 def lan_ip() -> str:
@@ -75,6 +103,10 @@ class Paths:
 
     web: Path
     work: Path
+    #: Where live sessions land. Overridable because it is NOT ours: it is
+    #: whatever `--root` tools/live_capture_server was started with, and the two
+    #: processes must agree or frames arrive somewhere nobody reads.
+    sessions_root: Optional[Path] = None
 
     @property
     def uploads(self) -> Path:
@@ -90,7 +122,7 @@ class Paths:
 
     @property
     def sessions(self) -> Path:
-        return self.work / "live_sessions"
+        return self.sessions_root or (self.work / "live_sessions")
 
     def owns(self, candidate: Path) -> bool:
         """Is this a file we produced? The fence for /file?path=."""
@@ -286,6 +318,7 @@ class Handler(BaseHTTPRequestHandler):
     registry: LiveRegistry
     watcher: Watcher
     port: int
+    capture_url: str
 
     def log_message(self, fmt: str, *args) -> None:  # quieter than the default
         return
@@ -345,36 +378,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "session required"})
             session = self.registry.get(sid, create=False)
             if session is None:
-                # 404, DELIBERATELY, AND THIS IS NOT AN OVERSIGHT.
+                # The status code here is read as a CAPABILITY answer, not just
+                # as "no such session". `probeStudio()` in
+                # web/lib/reconstruction/targets.ts asks about a nonsense id and
+                # treats 404 as "this build has no live endpoint" while anything
+                # else means "the route is here, that just is not a session".
                 #
-                # `probeStudio()` in web/lib/reconstruction/targets.ts asks this
-                # route about a nonsense session id and reads 404 as "this build
-                # has no live endpoint", while any other status means "the route
-                # exists, that just is not a session". So answering 400 here --
-                # which I did first, on the reasoning that the route plainly does
-                # exist -- flipped `studio-live` to available in the app's menu.
-                #
-                # It should not be available, because THE FRAMES CANNOT GET HERE.
-                # The live path in the browser is web/lib/liveRecon.ts, which
-                # opens ws://localhost:8765/ws/phone -- tools/live_capture_server
-                # -- and that server stores binary payloads keyed by
-                # (frame_id, payload_type) via protocol.payload_relpath. This
-                # package's LiveSession reads `frame_*.jpg` out of
-                # <work>/live_sessions/<id>/images. Two different layouts in two
-                # different directories written by two different processes that
-                # have never been introduced.
-                #
-                # So live reconstruction is architecturally ready and not wired.
-                # Reporting 400 would put "Render live on the laptop" in front of
-                # someone, take their three-minute walk, and reconstruct none of
-                # it -- the exact failure dispatch.ts was just corrected for, and
-                # it would be me reintroducing it one file over.
-                #
-                # FLIP THIS TO 400 IN THE SAME COMMIT THAT LANDS THE BRIDGE, not
-                # before. The bridge is small: teach LiveSession to read the
-                # capture server's layout, or teach the capture server to also
-                # write a jpg per RGB payload. Either closes it.
-                return self._send(404, {"error": "no live ingest wired", "session": sid})
+                # So the honest answer depends on whether frames could actually
+                # arrive. This package reads JPEGs that tools/live_capture_server
+                # writes; it cannot receive one itself. Capture server up, and a
+                # live session is a real offer. Capture server down, and offering
+                # it would take someone's three-minute walk and reconstruct none
+                # of it -- the failure dispatch.ts was corrected for.
+                if capture_reachable(self.capture_url):
+                    return self._send(400, {"error": "no such session", "session": sid})
+                return self._send(
+                    404,
+                    {
+                        "error": "no frame source",
+                        "detail": (
+                            f"Nothing is listening at {self.capture_url}. Live capture needs "
+                            "tools/live_capture_server running to receive frames."
+                        ),
+                    },
+                )
             status = session.tick()
             return self._send(
                 200,
@@ -450,9 +477,15 @@ def serve(
     port: int = DEFAULT_PORT,
     preset: str = "balanced",
     host: str = "127.0.0.1",
+    sessions_root: Optional[Path] = None,
+    capture_url: str = DEFAULT_CAPTURE_URL,
 ) -> None:
     """Run the studio until interrupted."""
-    paths = Paths(web=Path(web), work=Path(work))
+    paths = Paths(
+        web=Path(web),
+        work=Path(work),
+        sessions_root=Path(sessions_root) if sessions_root else None,
+    )
     for d in (paths.runs, paths.sessions, paths.splats):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -465,12 +498,26 @@ def serve(
     Handler.registry = registry
     Handler.watcher = watcher
     Handler.port = port
+    Handler.capture_url = capture_url
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"  spark studio   http://{host}:{port}")
     print(f"  watching       {paths.uploads}")
     print(f"  publishing to  {paths.splats}")
     print(f"  work           {paths.work}")
+    print()
+    print(f"  live sessions  {paths.sessions}")
+    live_up = capture_reachable(capture_url)
+    print(
+        f"  frame source   {capture_url} "
+        + ("- reachable, live capture is offered" if live_up else "- DOWN, live capture is not offered")
+    )
+    if not live_up:
+        # Said plainly rather than left to be discovered when a capture produces
+        # nothing: this server cannot receive a frame, it can only read the ones
+        # that server writes.
+        print("                 start tools/live_capture_server to enable it, and point")
+        print("                 --sessions at the same --root it uses.")
     print()
     print("  The web app finds this automatically - NEXT_PUBLIC_STUDIO_URL")
     print(f"  defaults to http://localhost:{DEFAULT_PORT}.")

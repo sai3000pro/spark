@@ -177,7 +177,15 @@ export function describeTargets(input: {
           "No reconstruction studio is running on the laptop. Start one with " +
           "`python -m spark_studio serve` from tools/ — see tools/spark_studio/README.md."
         : !studio.live
-          ? "The studio is running but this build has no live endpoint."
+          ? // Worded to be true whatever the cause, because the probe cannot
+            // tell them apart: it reads a status code, not a reason. A 404 here
+            // means either an older studio with no live route at all, or a
+            // current one whose FRAME SOURCE is down — tools/live_capture_server
+            // is what receives frames from the browser, and spark_studio reports
+            // itself live-incapable while nothing is listening there. Claiming
+            // "this build has no live endpoint" was wrong in the second case,
+            // which is now the common one.
+            "The studio is running but is not accepting live frames — its capture server isn't up."
           : null,
     },
     {

@@ -41,6 +41,19 @@ from typing import Callable, Optional, Protocol
 PARTIAL_REGISTRATION = 0.6
 
 
+def list_images(images_dir: Path) -> list[Path]:
+    """Every JPEG in a directory, in name order.
+
+    Deliberately `*.jpg` rather than `frames.py`'s own `frame_*.jpg`. This
+    package writes that prefix, but tools/live_capture_server writes
+    `phone/frames/000001.jpg` for the same thing -- real frames from a real
+    phone -- and a solver that only recognised our own naming would refuse to
+    reconstruct a live capture on a filename convention. COLMAP reads the whole
+    directory regardless; this list only decides what we COUNT.
+    """
+    return sorted(images_dir.glob("*.jpg"))
+
+
 class PoseError(RuntimeError):
     """No usable camera solution. Carries a sentence a person can act on."""
 
@@ -139,7 +152,7 @@ class ColmapSolver:
             if progress:
                 progress(stage, frac)
 
-        images = sorted(images_dir.glob("frame_*.jpg"))
+        images = list_images(images_dir)
         if len(images) < 8:
             raise PoseError(
                 f"Only {len(images)} frames - far too few to solve camera "
@@ -294,7 +307,7 @@ class PrecomputedSolver:
         return PoseResult(
             dataset_dir=dataset_dir,
             registered=registered,
-            total=len(sorted(images_dir.glob("*.jpg"))) or registered,
+            total=len(list_images(images_dir)) or registered,
             points3d=len(points),
             mean_reprojection_error_px=None,
             source=self.name,

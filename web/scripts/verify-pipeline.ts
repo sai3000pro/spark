@@ -2132,8 +2132,24 @@ function verifyReconTargetMenu() {
   });
   check("a studio with no live endpoint blocks live and allows batch",
     oldStudio[1].available === false && oldStudio[2].available === true);
-  check("and blames the build rather than the network",
-    /build|endpoint/i.test(oldStudio[1].blockedBecause ?? ""),
+  // Asserted as MEANING rather than as vocabulary. This used to test
+  // /build|endpoint/, which passed for one specific sentence and failed the
+  // moment that sentence got more accurate — the reachable-but-not-live case is
+  // now usually a capture server that is down rather than an old studio build,
+  // and the text says so. What has to hold is the distinction itself: a person
+  // told "no studio is running" and a person told "the studio is running but
+  // will not take live frames" have different problems and different next
+  // moves, so the two must never collapse into one sentence.
+  const noStudio = describeTargets({
+    studio: { reachable: false, live: false },
+    hasKiriKey: false,
+    kiriCredits: null,
+  });
+  check("and does not confuse a missing studio with a live-incapable one",
+    (oldStudio[1].blockedBecause ?? "") !== (noStudio[1].blockedBecause ?? ""),
+    oldStudio[1].blockedBecause ?? "null");
+  check("saying plainly that the studio itself IS running",
+    /studio is running/i.test(oldStudio[1].blockedBecause ?? ""),
     oldStudio[1].blockedBecause ?? "null");
 
   section("A bad key and an empty one are different problems");

@@ -118,8 +118,28 @@ class LiveSession:
     _note: Optional[str] = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    #: Where frames land, in priority order.
+    #:
+    #: Two producers write frames for a live session and they do not agree on a
+    #: layout. This package's own extractor writes `images/frame_00001.jpg`;
+    #: tools/live_capture_server -- which is what web/lib/liveRecon.ts actually
+    #: streams to -- writes `phone/frames/000001.jpg`, real JPEGs, already
+    #: decoded. Rather than make either side move, the session looks in both and
+    #: uses whichever has frames in it. That single lookup is the whole bridge
+    #: between the browser's live path and this reconstructor.
+    CANDIDATE_FRAME_DIRS = ("phone/frames", "images", "frames")
+
     @property
     def images(self) -> Path:
+        """The directory frames are actually arriving in.
+
+        Falls back to `images/` when nothing has arrived yet, so a brand-new
+        session has somewhere to be created rather than no answer.
+        """
+        for relative in self.CANDIDATE_FRAME_DIRS:
+            candidate = self.root / relative
+            if candidate.is_dir() and any(candidate.glob("*.jpg")):
+                return candidate
         return self.root / "images"
 
     @property
@@ -127,9 +147,12 @@ class LiveSession:
         return self.root / "exports"
 
     def frame_count(self) -> int:
-        if not self.images.is_dir():
+        images = self.images
+        if not images.is_dir():
             return 0
-        return len(list(self.images.glob("frame_*.jpg")))
+        # `*.jpg`, not `frame_*.jpg` -- the capture server names them
+        # `000001.jpg`. See CANDIDATE_FRAME_DIRS.
+        return len(list(images.glob("*.jpg")))
 
     def status(self) -> LiveStatus:
         """Derived by looking, every time. Nothing cached that could disagree."""
@@ -266,7 +289,9 @@ class LiveRegistry:
         if not self.root.is_dir():
             return
         for d in self.root.iterdir():
-            if d.is_dir() and (d / "images").is_dir():
+            if not d.is_dir():
+                continue
+            if any((d / rel).is_dir() for rel in LiveSession.CANDIDATE_FRAME_DIRS):
                 self.get(d.name)
 
     def all(self) -> list[LiveSession]:
