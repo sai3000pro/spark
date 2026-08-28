@@ -122,6 +122,48 @@ def _default_workspace() -> Path:
     return Path.home() / "SparkStudio"
 
 
+def _studio_on(port: int) -> bool | None:
+    """True if a Spark Studio answers on this port, False/None otherwise.
+
+    Three outcomes, deliberately: a studio (open it), something else that is
+    not a studio (say so and suggest another port), or nothing at all (start).
+    Distinguished by asking for an endpoint only this server has, because
+    "something is listening" and "the thing I am about to start is listening"
+    are different facts with different right answers.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/studio/health", timeout=2.0
+        ) as r:
+            _json.loads(r.read().decode("utf-8"))
+        return True
+    except urllib.error.URLError:
+        return None  # nothing there, or nothing that speaks HTTP
+    except Exception:
+        return False  # answered, but not with a studio health payload
+
+
+def _port_busy(port: int) -> bool:
+    """Can we actually take this port? Asked by trying, not by scanning."""
+    import socket
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        # No SO_REUSEADDR here on purpose - that flag is exactly what let a
+        # second studio bind an occupied port on Windows, so a probe that set
+        # it would report the port free and reintroduce the bug it is checking.
+        probe.bind(("127.0.0.1", port))
+        return False
+    except OSError:
+        return True
+    finally:
+        probe.close()
+
+
 def _app(args) -> int:
     """Serve the page and open it. The frozen build's front door."""
     import threading
@@ -140,29 +182,104 @@ def _app(args) -> int:
         return 1
 
     url = f"http://127.0.0.1:{args.port}/"
-    print()
-    print("  Spark Studio is running.")
-    print(f"  Open        {url}")
-    print(f"  Files       {work}")
-    print()
-    print("  Leave this window open - closing it stops the studio.")
-    print("  Ctrl+C to stop.")
-    print()
+
+    # ALREADY RUNNING? Then open that one rather than starting a second.
+    #
+    # Not a nicety. On Windows a second bind of the same port SUCCEEDS -
+    # SO_REUSEADDR, which http.server sets by default, permits it - so
+    # double-clicking the icon twice produced two studios listening on 8899,
+    # each with its own watcher over its own workspace, and requests landing on
+    # whichever the OS felt like. Measured: two PIDs on 127.0.0.1:8899 at once,
+    # and a page whose job list flickered between two different truths.
+    #
+    # Double-clicking a second time is a completely ordinary thing to do - the
+    # first window is behind a browser, so it looks like nothing happened - and
+    # the right response to it is to show the studio that is already there.
+    existing = _studio_on(args.port)
+    if existing:
+        say = print
+        say()
+        say("  Spark Studio is already running.")
+        say(f"  Open        {url}")
+        say()
+        if not args.no_open:
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        return 0
+    # Deliberately NOT `existing is None`. _studio_on has three outcomes and
+    # only one of them means "free": a port held by something that is not an
+    # HTTP server returns False, and gating on None let that case fall through
+    # to the bind, which then raised WinError 10013 as a raw traceback in a
+    # console window that closes a second later. Anything holding the port at
+    # all is a reason not to start.
+    if _port_busy(args.port):
+        print(file=sys.stderr)
+        print(
+            f"  Something else is already using port {args.port}.",
+            file=sys.stderr,
+        )
+        print(
+            f"  Start the studio on another one:  --port {args.port + 1}",
+            file=sys.stderr,
+        )
+        print(file=sys.stderr)
+        return 2
+
+    # flush=True on every line, because this text is the FALLBACK. If the
+    # browser does not open - no default browser set, a headless session, a
+    # locked-down machine - these lines are the only way to find out where the
+    # studio is listening. Python line-buffers to a console and block-buffers
+    # to anything else, so redirected into a file or a pipe the address would
+    # sit unwritten in a buffer for as long as the server runs, which is
+    # precisely when someone is looking for it.
+    def say(line: str = "") -> None:
+        print(line, flush=True)
+
+    say()
+    say("  Spark Studio is running.")
+    say(f"  Open        {url}")
+    say(f"  Files       {work}")
+    say()
+    say("  Leave this window open - closing it stops the studio.")
+    say("  Ctrl+C to stop.")
+    say()
 
     if not args.no_open:
         # After a beat, so the server is listening before the browser asks.
-        # Daemon: a failure to open a browser must never hold the process open.
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        # Failure here is deliberately silent and harmless: the address is
+        # already on screen, and a machine with no browser to open is not a
+        # machine that should lose its studio over it.
+        def open_later() -> None:
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
 
-    serve(
-        web=None,
-        work=work,
-        port=args.port,
-        preset=args.preset,
-        host="127.0.0.1",
-        capture_url=args.capture_url,
-        ui=True,
-    )
+        timer = threading.Timer(1.0, open_later)
+        timer.daemon = True
+        timer.start()
+
+    try:
+        serve(
+            web=None,
+            work=work,
+            port=args.port,
+            preset=args.preset,
+            host="127.0.0.1",
+            capture_url=args.capture_url,
+            ui=True,
+        )
+    except OSError as exc:
+        # The checks above race: a port free when probed can be taken a
+        # millisecond later. Whatever the cause, a person who double-clicked an
+        # icon must not be shown a socket traceback in a window that vanishes.
+        print(file=sys.stderr)
+        print(f"  Could not start on port {args.port}: {exc}", file=sys.stderr)
+        print(f"  Try another one:  --port {args.port + 1}", file=sys.stderr)
+        print(file=sys.stderr)
+        return 2
     return 0
 
 

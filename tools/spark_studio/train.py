@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -128,6 +129,18 @@ def latest_snapshot(export_dir: Path) -> Optional[Path]:
 
 # Brush logs progress lines; the exact wording is not a contract we control, so
 # the parse is deliberately loose and a miss only costs a progress update.
+#
+# IT NEVER MATCHES ANYTHING, and that is not a bug in the pattern.
+#
+# brush-cli draws a progress bar when it owns a terminal and prints NOTHING when
+# its output is a pipe - which is every way this module ever runs it. Measured:
+# 30 training iterations, exit 0, a 5.2 MB .ply written, and exactly 0 bytes on
+# stdout and stderr combined. So there is no line to parse, and the progress
+# callback fired once with "starting trainer" and then stayed silent for the
+# entire run: forty minutes pinned at 50% on a page that says "watch it build".
+#
+# Kept because it costs nothing and a future Brush may well speak up. The signal
+# that actually works is below - the snapshots it writes.
 _STEP_RE = re.compile(r"(?:step|iter\w*)\D{0,4}(\d[\d,]*)\s*/\s*(\d[\d,]*)", re.I)
 
 
@@ -192,6 +205,45 @@ def train(
     except OSError as exc:
         raise TrainError(f"Could not start {brush.path}: {exc}") from exc
 
+    # PROGRESS FROM THE FILES, because the process will not tell us.
+    #
+    # `--export-every` makes Brush drop `export_<iter>.ply` as it goes, and the
+    # highest iteration on disk is a true statement about how far the run has
+    # got. Same derive-by-looking rule the rest of this package runs on: the
+    # artefact IS the progress, so this survives a restart and cannot drift.
+    #
+    # Granularity is `export_every` steps - five updates across a 10k run - which
+    # is coarse and is real, and infinitely better than one update and silence.
+    watching = threading.Event()
+
+    def _watch_snapshots() -> None:
+        last = -1
+        while not watching.wait(4.0):
+            try:
+                snaps = snapshots(export_dir)
+            except OSError:
+                continue
+            if not snaps:
+                continue
+            m = _ITER_RE.search(snaps[-1].name)
+            if not m:
+                continue
+            cur = int(m.group(1))
+            if cur <= last:
+                continue
+            last = cur
+            if progress:
+                progress(
+                    f"training ({cur:,}/{cfg.steps:,} steps)",
+                    min(0.99, cur / cfg.steps) if cfg.steps else 0.0,
+                )
+
+    if progress:
+        watcher = threading.Thread(target=_watch_snapshots, name="train-progress", daemon=True)
+        watcher.start()
+    else:
+        watcher = None
+
     assert proc.stdout is not None
     for line in proc.stdout:
         line = line.rstrip()
@@ -209,6 +261,9 @@ def train(
             except ValueError:
                 pass
     code = proc.wait()
+    watching.set()
+    if watcher is not None:
+        watcher.join(timeout=6.0)
 
     # THE FILE IS THE TRUTH. A zero exit with no ply is a failure; a non-zero
     # exit that nonetheless left a usable snapshot is worth surfacing rather
