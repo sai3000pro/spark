@@ -151,6 +151,56 @@ handing the file to anyone else, and no amount of code fixes it.
 
 ---
 
+## Deploying to Vercel — what happens today, measured
+
+Run `GET /api/deployment` on any deploy; it answers this in one request, in the
+app's words rather than the platform's.
+
+| | On this laptop | On Vercel |
+|---|---|---|
+| `storage.host` | `local` | `serverless` |
+| `storage.writable` | true | **true** — and that is the trap |
+| `storage.durable` | true | **false** |
+| upload ceiling | 1024 MB | **4 MB** |
+| uploads enabled | yes | **no**, refused with a 503 and a sentence |
+| `ready` | false (no database) | false |
+
+**The trap is that writing SUCCEEDS.** A serverless instance has a writable
+temp filesystem, so a naive check passes and the bytes land — on a disk the next
+request will not see. Storing a 200 MB splat and reporting `ready` is the worst
+available outcome, because the upload was spent and the answer was a lie. So
+`canStoreUploads()` requires DURABLE, not writable, and durability is inferred
+from the host rather than probed — one process cannot observe what a different
+instance will see, and this says so rather than pretending to measure it.
+
+**Verified by running the app with `VERCEL=1`:**
+
+- `POST /api/splat/upload` → **503** with *"This deployment can write, but each
+  request may run on a different instance with its own disk…"*, and
+  `public/mock/splats/` untouched. It previously threw `EROFS` from inside the
+  handler and returned a 500 about a path.
+- The advertised limit drops to 4 MB, because **Vercel caps a serverless
+  function's request body at 4.5 MB** and the platform rejects the request
+  before this code runs. A 1024 MB ceiling there is a limit nobody can reach and
+  a refusal nobody can explain.
+- With the flag removed, local uploads still work — regression-checked with a
+  real 21 MB PLY.
+
+### So: is it deployable to Vercel right now?
+
+**It deploys and it runs. It cannot keep anything.** The landing page, the
+viewer, the walk pipeline and every read path work. Every write path — uploads,
+albums, journeys, the rover feed — degrades to "this instance only", and the
+upload route refuses outright rather than pretending.
+
+That is a demo, honestly labelled, not a product. The two things that change it
+are the same two as everywhere else in this document: **object storage** for the
+splat bytes (`lib/storage/providers/` has R2, Backblaze and Supabase written and
+none configured) and **Postgres** for the records. Neither can be built here,
+and `/api/deployment` will say `ready: true` when both are.
+
+---
+
 ## What still blocks production
 
 ### 1. Durable storage beyond one machine — **the real blocker**

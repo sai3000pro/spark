@@ -68,7 +68,33 @@ import { SPLAT_DIR } from "@/lib/splat/store";
  * export at full spherical-harmonic detail is around 900 MB, and refusing it
  * would refuse the best output the studio can produce.
  */
-export const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
+/*
+  THE CEILING IS NOT OURS TO SET ON EVERY HOST.
+
+  A gigabyte is the right number for a splat arriving over localhost, and it is
+  fiction on a serverless platform: Vercel caps a serverless function's request
+  body at 4.5 MB, and the request is rejected by the platform before this code
+  runs at all. Advertising 1024 MB there would mean a limit nobody can reach and
+  a refusal nobody can explain — the upload dies with a platform error naming
+  neither the real limit nor a way around it.
+
+  So the number is the smaller of what we want and what the host allows. On a
+  laptop nothing changes. On Vercel the panel and the refusals both say 4 MB,
+  which is true and is at least actionable: it tells you this deployment cannot
+  be the one that takes your captures.
+
+  Kept slightly under the platform's own figure. 4.5 MB is the ceiling on the
+  whole request, and a multipart body carries boundaries and headers a file does
+  not; refusing at 4 MB is a refusal WE can word, rather than one the platform
+  words for us.
+*/
+const SERVERLESS_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
+const PREFERRED_MAX_UPLOAD_BYTES = 1024 * 1024 * 1024;
+
+export const MAX_UPLOAD_BYTES =
+  process.env.VERCEL === "1" || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? SERVERLESS_BODY_LIMIT_BYTES
+    : PREFERRED_MAX_UPLOAD_BYTES;
 
 /** Below this there is no plausible splat — it is a stray or an empty file. */
 export const MIN_UPLOAD_BYTES = 256;

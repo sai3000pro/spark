@@ -83,6 +83,7 @@ import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import { NextResponse } from "next/server";
 
+import { canStoreUploads, storageReality } from "@/lib/deployment";
 import { detectSplatFormat, MAX_HEADER_BYTES } from "@/lib/splat/formats";
 import { createSplatJob, ensureDirs, getSplatJob, splatPathFor } from "@/lib/splatJobs";
 
@@ -147,6 +148,25 @@ export async function POST(request: Request) {
     a connection and costs this machine nothing. Checking after the transfer
     would mean accepting a gigabyte in order to say no to it.
   */
+  /*
+    Can this deployment keep a splat at all?
+
+    Asked FIRST, before a byte is read, because the alternative is what used to
+    happen on a read-only host: `ensureDirs()` throws EROFS from inside the
+    handler and the caller gets a 500 about a path. Someone who just waited out
+    a 200 MB upload deserves a sentence about the deployment, not a stack trace.
+
+    `durable`, not merely `writable` — see canStoreUploads(). Taking the bytes
+    onto a disk that evaporates before anyone can open the result is worse than
+    refusing them, because the upload was spent and the answer was "ready".
+  */
+  if (!canStoreUploads()) {
+    return NextResponse.json(
+      { error: storageReality().reason },
+      { status: 503, headers: { ...NO_STORE, "Retry-After": "3600" } },
+    );
+  }
+
   const slot = openUploadSlot(request);
   if (!slot.ok) {
     return NextResponse.json(

@@ -23,6 +23,7 @@ import {
   MAX_JOURNEYS,
 } from "../lib/journey/store";
 import { __wipeStore, forget, hydrate, persist, persistedCount, storeDir } from "../lib/persist";
+import { __resetStorageReality, canStoreUploads, storageReality } from "../lib/deployment";
 import { deriveRoute } from "../lib/journey/route";
 import { emptyFacts, type ClipFacts } from "../lib/journey/clips";
 import {
@@ -411,6 +412,48 @@ section("The rover feed survives a restart");
   );
 
   __resetIngest();
+}
+
+section("The deployment knows what it cannot do");
+{
+  /*
+    The question this answers is the one a Vercel deploy fails on. Every store
+    here writes a sidecar and the upload route streams into public/ — correct on
+    a laptop, and on a serverless host the disk is per-invocation, so a write
+    that SUCCEEDS is still gone by the next request. Storing a 200 MB splat
+    there and reporting "ready" is the worst available outcome: the upload was
+    spent and the answer was a lie.
+  */
+  __resetStorageReality();
+  const here = storageReality();
+  ok("this machine can write", here.writable);
+  ok("...and is treated as durable", here.durable);
+  ok("...so uploads are allowed", canStoreUploads());
+
+  // What the same code says on a serverless host.
+  const saved = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  __resetStorageReality();
+  const serverless = storageReality();
+  ok("a serverless host is recognised", serverless.host === "serverless");
+  ok(
+    "...and is NOT durable even though the write succeeds",
+    serverless.writable && !serverless.durable,
+  );
+  ok("...so uploads are refused there", !canStoreUploads());
+  ok(
+    "...with a reason naming what is actually missing",
+    /object storage|database/i.test(serverless.reason),
+  );
+  ok(
+    "...phrased for a person, not as an error code",
+    serverless.reason.length > 40 && /[.]$/.test(serverless.reason.trim()),
+  );
+
+  if (saved === undefined) delete process.env.VERCEL;
+  else process.env.VERCEL = saved;
+  __resetStorageReality();
+  ok("the local answer comes back afterwards", canStoreUploads());
 }
 
 // NOT COVERED HERE: lib/push/registry.ts, and it is worth saying why rather
