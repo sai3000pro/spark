@@ -16,8 +16,10 @@ class of lie this repository is organised against.
 from __future__ import annotations
 
 import importlib
+import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -26,6 +28,25 @@ from typing import Optional
 # install is found without touching the user's PATH.
 _VENV = Path(__file__).resolve().parents[2] / ".venv-splat"
 _LOCAL_BIN = [_VENV / "bin", _VENV / "Scripts"]
+
+
+def bundled_dir() -> Optional[Path]:
+    """Where PyInstaller unpacked us, when we are the one-file executable.
+
+    The frozen build ships ffmpeg and brush-cli inside itself, because the whole
+    promise of the download is that nothing else has to be installed. At runtime
+    they are extracted beside the interpreter in a temporary directory that only
+    `sys._MEIPASS` knows about - `__file__` points into that same unpack, so the
+    repo-relative `_VENV` above resolves to somewhere that does not exist.
+
+    Returns None in a normal checkout, where the venv paths are the right answer.
+    """
+    base = getattr(sys, "_MEIPASS", None)
+    return Path(base) if base else None
+
+
+def is_frozen() -> bool:
+    return bundled_dir() is not None
 
 
 @dataclass
@@ -56,7 +77,25 @@ def _run_version(exe: str, *args: str) -> Optional[str]:
 
 
 def find_executable(name: str) -> Optional[str]:
-    """PATH, then the project venv. Never a bare path guess."""
+    """Our own bundle first, then PATH, then the project venv.
+
+    The bundle wins deliberately. A one-file download that says it needs nothing
+    installed has to use the copy it shipped with - the one that was built and
+    tested together with this code. Falling through to PATH first would let an
+    unrelated `brush-cli` from an old experiment take over on the one machine
+    where the user was promised there were no moving parts.
+
+    In a checkout there is no bundle, so this is exactly the old order.
+    """
+    search: list[Path] = []
+    bundle = bundled_dir()
+    if bundle:
+        search.append(bundle)
+    for d in search:
+        for candidate in (d / name, d / f"{name}.exe"):
+            if candidate.is_file():
+                return str(candidate)
+
     hit = shutil.which(name)
     if hit:
         return hit
@@ -69,6 +108,25 @@ def find_executable(name: str) -> Optional[str]:
 
 def check_ffmpeg() -> Tool:
     """imageio-ffmpeg first: it ships its own binary, so pip alone is enough."""
+    # A backstop, and only that: imageio_ffmpeg resolves its own binary inside a
+    # frozen bundle, and on this build it does. But it finds it by a name the
+    # package chooses - "ffmpeg-win-x86_64-v7.1.exe", version and platform baked
+    # in - so a version bump or a change of heart upstream silently costs us
+    # stage one. The variable is honoured ahead of any of that logic, so setting
+    # it from whatever ffmpeg we can see in the bundle makes the frozen build
+    # depend on the file being there rather than on it still being called what
+    # it is called today.
+    #
+    # Globbed for the same reason. Matching a literal "ffmpeg.exe" was the first
+    # attempt and it never matched anything - dead code that read like a
+    # safeguard, which is worse than no safeguard.
+    bundle = bundled_dir()
+    if bundle and not os.environ.get("IMAGEIO_FFMPEG_EXE"):
+        for cand in sorted(bundle.glob("ffmpeg*")):
+            if cand.is_file() and cand.suffix.lower() in ("", ".exe"):
+                os.environ["IMAGEIO_FFMPEG_EXE"] = str(cand)
+                break
+
     try:
         import imageio_ffmpeg
 
@@ -136,7 +194,19 @@ def check_brush() -> Tool:
 
 def report() -> list[Tool]:
     """All three, in pipeline order."""
-    return [check_ffmpeg(), check_pycolmap(), check_brush()]
+    tools = [check_ffmpeg(), check_pycolmap(), check_brush()]
+    if is_frozen():
+        # "pip install pycolmap" is useless advice to someone holding a single
+        # .exe - there is no environment to install into. A missing piece in a
+        # frozen build is our packaging error, not their setup, and saying so
+        # sends them to the right place instead of into a Python install.
+        for t in tools:
+            if not t.found:
+                t.fix = (
+                    "This build is missing a piece it should have shipped with. "
+                    "Re-download the studio, and report it if it happens again."
+                )
+    return tools
 
 
 def render(tools: list[Tool]) -> str:

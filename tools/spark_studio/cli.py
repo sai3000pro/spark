@@ -176,6 +176,12 @@ def main(argv: list[str] | None = None) -> int:
         "--no-resume", action="store_true",
         help="Redo every stage even if its output is already on disk",
     )
+    parser.add_argument(
+        "--push", metavar="URL", nargs="?", const="http://localhost:3000",
+        help="After the .ply lands, upload it to a running Spark app so it "
+             "becomes a capture you can open. Bare --push means "
+             "http://localhost:3000. The file stays on disk either way",
+    )
     args = parser.parse_args(argv)
 
     # The verbs are spelled as the positional so the common case stays one word.
@@ -292,6 +298,27 @@ def main(argv: list[str] | None = None) -> int:
             f"{result.training['snapshots']} snapshots, {mb:.1f} MB"
         )
     print(f"  done       {published}  in {_human(elapsed)}")
+
+    # AFTER the summary, never instead of it. The .ply is the artefact and its
+    # path is the one line that must survive whatever the network does next.
+    if args.push:
+        from .push import PushError, push_ply
+
+        print()
+        print(f"  Uploading to {args.push} ...")
+        try:
+            pushed = push_ply(published, args.push)
+        except PushError as exc:
+            print(f"  Not uploaded: {exc}", file=sys.stderr)
+            print(f"  The splat is fine and it is here: {published}", file=sys.stderr)
+            print(file=sys.stderr)
+            # Deliberately 0. The reconstruction - the hour of work - succeeded,
+            # and exiting non-zero would tell a script that it failed.
+            return 0
+        print(f"  open       {pushed.view_url}")
+        if pushed.warning:
+            print(f"  note: {pushed.warning}")
+
     print()
     return 0
 

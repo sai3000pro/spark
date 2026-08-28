@@ -18,10 +18,74 @@ walk.mp4 ──ffmpeg──▶ frames ──COLMAP──▶ camera poses ──B
 motion. It produces no model of the scene, just poses and a sparse dust of tie
 points. You cannot look at it. **Stage 3** is the one that makes the splat.
 
-This is also why there is no browser-only path. Stage 3 runs in a browser fine
-(Brush is wgpu). Stage 2 has *no* browser implementation in existence — no
-SfM has ever been compiled to WASM. Poses have to come from somewhere else:
-a machine like this one, or a phone that ran ARKit and already knows.
+This is also why there is no browser-only path, and the two stages fail that
+test for completely different reasons.
+
+| stage | in a browser tab? |
+|---|---|
+| frames from a video | **yes** — WebCodecs, already done in this repo |
+| **camera poses** | **no.** No SfM implementation exists for the browser at all |
+| train the gaussians | **in principle** — Brush is wgpu, but see below |
+| render the result | **yes** — shipped, this is what `/splat/<id>` does |
+
+**Stage 2 is the wall.** No SfM has ever been compiled to WASM — no COLMAP, no
+OpenMVG, no OpenSfM, no Theia. The learned alternatives that skip SfM entirely
+do not fit either: transformers.js has no multi-view pose model, and ONNX
+Runtime Web is capped at 4 GB by wasm32 while a VGGT export is 4.76 GB.
+
+**Stage 3 is a packaging problem, not an impossibility, and it is still not
+free.** Brush is Rust and wgpu, so a web build is coherent in principle — but
+Brush v0.3.0 publishes three native desktop binaries and *no* wasm artifact, so
+there is nothing to vendor. It would have to be built from source, and a Brush
+web build trains from a prepared COLMAP dataset: it does not do stage 2 either.
+So even a perfect in-tab trainer still needs poses from somewhere.
+
+**Where poses can come from without a laptop:** a phone that already computed
+them. WebXR on Android exposes ARCore's 6-DoF poses together with
+`camera-access`, and ARKit does the same natively — which is what
+`tools/arkit_capture/export_colmap.py` already exploits, writing COLMAP triples
+with no solve at all. That is the one genuine route to end-to-end in-tab
+reconstruction, and it is a capture path, not a way to import an existing video.
+
+For an arbitrary video, poses have to come from a machine like this one.
+
+## The download, for people who do not want an install
+
+Everything below assumes a Python and a Rust toolchain. Most people who want to
+turn a video into a splat have neither, and "create a virtualenv" is where the
+project ends for them. So there is a build that is one file:
+
+```bash
+.venv-splat/Scripts/python tools/package/build_studio.py
+#  -> dist/spark-studio.exe   (163 MB)
+```
+
+It contains Python, numpy, pycolmap, ffmpeg and brush-cli. Nothing else is
+needed on the machine that runs it:
+
+```
+spark-studio.exe doctor                       # can this machine do it at all
+spark-studio.exe walk.mp4 -o walk.ply         # the whole pipeline
+spark-studio.exe walk.mp4 -o walk.ply --push  # ...and put it in the app
+```
+
+`--push` uploads the finished `.ply` to a running Spark app (default
+`http://localhost:3000`) and prints the URL to open it at. Without it you get a
+file, which you can drop into the app yourself on the `/live` page under **Or
+bring a finished splat**. Either way the `.ply` stays on disk — a failed upload
+never costs you the reconstruction, and the path is printed again if it happens.
+
+**It starts slowly.** A one-file build unpacks 217 MB of binaries into a temp
+directory on every run, which is a pause of a few seconds before anything is
+printed. That is invisible against a job that runs for half an hour and mildly
+irritating in front of `doctor`. The alternative is shipping a folder of six
+hundred files, which is worse in the way that actually loses people.
+
+**It is not signed.** Windows SmartScreen will warn about it and macOS
+Gatekeeper will refuse it outright until it is notarised — both need a paid
+developer identity. This is fine for a build you made yourself on the machine
+you made it on; it is the blocker for handing the file to a stranger, and no
+amount of code fixes it.
 
 ## Install
 

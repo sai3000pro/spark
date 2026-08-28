@@ -60,3 +60,17 @@ ComfyUI/
 # Both are rebuildable from tools/spark_studio/README.md and neither is ours to keep.
 .venv-splat/
 .studio/
+
+# The frozen studio, and PyInstaller's scratch.
+#
+# `dist/spark-studio.exe` is 163 MB — over GitHub's 100 MB hard limit on its
+# own, and it is a BUILD of code that is already in this repo rather than a
+# source of it. `tools/package/build_studio.py` reproduces it in about two
+# minutes from a checkout that passes `doctor`.
+#
+# Distributing it is a release-artifact problem, not a version-control one:
+# it also needs signing before it can be handed to anyone else at all (Windows
+# SmartScreen warns, macOS Gatekeeper refuses), which is documented in
+# tools/spark_studio/README.md.
+dist/
+build/studio/
