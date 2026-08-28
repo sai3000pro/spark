@@ -1,5 +1,5 @@
 /**
- * The four formats this app stores, and nothing else.
+ * The five formats this app stores, and nothing else.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * WHY THIS IS ITS OWN FILE
@@ -17,7 +17,7 @@
  * resolution error about a Node builtin, from a file that never mentions one.
  * The alternative is writing the list out twice, and a list written twice is a
  * list that drifts: the picker would go on offering `.ply` alone long after the
- * server started taking four formats, or, worse, offer a format the server
+ * server started taking more, or, worse, offer a format the server
  * refuses, which is a wasted upload and a confusing refusal.
  *
  * So the list lives here, with no imports at all, and everything reads it from
@@ -35,14 +35,26 @@
  * gets a silently wrong one the day somebody sorts it alphabetically.
  */
 
-export const SPLAT_FORMATS = ["ply", "spz", "ksplat", "splat"] as const;
+/*
+  `rad` sits before `splat` for the reason the note above gives: it is
+  self-describing (a "RAD0" magic) and `.splat` is not, so anything that can
+  identify itself must get the chance before the format that is identified by
+  elimination.
+
+  It is also the one format here that only ONE of the two engines can open -
+  see RENDERER_FORMATS in ./renderer.ts. Storing it is still right: the viewer
+  picks the engine that can read the file, and refusing a format because the
+  fallback engine cannot draw it would be refusing the only format that makes a
+  million-splat scene openable at all.
+*/
+export const SPLAT_FORMATS = ["ply", "spz", "ksplat", "rad", "splat"] as const;
 export type SplatFormat = (typeof SPLAT_FORMATS)[number];
 
 /** The same list as filename extensions, dot included. */
 export const SPLAT_EXTENSIONS: readonly string[] = SPLAT_FORMATS.map((f) => `.${f}`);
 
 /**
- * What a file picker's `accept` attribute wants: `.ply,.spz,.ksplat,.splat`.
+ * What a file picker's `accept` attribute wants: `.ply,.spz,.ksplat,.rad,.splat`.
  *
  * A hint to the browser and nothing more. The server re-derives the format from
  * the bytes, because an extension is a claim by whoever named the file — see

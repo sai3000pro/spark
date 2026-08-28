@@ -4,7 +4,7 @@
  * The gate on /api/splat/upload used to read one format. `lib/splat/renderer.ts`
  * has always said what the engines actually open —
  *
- *   Spark 2.1 (@sparkjsdev/spark)   ply · spz · splat · ksplat · pcsogs
+ *   Spark 2.1 (@sparkjsdev/spark)   ply · spz · splat · ksplat · pcsogs · rad
  *   mkkellogg 0.4.7                 ply · splat · ksplat
  *
  * — and the upload path accepted `.ply` alone, so a Luma `.splat` and a
@@ -61,7 +61,22 @@
  *           than that is accepted on its file header alone and SAYS SO in the
  *           warning rather than quietly.
  *
- *   SPLAT   Structure only, and it is the weakest of the four BY CONSTRUCTION.
+ *   RAD     MAGIC ONLY, and it is the least checked format here. RAD is World
+ *           Labs' streaming/LOD format: a "RAD0" magic, then a header that
+ *           Spark decodes in wasm (`decode_rad_header`, handed the first 1 MB
+ *           of the file). That layout is not published and is not readable from
+ *           TypeScript without shipping the wasm into this request handler, so
+ *           the only fact established here is those four bytes and a plausible
+ *           length. Truncation is NOT caught. A half-downloaded .rad reaches
+ *           the viewer and fails there.
+ *
+ *           Accepted anyway, on the same reasoning as SPZ: the failure is a
+ *           loud one at load rather than a wrong scene quietly drawn, and the
+ *           format is what makes a million-splat capture openable at all. If
+ *           the header layout is ever published, this becomes checkable and
+ *           this paragraph should shrink.
+ *
+ *   SPLAT   Structure only, and it is the weakest of the five BY CONSTRUCTION.
  *           The antimatter15/Luma `.splat` format has no magic number and no
  *           header at all: it is a bare array of 32-byte records (3 float32
  *           position, 3 float32 scale, 4 uint8 RGBA, 4 uint8 quaternion). So
@@ -497,6 +512,47 @@ function readKsplatHeader(prefix: Uint8Array, totalBytes: number): SplatFileResu
  * RGBA, 4 bytes quaternion. No header, no magic, no count — the whole format
  * specification is this one number.
  */
+/*
+  "RAD0" — World Labs' streaming/LOD container.
+
+  Taken from Spark's own `getSplatFileType`, which compares a little-endian
+  uint32 against 809779538. That is 0x30444152, which is the four bytes
+  52 41 44 30 in file order: R A D 0. Written here as bytes rather than as that
+  integer so it cannot silently mean something else on a big-endian host, and so
+  the next person does not have to do the arithmetic to see what it is.
+*/
+/*
+  The accepted list, as a sentence, DERIVED rather than typed.
+
+  This was written out by hand as ".ply, .spz, .splat and .ksplat" and went
+  stale the moment a fifth format landed: the gate took `.rad` while the
+  refusal still told people it did not. A message that lists what is accepted
+  is precisely the message that must never be a second copy of the list -
+  someone reads it, believes it, and does not try the file that would have
+  worked.
+*/
+function spokenExtensions(): string {
+  const all = [...SPLAT_EXTENSIONS];
+  if (all.length <= 1) return all.join("");
+  return `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
+}
+
+const RAD_MAGIC = [0x52, 0x41, 0x44, 0x30] as const;
+
+/*
+  A floor, not a validation, and the comment is the honest part.
+
+  Spark hands `decode_rad_header` up to the first megabyte, so the real header
+  can be large and its layout is not something this module can read. All this
+  rules out is a four-byte file that happens to spell RAD0. Anything past it is
+  the viewer's problem, which the module header says plainly.
+*/
+const RAD_MIN_BYTES = 64;
+
+function startsWithRadMagic(b: Uint8Array): boolean {
+  return b.length >= 4 && RAD_MAGIC.every((byte, i) => b[i] === byte);
+}
+
 const SPLAT_RECORD_BYTES = 32;
 
 /**
@@ -636,6 +692,26 @@ export function detectSplatFormat(prefix: Uint8Array, totalBytes: number): Splat
 
   if (looksLikeKsplat(prefix, totalBytes)) return readKsplatHeader(prefix, totalBytes);
 
+  // RAD, before the headerless guess below, because it can name itself.
+  if (startsWithRadMagic(prefix)) {
+    if (totalBytes < RAD_MIN_BYTES) {
+      return { ok: false, reason: "That .rad file is too small to contain a scene." };
+    }
+    return {
+      ok: true,
+      format: "rad",
+      // Both unknowable without the wasm decoder. `null` rather than 0: the
+      // count is not zero, it is unmeasured, and the difference is the whole
+      // point of the type allowing null.
+      count: null,
+      gaussian: true,
+      measurable: false,
+      warning:
+        "Streaming RAD files open in the Spark engine only — the original engine " +
+        "cannot read them, so the renderer choice will be fixed for this capture.",
+    };
+  }
+
   const splat = readSplatStructure(prefix, totalBytes);
   if (splat) return splat;
 
@@ -645,8 +721,8 @@ export function detectSplatFormat(prefix: Uint8Array, totalBytes: number): Splat
   return {
     ok: false,
     reason: sniff
-      ? `That is ${sniff}, not a splat. This takes a .ply, .spz, .splat or .ksplat.`
-      : "That file is not a splat this app can read. It takes .ply, .spz, .splat and .ksplat, " +
+      ? `That is ${sniff}, not a splat. This takes ${spokenExtensions()}.`
+      : `That file is not a splat this app can read. It takes ${spokenExtensions()}, ` +
         "and this one matches none of them.",
   };
 }

@@ -245,7 +245,7 @@ export function parsePlyHeader(prefix: Uint8Array, totalBytes: number): PlyHeade
  * Name the format someone uploaded by mistake, when it is one we recognise.
  *
  * Exported so lib/splat/formats.ts can end its own chain with the same
- * sentence. It has to: that module tries four formats before giving up, and
+ * sentence. It has to: that module tries every format before giving up, and
  * once it does, the useful thing to say is still which wrong file this is —
  * duplicating the table there would let the two drift.
  *

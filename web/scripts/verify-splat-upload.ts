@@ -15,7 +15,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * WHICH FIXTURES ARE REAL, AND WHICH ARE NOT — READ THIS BEFORE TRUSTING A PASS
  *
- * The gate takes four formats now, and the four are NOT equally well covered
+ * The gate takes five formats now, and they are NOT equally well covered
  * here. Being specific, because "the tests pass" means different things for each:
  *
  *   PLY     REAL. The last section opens the four .ply files committed under
@@ -80,7 +80,15 @@ import {
   sweepStaleTemps,
   tempUploadPath,
 } from "../app/api/splat/upload/limits";
-import { SPLAT_ACCEPT_ATTRIBUTE, SPLAT_EXTENSIONS, hasSplatExtension } from "../lib/splat/extensions";
+import { getSplatFileType } from "@sparkjsdev/spark";
+
+import {
+  SPLAT_ACCEPT_ATTRIBUTE,
+  SPLAT_EXTENSIONS,
+  SPLAT_FORMATS,
+  hasSplatExtension,
+} from "../lib/splat/extensions";
+import { canOpen, rendererFor } from "../lib/splat/renderer";
 import { detectSplatFormat, MAX_HEADER_BYTES } from "../lib/splat/formats";
 import { parsePlyHeader } from "../lib/splat/plyHeader";
 import { SPLAT_DIR } from "../lib/splat/store";
@@ -739,7 +747,10 @@ section("Formats the app does not store are refused by name");
   for (let i = 0; i < noise.length; i++) noise[i] = (i * 37 + 11) & 0xff;
   const r4 = detectSplatFormat(noise, 1000);
   ok("unrecognisable bytes refused", !r4.ok);
-  ok("...and the four formats are named", !r4.ok && /\.ply.*\.spz.*\.splat.*\.ksplat/i.test(r4.reason));
+  ok(
+    "...and every accepted format is named in the refusal",
+    !r4.ok && SPLAT_EXTENSIONS.every((e) => r4.reason.includes(e)),
+  );
 }
 
 section("Every new refusal is phrased for a person");
@@ -982,7 +993,9 @@ section("Who an upload is counted against — the seam authentication replaces")
 
 section("The picker and the store agree about what is accepted");
 {
-  ok("four formats", SPLAT_EXTENSIONS.length === 4);
+  // Counted against the source list rather than a literal, so adding a format
+  // cannot leave this assertion quietly describing the old world.
+  ok("the picker offers every stored format", SPLAT_EXTENSIONS.length === SPLAT_FORMATS.length);
   ok("the accept attribute is the same list", SPLAT_ACCEPT_ATTRIBUTE === SPLAT_EXTENSIONS.join(","));
   ok("every one is offered", SPLAT_EXTENSIONS.every((e) => SPLAT_ACCEPT_ATTRIBUTE.includes(e)));
   ok("the client check accepts a .spz", hasSplatExtension("walk.spz"));
@@ -1003,6 +1016,106 @@ section("The picker and the store agree about what is accepted");
   ok(
     "...where a suffix test would not",
     "walk.ksplat".endsWith("splat") && !SPLAT_EXTENSIONS.includes("splat"),
+  );
+}
+
+section("RAD - streaming/LOD, and the least checked format here");
+{
+  const rad = (bytes = 4096) => {
+    const b = Buffer.alloc(bytes);
+    b.write("RAD0", 0, "latin1");
+    return b;
+  };
+
+  const r = detectSplatFormat(rad(), 40_000_000);
+  ok("a RAD0 file is accepted", r.ok);
+  ok("...identified as rad", r.ok && r.format === "rad");
+  ok(
+    "...with no splat count, because the header is wasm-decoded and unreadable here",
+    r.ok && r.count === null,
+  );
+  ok("...not measurable, so the viewer keeps its default camera", r.ok && !r.measurable);
+  ok("...and warns that only one engine opens it", r.ok && !!r.warning && /Spark/i.test(r.warning));
+
+  // The floor is the ONLY size fact available for RAD: truncation is not caught.
+  ok("a four-byte RAD0 is refused", !detectSplatFormat(rad(4), 4).ok);
+
+  // `null` and `0` are different claims: one says unmeasured, the other empty.
+  ok("count is null, never 0", r.ok && r.count !== 0);
+}
+
+section("Our gate agrees with the engine that will draw the file");
+{
+  /*
+    THE STRONGEST CHECK HERE, and the only one that is not self-referential.
+
+    Every other assertion in this file compares this module against fixtures
+    written by the same hand. This one compares it against `getSplatFileType`
+    from @sparkjsdev/spark - the function the RENDERER uses to decide what it is
+    looking at. A disagreement means one of two things and both are bad: we
+    accept a file Spark will not open, or we refuse one it would have drawn.
+
+    It is also where the RAD magic came from: Spark compares a little-endian
+    uint32 against 809779538, which is the four bytes R A D 0.
+  */
+  const realPly = (() => {
+    const file = path.join(SPLAT_DIR, "summerhacks_build_room_400k.ply");
+    const fd = openSync(file, "r");
+    const buf = Buffer.alloc(65536);
+    try {
+      readSync(fd, buf, 0, buf.length, 0);
+    } finally {
+      closeSync(fd);
+    }
+    return { bytes: buf, total: statSync(file).size };
+  })();
+
+  const radBytes = (() => {
+    const b = Buffer.alloc(4096);
+    b.write("RAD0", 0, "latin1");
+    return b;
+  })();
+
+  const spz = spzFile({ numSplats: 500 });
+
+  const cases: Array<[string, Buffer, number]> = [
+    ["real ply", realPly.bytes, realPly.total],
+    ["rad", radBytes, 40_000_000],
+    ["spz", spz.prefix, spz.total],
+  ];
+
+  for (const [label, bytes, total] of cases) {
+    const mine = detectSplatFormat(bytes, total);
+    const theirs = getSplatFileType(new Uint8Array(bytes));
+    ok(
+      `${label}: our gate and Spark agree (ours ${mine.ok ? mine.format : "refused"} / theirs ${theirs ?? "undefined"})`,
+      mine.ok && mine.format === theirs,
+    );
+  }
+
+  const junk = Buffer.from("this is not a splat, not even slightly, no".repeat(4), "latin1");
+  ok(
+    "junk: both refuse it",
+    !detectSplatFormat(junk, junk.length).ok && getSplatFileType(new Uint8Array(junk)) === undefined,
+  );
+}
+
+section("rad is offered, and only by the engine that can open it");
+{
+  ok("rad is in the stored formats", SPLAT_EXTENSIONS.includes(".rad"));
+  ok("the picker offers it", SPLAT_ACCEPT_ATTRIBUTE.includes(".rad"));
+  ok("a filename claiming .rad passes the client pre-check", hasSplatExtension("world.rad"));
+
+  // The point of the capability table: never offer an engine that cannot read it.
+  ok("Spark opens rad", canOpen("spark", "/mock/splats/x.rad"));
+  ok("the original engine does NOT", !canOpen("gs3d", "/mock/splats/x.rad"));
+  ok(
+    "so a rad capture resolves to Spark even when gs3d is preferred",
+    rendererFor("gs3d", "/mock/splats/x.rad") === "spark",
+  );
+  ok(
+    "...while a .ply still honours the preference",
+    rendererFor("gs3d", "/mock/splats/x.ply") === "gs3d",
   );
 }
 

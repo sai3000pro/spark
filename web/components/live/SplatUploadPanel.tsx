@@ -20,14 +20,15 @@
  * guess about their origin would only mean refusing files that work.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * FOUR FORMATS
+ * FIVE FORMATS
  *
  * The picker offered `.ply` alone, which was the gate's old limit rather than
- * the app's: both engines read `.splat` and `.ksplat`, and Spark reads `.spz`,
- * which is about a third the size of the PLY it came from. A Luma export was
- * refused here before the server ever saw it. The `accept` list and the check
- * below both come from lib/splat/extensions.ts so this panel cannot fall behind
- * what the server takes.
+ * the app's: both engines read `.splat` and `.ksplat`, Spark reads `.spz` (about
+ * a third the size of the PLY it came from) and `.rad` (World Labs' streaming
+ * LOD format, the one that makes a million-splat scene openable). A Luma export
+ * was refused here before the server ever saw it. The `accept` list, the check
+ * below AND the sentence the reader sees all come from lib/splat/extensions.ts,
+ * so this panel cannot fall behind what the server takes.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * XHR, NOT FETCH, AND THAT IS THE WHOLE REASON
@@ -47,7 +48,7 @@ import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 
 import { formatBytes } from "@/lib/format";
-import { SPLAT_ACCEPT_ATTRIBUTE, hasSplatExtension } from "@/lib/splat/extensions";
+import { SPLAT_ACCEPT_ATTRIBUTE, SPLAT_EXTENSIONS, hasSplatExtension } from "@/lib/splat/extensions";
 
 interface Accepted {
   id: string;
@@ -86,7 +87,7 @@ export function SplatUploadPanel() {
       The list comes from lib/splat/extensions.ts, the same one the server finds
       stored splats by. Written out here as a second literal it would drift, and
       the way it drifts is silent: the picker goes on offering `.ply` alone
-      while the server has taken four formats for weeks.
+      while the server has taken every format for weeks.
     */
     if (!hasSplatExtension(file.name)) {
       setPhase({
@@ -182,10 +183,18 @@ export function SplatUploadPanel() {
           <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-ink-soft">
             Already have a splat? Drop it here and it becomes a capture you can open, name and
             keep — no reconstruction, no waiting. Takes{" "}
-            <code className="text-[12.5px]">.ply</code>, <code className="text-[12.5px]">.spz</code>,{" "}
-            <code className="text-[12.5px]">.splat</code> and{" "}
-            <code className="text-[12.5px]">.ksplat</code>, so output from the studio, from KIRI,
-            from Luma, or from anything else that makes splats.
+            {/* Rendered from the source list, not typed out. A visible list of
+                accepted formats is exactly the copy that must not be a second
+                copy: someone reads it, believes it, and never tries the file
+                that would have worked. */}
+            {SPLAT_EXTENSIONS.map((ext, i) => (
+              <span key={ext}>
+                {i > 0 && (i === SPLAT_EXTENSIONS.length - 1 ? " and " : ", ")}
+                <code className="text-[12.5px]">{ext}</code>
+              </span>
+            ))}
+            , so output from the studio, from KIRI, from Luma, or from anything else that makes
+            splats.
           </p>
         </div>
         <span className="fnote chip text-[10px]">[ no GPU needed ]</span>

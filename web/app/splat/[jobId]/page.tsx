@@ -94,7 +94,7 @@ const SAFE_ID = /^[A-Za-z0-9_-]{1,120}$/;
 /**
  * The stored splat for an id, or null if there isn't one to show.
  *
- * Any of the four formats the upload gate takes, not `.ply` alone. This joined
+ * Any of the formats the upload gate takes, not `.ply` alone. This joined
  * `${jobId}.ply` directly, which was correct while `.ply` was the only thing
  * that could be stored and became a hole the moment it was not: `getSplatJob`
  * would report an uploaded `.spz` ready and hand out `/splat/<id>`, and this

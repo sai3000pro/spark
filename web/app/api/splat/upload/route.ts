@@ -20,7 +20,7 @@
  * made it, and pretending otherwise would only mean refusing files that work.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * FOUR FORMATS, NOT ONE
+ * FIVE FORMATS, NOT ONE
  *
  * This took `.ply` and nothing else, which was a limit of the gate rather than
  * of the app: lib/splat/renderer.ts has always documented that Spark opens ply,

@@ -6,7 +6,7 @@
  *
  * They are not redundant. They read different files:
  *
- *   Spark 2.1 (@sparkjsdev/spark)      ply · spz · splat · ksplat · pcsogs
+ *   Spark 2.1 (@sparkjsdev/spark)      ply · spz · splat · ksplat · pcsogs · rad
  *   mkkellogg 0.4.7                    ply · splat · ksplat
  *
  * SPZ is the format everything is served as once storage matters — it is about
@@ -56,7 +56,22 @@ export const DEFAULT_SPLAT_RENDERER: SplatRenderer = isSplatRenderer(
 // What each engine can actually open
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SPARK_FORMATS = ["ply", "spz", "splat", "ksplat", "sog"] as const;
+/*
+  `rad` is Spark-only, and that asymmetry is the reason this table exists.
+
+  RAD is World Labs' streaming/LOD format: a scene is stored as a tree and the
+  renderer pulls only the detail the camera can currently see, which is what
+  makes million-splat scenes openable at all. Spark 2.1 ships the decoder
+  (`decode_rad_header`, `LodTree`, backed by wasm); mkkellogg 0.4.7 has never
+  heard of it.
+
+  Nothing extra is needed to handle that: `rendererFor` already falls back to
+  whichever engine can open the file, and `canOpen` already greys the other
+  choice in the picker. Adding the string here is the whole integration - which
+  is the payoff for the table having been written as capability rather than as
+  preference.
+*/
+const SPARK_FORMATS = ["ply", "spz", "splat", "ksplat", "sog", "rad"] as const;
 const GS3D_FORMATS = ["ply", "splat", "ksplat"] as const;
 
 export const RENDERER_FORMATS: Record<SplatRenderer, readonly string[]> = {
@@ -119,14 +134,14 @@ export const RENDERER_INFO: Record<SplatRenderer, RendererDescription> = {
     id: "spark",
     label: "Spark",
     library: "@sparkjsdev/spark 2.1",
-    note: "Opens every format here, compressed ones included. Draws in the same scene as the object markers.",
+    note: "Opens every format here, compressed and streaming ones included. Draws in the same scene as the object markers.",
     formats: SPARK_FORMATS,
   },
   gs3d: {
     id: "gs3d",
     label: "Original",
     library: "@mkkellogg/gaussian-splats-3d 0.4.7",
-    note: "The original engine, on its own canvas. Reads raw PLY at full detail; cannot open compressed SPZ.",
+    note: "The original engine, on its own canvas. Reads raw PLY at full detail; cannot open compressed SPZ or streaming RAD.",
     formats: GS3D_FORMATS,
   },
 };
