@@ -235,7 +235,7 @@ export const listCaptures = cache((): CaptureCard[] => {
       // the file on disk, and it is the megabytes that are actually there.
       detail: job.note,
       note:
-        job.origin === "ply"
+        job.origin === "upload"
           ? "Brought in as a finished splat. There is no walk behind it — no clip was ever scored."
           : null,
       thumbs: [],

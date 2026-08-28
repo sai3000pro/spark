@@ -341,7 +341,7 @@ async function handle(request: Request, slot: UploadSlot) {
   const job = createSplatJob({
     sourceName: declaredName || `uploaded.${detected.format}`,
     sourceBytes: state.total,
-    origin: "ply",
+    origin: "upload",
     tripId,
     // Kept, because for spz, ksplat and rad this is the only time anyone counts
     // them — see the field's note in lib/splatJobs.ts.

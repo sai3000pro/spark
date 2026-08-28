@@ -151,6 +151,53 @@ handing the file to anyone else, and no amount of code fixes it.
 
 ---
 
+## Start here — the exact next five things
+
+Ordered by what blocks what. Nothing below can be done without credentials, and
+that is the only reason none of it is done.
+
+**The keystone finding:** `lib/storage/` is 1,660 lines across three real
+providers (`r2.ts` is a genuine S3Client implementation, not a stub) and
+**`createFleet()` is never called anywhere in the app**. The single match outside
+that directory is a comment in a test. Not one byte has ever passed through it.
+So a configured R2 bucket changes nothing on its own — `/api/splat/upload` still
+calls `createWriteStream` into `public/`, with zero mentions of `lib/storage`.
+
+Equally: the "Supabase" mentions in `lib/journey/store.ts` and `lib/albums.ts`
+are **comments**. No store reads or writes Postgres. Every one persists a
+sidecar through `lib/persist.ts`.
+
+1. **Call `createFleet()`** and give the upload route a real destination. This
+   is the keystone; 2–3 are downstream of it. Flip `objectStorageWired` in
+   `app/api/deployment/route.ts` in the same commit, and make it a real probe
+   rather than a constant.
+2. **Rewrite `/api/splat/upload`** to put bytes in the bucket instead of on
+   local disk. Keep the format gate exactly as it is — it is verified — and
+   change only where the stream lands.
+3. **Change how a splat is served.** `getSplatJob().url` returns
+   `/mock/splats/<id>.<ext>`, a static path under `public/`, and
+   `app/splat/[jobId]/page.tsx` resolves the file with `storedSplatFor`. Both
+   assume a local file; object storage means a signed URL or a proxy route.
+4. **Swap the six stores onto Postgres** behind `hydrate`/`persist`/`forget` —
+   journey, albums, uploadedTrips, postedWalks, splatJobs, ingest. The
+   migrations exist. `verify:persistence` (80 checks) is the harness; it should
+   keep passing against the new backing.
+5. **Make `lib/storage/ledger.ts` durable.** It is a `globalThis` singleton, so
+   quota accounting resets on restart — and `reclaim.ts` reads it to decide
+   which PLY masters to give up. An eviction policy reading a counter that
+   silently zeroed is worse than none.
+
+**What already works the moment Supabase exists, with no code changes:** auth.
+`lib/auth/session.ts`, `lib/auth/guest.ts` and `/auth/upgrade` are complete —
+anonymous guests on first write, email attached to that same row on upgrade, and
+the RLS wall in `007_rls.sql` (decided: globe gated, albums free — see
+docs/auth-wall.md).
+
+**Run `npm run verify:all`** for all five suites in one command, and
+`GET /api/deployment` on any deploy to see what that instance can actually do.
+
+---
+
 ## Deploying to Vercel — what happens today, measured
 
 Run `GET /api/deployment` on any deploy; it answers this in one request, in the

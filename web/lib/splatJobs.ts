@@ -52,8 +52,14 @@ export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
 /**
  * How this job expects to acquire its .ply.
  *
- *   video   a clip was uploaded and something still has to reconstruct it
- *   ply     a finished splat was handed to us and the work is already done
+ *   video    a clip was uploaded and something still has to reconstruct it
+ *   upload   a finished splat was handed to us and the work is already done
+ *
+ * It was called "ply" until the gate took five formats, at which point the name
+ * read as a claim about the FILE rather than about where the job came from —
+ * `origin === "ply"` on a job whose file is an .spz is exactly the kind of line
+ * someone corrects in the wrong direction. Renamed to say what it means. Records
+ * written under the old spelling are still read; see `hydrate`.
  *
  * The distinction is not cosmetic: it decides what an ABSENT file means. For a
  * video job, no .ply is the normal state for the first hour — the pipeline is
@@ -62,7 +68,7 @@ export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
  * to "wait for the reconstruction" would be waiting for something that already
  * happened. One field, two very different sentences.
  */
-export type SplatJobOrigin = "video" | "ply";
+export type SplatJobOrigin = "video" | "upload";
 
 export interface SplatJob {
   id: string;
@@ -194,7 +200,14 @@ function hydrate(s: Store): void {
         sourceBytes: raw.sourceBytes ?? 0,
         // Records written before uploads existed have no origin and are all
         // videos. Defaulting rather than dropping keeps them readable.
-        origin: raw.origin === "ply" ? "ply" : "video",
+        // "ply" is the old spelling of "upload" and still appears in sidecars
+        // written before the rename. Accepted on read, never written again.
+        // Compared as a plain string on purpose: "ply" is no longer in the
+        // type, which is the whole point of the rename — but it is still on
+        // disk in every sidecar written before it, and a record we cannot read
+        // is a capture we cannot reach.
+        origin:
+          raw.origin === "upload" || (raw.origin as string) === "ply" ? "upload" : "video",
         splatCount: typeof raw.splatCount === "number" && raw.splatCount > 0 ? raw.splatCount : null,
         tripId: raw.tripId ?? null,
         note: "",
@@ -291,7 +304,7 @@ function hydrate(s: Store): void {
         // Whatever produced it, what we HAVE is the finished splat — and that
         // is what `origin` describes. Claiming "video" would make a missing
         // file read as "still reconstructing" for something already finished.
-        origin: "ply",
+        origin: "upload",
         splatCount: null,
         tripId: null,
         note: "",
@@ -485,14 +498,14 @@ export function getSplatJob(id: string): SplatJob | null {
       reporting progress would leave someone watching a spinner for a job that
       finished before it was ever created.
     */
-    status: ready ? "ready" : job.origin === "ply" ? "failed" : "processing",
+    status: ready ? "ready" : job.origin === "upload" ? "failed" : "processing",
     // The name the file actually has, not a name we would like it to have. A
     // capture stored as `.spz` is served from `/mock/splats/<id>.spz`, and
     // asserting `.ply` here would hand the viewer a 404 for a file on disk.
     url: stored ? `/mock/splats/${stored.filename}` : null,
     note: stored
       ? `Reconstructed. ${(statSync(stored.path).size / 1_048_576).toFixed(1)} MB on disk.`
-      : job.origin === "ply"
+      : job.origin === "upload"
         ? "The uploaded splat is no longer on disk. Upload it again to restore this capture."
         : // Still the .ply spelling, and deliberately: this sentence is an
           // instruction to whoever is running the reconstruction by hand, and

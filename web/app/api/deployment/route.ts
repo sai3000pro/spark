@@ -33,12 +33,30 @@ export function GET() {
   const db = supabaseConfig() !== null;
 
   /*
-    "Ready" means a stranger could use this deployment and keep what they made.
-    Both halves are required and neither implies the other: a box with a disk
-    and no database loses everything the moment it scales past one instance, and
-    a database with a read-only disk has nowhere to put a 200 MB splat.
+    Object storage is a THIRD fact, and leaving it out made this route
+    misleading in the exact situation it exists for. `lib/storage/` holds three
+    real providers, and `createFleet()` — the only way into any of them — is
+    never called anywhere in the app. So configuring an R2 bucket changes
+    nothing: /api/splat/upload still writes to the local filesystem, and a
+    deployer who set the credentials would reasonably conclude the problem was
+    their credentials.
+
+    Hardcoded rather than probed, deliberately. There is nothing to measure: the
+    wiring either exists in the source or it does not, and today it does not.
+    When the upload route goes through the fleet, this becomes a real check of
+    whether a provider answers — and it should be changed in that commit, not
+    before.
   */
-  const ready = storage.durable && db;
+  const objectStorageWired = false;
+
+  /*
+    "Ready" means a stranger could use this deployment and keep what they made.
+    Every part is required and none implies another: a box with a disk and no
+    database loses everything the moment it scales past one instance, a database
+    with a read-only disk has nowhere to put a 200 MB splat, and neither helps
+    while the code still writes to `public/`.
+  */
+  const ready = storage.durable && db && objectStorageWired;
 
   return NextResponse.json(
     {
@@ -55,6 +73,13 @@ export function GET() {
           ? "A database is configured."
           : "No database is configured, so anything written lives only in this process.",
       },
+      objectStorage: {
+        wired: objectStorageWired,
+        reason: objectStorageWired
+          ? "Uploads go to object storage."
+          : "lib/storage/ is written but never called — createFleet() has no callers, so uploads " +
+            "go to this instance's own disk regardless of any bucket credentials.",
+      },
       uploads: {
         accepted: SPLAT_FORMATS,
         maxBytes: MAX_UPLOAD_BYTES,
@@ -67,9 +92,11 @@ export function GET() {
       */
       summary: !storage.durable
         ? storage.reason
-        : !db
-          ? "Captures are stored on this instance's disk and are not shared between instances. Configure a database before running more than one."
-          : "This deployment can accept captures and keep them.",
+        : !objectStorageWired
+          ? "Captures are stored on this instance's own disk. Object storage is written but not wired up, so bucket credentials alone will not change that."
+          : !db
+            ? "Captures are stored, but records live only in this process. Configure a database before running more than one instance."
+            : "This deployment can accept captures and keep them.",
     },
     { headers: { "Cache-Control": "no-store" } },
   );

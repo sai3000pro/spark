@@ -42,12 +42,24 @@
  * REALTIME_SPLAT_PLAN.md those poses are "the single biggest enabler" — they
  * are what lets Brush skip the SfM solve entirely and train immediately.
  *
- * A browser has NEITHER. `DeviceOrientationEvent` gives the phone's ROTATION;
- * nothing gives its position. So `camera_transform` below carries a real
- * rotation and a ZERO translation, and the metadata says so in
- * `pose_source` / `has_translation`. A studio must treat these frames as
+ * THIS path has neither. It is built on `DeviceOrientationEvent`, which gives
+ * the phone's ROTATION and nothing about where it is. So `camera_transform`
+ * below carries a real rotation and a ZERO translation, and the metadata says
+ * so in `pose_source` / `has_translation`. A studio must treat these frames as
  * unposed and solve structure itself. Writing a plausible-looking translation
  * would be worse than sending none: it would train a confident, wrong scene.
+ *
+ * "A browser cannot know where it is" is NO LONGER TRUE IN GENERAL, and this
+ * paragraph used to say it was. WebXR's `immersive-ar` session exposes ARCore's
+ * tracked 6-DoF pose on Android, and lib/webxr/ uses exactly that to write a
+ * finished COLMAP model so the solve can be skipped — the same enabler the
+ * native app has. What remains true is that it is not available HERE: WebXR
+ * needs a session the user grants, it is Android-only (iOS Safari has no WebXR
+ * at all), and this socket is the fallback for every phone that cannot do it.
+ *
+ * So both paths exist and they are not redundant. Read lib/webxr/support.ts for
+ * which one a given device gets, and do not "fix" the zero translation below by
+ * copying a pose from there — a device on this path genuinely does not have one.
  */
 
 /** The capture server's own default port. Override for a studio elsewhere. */
