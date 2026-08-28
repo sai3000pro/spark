@@ -48,6 +48,51 @@ It is *far* better than the 30 min–2 h extrapolation for the pose half.
 
 ---
 
+## Update — 2026-08-27: the local route now has both ends
+
+Yesterday the studio could make a `.ply` and there was nowhere to put it unless
+you were sitting at this checkout with a terminal open. Both halves of that are
+closed.
+
+| | Evidence |
+|---|---|
+| ✅ `POST /api/splat/upload` | raw body **and** multipart both 201; mp4 / truncated / mesh / ASCII each refused with their own sentence; uploaded splat serves 22,400,362 bytes at `/splat/<id>` |
+| ✅ Upload gate suite | `verify:upload`, **41 checks, 0 failures** |
+| ✅ Gate agrees with reality | all four real splats in the tree accepted — 14, 59 and 62 properties, three different exporters — with `dataOffset + count*stride` matching file size exactly |
+| ✅ **One-file executable** | `dist/spark-studio.exe`, 163 MB, contains Python + numpy + pycolmap + ffmpeg + brush-cli |
+| ✅ Frozen build, full pipeline | **48/48 frames placed, 1,000 steps, 2.0 MB splat, exit 0** — COLMAP and Brush both ran from inside the bundle |
+| ✅ Frozen build with no venv | venv ffmpeg moved aside, none on PATH → `doctor` still green on all three |
+
+**In-tab training is still not possible, and now with evidence rather than
+assertion.** Brush v0.3.0 publishes three native desktop binaries and *no* wasm
+artifact, so there is nothing to vendor; `crates.io` is unreachable from this
+environment, so building one here was not possible either. And it would not be
+sufficient anyway: a Brush web build trains from a *prepared COLMAP dataset*, so
+it does not close the pose stage, which has no browser implementation anywhere.
+The one genuine in-tab route is a device that already knows its own poses —
+WebXR/ARCore, or ARKit as `tools/arkit_capture/export_colmap.py` already
+exploits. See `tools/spark_studio/README.md` for the full table.
+
+### Two things about the upload endpoint that matter before it is public
+
+**It does not authenticate.** Neither does `/api/splat/jobs`, `/api/upload/walk`
+or `/api/journey` — so this is the app's existing posture rather than something
+new — but this one accepts up to **1 GB per request** and writes into the
+statically-served directory. On localhost that is correct and convenient. On a
+public host it is a way to fill someone's disk. Whatever auth the other write
+routes eventually get, this needs the same, and it needs a per-user quota.
+
+Uploaded bytes are served as `application/octet-stream` (verified), so they
+cannot be sniffed as HTML — the filename is server-minted, not user-supplied, so
+there is no path or extension the uploader controls.
+
+**Unsigned executable.** Windows SmartScreen warns about `spark-studio.exe` and
+macOS Gatekeeper will refuse it outright until notarised. Both need a paid
+developer identity. Fine for a build you made yourself; it is the blocker for
+handing the file to anyone else, and no amount of code fixes it.
+
+---
+
 ## What still blocks production
 
 ### 1. Durable storage beyond one machine — **the real blocker**

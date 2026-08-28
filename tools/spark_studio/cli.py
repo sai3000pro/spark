@@ -287,9 +287,14 @@ def main(argv: list[str] | None = None) -> int:
     for w in result.warnings:
         print(f"  note: {w}")
     if result.poses:
+        # `source` names the solver, and on a resumed run that name is "reused"
+        # - which read as "placed via reused". The distinction is worth keeping
+        # (poses off disk were not solved just now, and that is why the run was
+        # quick) so it is phrased rather than dropped.
+        src = result.poses["source"]
+        how = "reused from the last run" if src == "reused" else f"placed via {src}"
         print(
-            f"  poses      {result.poses['registered']}/{result.poses['total']} frames "
-            f"placed via {result.poses['source']}"
+            f"  poses      {result.poses['registered']}/{result.poses['total']} frames {how}"
         )
     if result.training:
         mb = result.training["bytes"] / (1024 * 1024)
