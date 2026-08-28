@@ -47,14 +47,13 @@
  * about to fetch anyway.
  */
 import { existsSync, statSync } from "node:fs";
-import path from "node:path";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StageClient } from "./StageClient";
 import { compactNumber, formatBytes, shortDate } from "@/lib/format";
-import { SPLAT_DIR, getSplatJob } from "@/lib/splatJobs";
+import { getSplatJob, storedSplatFor } from "@/lib/splatJobs";
 import { CANVAS_BG } from "@/lib/theme";
 import { measurePly } from "@/lib/video/plyBounds";
 import type { SplatView } from "@/lib/types";
@@ -92,17 +91,41 @@ interface Ctx {
  */
 const SAFE_ID = /^[A-Za-z0-9_-]{1,120}$/;
 
-/** The .ply for an id, or null if there isn't one to show. */
-function resolvePly(jobId: string): { file: string; bytes: number; landedAt: string } | null {
+/**
+ * The stored splat for an id, or null if there isn't one to show.
+ *
+ * Any of the four formats the upload gate takes, not `.ply` alone. This joined
+ * `${jobId}.ply` directly, which was correct while `.ply` was the only thing
+ * that could be stored and became a hole the moment it was not: `getSplatJob`
+ * would report an uploaded `.spz` ready and hand out `/splat/<id>`, and this
+ * page would `notFound()` on it. An upload that succeeds, says "ready", and
+ * leads to a 404 is precisely the promise-we-cannot-keep this whole path was
+ * built to avoid.
+ *
+ * `storedSplatFor` is the one place that spelling lives, so the page and the
+ * store cannot drift. It only ever tries the known extensions against an id
+ * this app minted, so the SAFE_ID fence above still does all the work it did.
+ */
+function resolveSplat(
+  jobId: string,
+): { file: string; url: string; name: string; bytes: number; landedAt: string } | null {
   if (!SAFE_ID.test(jobId)) return null;
-  const file = path.join(SPLAT_DIR, `${jobId}.ply`);
+  const found = storedSplatFor(jobId);
+  if (!found) return null;
+  const { path: file, filename } = found;
   if (!existsSync(file)) return null;
   try {
     const st = statSync(file);
     // mtime, not the job's createdAt. They answer different questions: the job
     // was created when somebody uploaded a clip, which can be days before the
     // reconstruction of it landed. "Collected" means the file arrived.
-    return { file, bytes: st.size, landedAt: new Date(st.mtimeMs).toISOString() };
+    return {
+      file,
+      url: `/mock/splats/${filename}`,
+      name: filename,
+      bytes: st.size,
+      landedAt: new Date(st.mtimeMs).toISOString(),
+    };
   } catch {
     return null;
   }
@@ -122,7 +145,7 @@ export async function generateMetadata({ params }: Ctx) {
 export default async function SplatPage({ params }: Ctx) {
   const { jobId } = await params;
 
-  const ply = resolvePly(jobId);
+  const ply = resolveSplat(jobId);
   // Honestly, and with no consolation screen. A 404 that renders "processing…"
   // for an id that was never real is a page that will spin forever.
   if (!ply) notFound();
@@ -201,7 +224,7 @@ export default async function SplatPage({ params }: Ctx) {
           style={{ background: CANVAS_BG }}
         >
           <StageClient
-            url={`/mock/splats/${jobId}.ply`}
+            url={ply.url}
             view={view}
             span={span}
             bytes={ply.bytes}
@@ -255,8 +278,8 @@ export default async function SplatPage({ params }: Ctx) {
         )}
 
         <p className="fnote mt-4 text-[10px] leading-relaxed text-ink-faint">
-          [ served from public/mock/splats/{jobId}.ply ·{" "}
-          <a href={`/mock/splats/${jobId}.ply`} download className="underline">
+          [ served from public/mock/splats/{ply.name} ·{" "}
+          <a href={ply.url} download className="underline">
             take the file
           </a>{" "}
           ]

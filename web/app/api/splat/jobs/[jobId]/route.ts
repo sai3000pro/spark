@@ -11,13 +11,12 @@
  * starts rendering it with no other change anywhere.
  */
 import { NextResponse } from "next/server";
-import path from "node:path";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { fanOutJobStatus } from "@/lib/firebase/fanout";
 import { collectFromKiri } from "@/lib/reconstruction/collect";
 import { measurePly } from "@/lib/video/plyBounds";
-import { getSplatJob, SPLAT_DIR } from "@/lib/splatJobs";
+import { getSplatJob, storedSplatFor } from "@/lib/splatJobs";
 import { attachSplat } from "@/lib/uploadedTrips";
 
 export const dynamic = "force-dynamic";
@@ -106,7 +105,19 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/splat/jobs
     derived from the file the splat loads, draws, and looks like nothing at all.
     See lib/video/plyBounds.ts.
   */
-  const measured = measurePly(path.join(SPLAT_DIR, `${jobId}.ply`));
+  /*
+    Only a PLY can be measured, and that is not a failure for the others.
+
+    `measurePly` reads raw float32 offsets to find the scene bounds, which is a
+    PLY-shaped question - an .spz is compressed and a .splat is quantised, so
+    neither answers it without being decoded first. Passing the stored file
+    whatever its extension is still right: a non-PLY returns null, the viewer
+    keeps its default camera, and nothing claims a measurement it did not make.
+    Building `${jobId}.ply` unconditionally would have measured a file that is
+    not there, which is the same null by a worse route.
+  */
+  const stored = storedSplatFor(jobId);
+  const measured = stored ? measurePly(stored.path) : null;
   const attached = attachSplat(job.tripId, job.url, measured?.pointCount, measured?.view);
   return NextResponse.json(
     {

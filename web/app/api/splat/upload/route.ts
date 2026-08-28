@@ -15,42 +15,85 @@
  * running app (`--push`), so the manual upload is the fallback rather than the
  * expected path. Both arrive here.
  *
- * It equally accepts a .ply from anywhere else — KIRI, Polycam, Luma, Postshot,
- * a friend. There is nothing in a Gaussian splat that records what made it, and
- * pretending otherwise would only mean refusing files that work.
+ * It equally accepts a splat from anywhere else — KIRI, Polycam, Luma,
+ * Postshot, a friend. There is nothing in a Gaussian splat that records what
+ * made it, and pretending otherwise would only mean refusing files that work.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * STREAMED, NOT BUFFERED
+ * FOUR FORMATS, NOT ONE
  *
- * `request.formData()` reads the whole upload into memory before handing it
- * over, which is survivable for a form field and not for a splat — the two real
- * captures in this repo are 59 MB and 143 MB, and 500 MB is a normal export at
- * high quality. So the body is piped to a temporary file while only the first
- * 64 KB is kept, which is all the header check needs.
+ * This took `.ply` and nothing else, which was a limit of the gate rather than
+ * of the app: lib/splat/renderer.ts has always documented that Spark opens ply,
+ * spz, splat, ksplat and pcsogs, and that mkkellogg opens ply, splat and
+ * ksplat. So a Luma `.splat`, or an `.spz` a third the size of the PLY it came
+ * from, was refused with a sentence explaining it was not a PLY — true, and
+ * useless to someone holding a file this app can draw.
+ *
+ * Now: ply, spz, splat, ksplat. Identified by their bytes rather than by their
+ * name, in lib/splat/formats.ts, which also writes down what each format lets
+ * us verify and what it does not — they are not equally checkable and it says
+ * so. The stored file keeps the real extension and `getSplatJob` finds it by
+ * looking for any of them, so a capture stored as `.spz` is found, served and
+ * reported ready with nothing to keep in sync.
+ *
+ * PCSOGS is left out. It is a directory of PNGs plus a JSON manifest, or a zip
+ * of one, and "store this upload under one name" is not a shape it fits — that
+ * is a different endpoint, not a wider whitelist here.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * STREAMED, NOT BUFFERED — ON THE RAW PATH
+ *
+ * The two real captures in this repo are 59 MB and 143 MB, and 500 MB is a
+ * normal export at high quality. So the raw body is piped to a temporary file
+ * while only the first 64 KB is kept, which is all the header check needs.
+ *
+ * The multipart path does NOT get that, and the comment here used to imply it
+ * did. `request.formData()` decodes the whole body before returning, so a
+ * browser upload is held by the runtime first and only then streamed to disk.
+ * That is the price of accepting what a file input produces; the size ceiling
+ * is checked against `file.size` the moment the form is readable, which is the
+ * earliest this path can refuse anything. Fixing it properly means parsing
+ * multipart by hand, which is a different piece of work from this one.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * NOTHING BECOMES VISIBLE UNTIL IT IS VALID
  *
- * The bytes land on `.uploading-*.tmp` and are renamed to `<id>.ply` only after
- * the header parses and the size checks out. `getSplatJob` derives readiness
- * from that filename existing, so a half-written or rejected upload appearing
- * there for even a moment is a capture the app would call ready and the viewer
- * would fail to draw. Rename is atomic within a directory; a partial file
- * cannot be observed under the real name.
+ * The bytes land on `.uploading-*.tmp` and are renamed to `<id>.<ext>` only
+ * after the format is identified and the size checks out. `getSplatJob` derives
+ * readiness from that filename existing, so a half-written or rejected upload
+ * appearing there for even a moment is a capture the app would call ready and
+ * the viewer would fail to draw. Rename is atomic within a directory; a partial
+ * file cannot be observed under the real name.
  *
  * The job record is minted AFTER validation for the same reason: a rejected
  * upload should leave nothing behind, not a permanent job describing a file
  * that was never accepted.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * AND IT IS NOT UNLIMITED
+ *
+ * A gigabyte a time, unauthenticated, into a statically-served directory, with
+ * nothing saying how many times. See ./limits.ts, which holds the byte budget,
+ * the rate limit, the concurrency cap and the seam where authentication goes —
+ * and which explains why an auth layer is deliberately NOT written here.
  */
 import { createWriteStream } from "node:fs";
 import { rename, unlink } from "node:fs/promises";
-import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
 import { NextResponse } from "next/server";
 
-import { MAX_HEADER_BYTES, parsePlyHeader } from "@/lib/splat/plyHeader";
-import { createSplatJob, ensureDirs, getSplatJob, plyPathFor, SPLAT_DIR } from "@/lib/splatJobs";
+import { detectSplatFormat, MAX_HEADER_BYTES } from "@/lib/splat/formats";
+import { createSplatJob, ensureDirs, getSplatJob, splatPathFor } from "@/lib/splatJobs";
+
+import {
+  MAX_UPLOAD_BYTES,
+  MIN_UPLOAD_BYTES,
+  openUploadSlot,
+  SPLAT_STORE_BUDGET_BYTES,
+  tempUploadPath,
+  type UploadSlot,
+} from "./limits";
 
 export const dynamic = "force-dynamic";
 /** Node, not edge: this writes to the filesystem. */
@@ -58,36 +101,31 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-/**
- * The ceiling on a single splat.
- *
- * Higher than the 512 MB video limit on /api/splat/jobs, and deliberately so:
- * that limit is about an upload that has to survive a phone's connection, while
- * this one is usually a local file moving over localhost. A 4-million-gaussian
- * export at full spherical-harmonic detail is around 900 MB, and refusing it
- * would refuse the best output the studio can produce.
- */
-const MAX_BYTES = 1024 * 1024 * 1024;
-
-/** Below this there is no plausible splat — it is a stray or empty file. */
-const MIN_BYTES = 256;
-
+/** Thrown out of the tee so the pipeline unwinds and the temp file is removed. */
 class TooLarge extends Error {}
+class NoSpace extends Error {}
 
 /**
  * Tee the leading bytes off the stream while it flows to disk.
  *
  * The header has to be read to decide whether to keep the file, and the file is
  * too big to hold in memory to decide it — so the prefix is kept and the rest
- * is forgotten as it passes. Also where the size cap is enforced, because
- * Content-Length is a claim by the sender and the byte count is a fact.
+ * is forgotten as it passes. Also where both size limits are enforced, because
+ * Content-Length is a claim by the sender and the byte count is a fact: the
+ * per-file ceiling, and the shared disk budget, which the slot answers for
+ * because it knows what every other upload in flight has written.
  */
-function tee(state: { head: Buffer[]; headLen: number; total: number }): Transform {
+function tee(state: { head: Buffer[]; headLen: number; total: number }, slot: UploadSlot): Transform {
   return new Transform({
     transform(chunk: Buffer, _enc, cb) {
       state.total += chunk.length;
-      if (state.total > MAX_BYTES) {
+      const verdict = slot.accept(state.total);
+      if (verdict === "too-large") {
         cb(new TooLarge());
+        return;
+      }
+      if (verdict === "no-space") {
+        cb(new NoSpace());
         return;
       }
       if (state.headLen < MAX_HEADER_BYTES) {
@@ -101,6 +139,38 @@ function tee(state: { head: Buffer[]; headLen: number; total: number }): Transfo
 }
 
 export async function POST(request: Request) {
+  /*
+    Admission before a single byte is read.
+
+    Concurrency, rate limit and disk budget all answer from state this process
+    already has or from one directory scan, so a refused upload costs the sender
+    a connection and costs this machine nothing. Checking after the transfer
+    would mean accepting a gigabyte in order to say no to it.
+  */
+  const slot = openUploadSlot(request);
+  if (!slot.ok) {
+    return NextResponse.json(
+      { error: slot.error },
+      {
+        status: slot.status,
+        headers:
+          slot.status === 503 || slot.status === 429
+            ? { ...NO_STORE, "Retry-After": "60" }
+            : NO_STORE,
+      },
+    );
+  }
+
+  try {
+    return await handle(request, slot);
+  } finally {
+    // Always. A leaked slot counts against MAX_CONCURRENT_UPLOADS forever, and
+    // four of those jam the endpoint for the life of the process.
+    slot.close();
+  }
+}
+
+async function handle(request: Request, slot: UploadSlot) {
   const contentType = request.headers.get("content-type") ?? "";
 
   /*
@@ -125,19 +195,28 @@ export async function POST(request: Request) {
         { status: 400, headers: NO_STORE },
       );
     }
-    const file = form.get("ply");
+    /*
+      `splat` is the name now, and `ply` still works.
+
+      The field was called `ply` when a PLY was the only thing that could be
+      sent, and renaming it outright would break anything already written
+      against this endpoint — including copies of the studio executable already
+      on people's machines. Accepting both costs one line and keeps a field name
+      from being the reason a valid .spz is refused.
+    */
+    const file = form.get("splat") ?? form.get("ply");
     if (!(file instanceof File)) {
       return NextResponse.json(
-        { error: "missing `ply` file field" },
+        { error: "missing `splat` file field" },
         { status: 400, headers: NO_STORE },
       );
     }
-    if (file.size > MAX_BYTES) {
+    if (file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
         {
           error:
             `That splat is ${(file.size / 1_048_576).toFixed(0)} MB; ` +
-            `the limit is ${MAX_BYTES / 1_048_576} MB.`,
+            `the limit is ${MAX_UPLOAD_BYTES / 1_048_576} MB.`,
         },
         { status: 413, headers: NO_STORE },
       );
@@ -149,7 +228,8 @@ export async function POST(request: Request) {
   } else {
     source = request.body;
     // The filename is cosmetic — it becomes `sourceName` for display and never
-    // touches the path, which is built from an id this server minted.
+    // touches the path, which is built from an id this server minted and an
+    // extension chosen by the format detector rather than by the sender.
     declaredName = request.headers.get("x-splat-filename") ?? "";
     const t = request.headers.get("x-splat-trip");
     if (t) tripId = t;
@@ -164,29 +244,37 @@ export async function POST(request: Request) {
 
   ensureDirs();
 
-  /*
-    A temporary name nothing serves and nothing derives a job from.
-
-    In SPLAT_DIR rather than the system temp directory, so the final step is a
-    rename WITHIN a directory. A rename across filesystems is a copy plus a
-    delete — not atomic, and on a 500 MB file not fast — which would reintroduce
-    the window where a half-written file sits under the served name.
-  */
-  const tmp = path.join(SPLAT_DIR, `.uploading-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.tmp`);
+  // A temporary name nothing serves and nothing derives a job from. See
+  // `tempUploadPath` for why it is a UUID and why it lives in this directory.
+  const tmp = tempUploadPath();
   const state = { head: [] as Buffer[], headLen: 0, total: 0 };
 
   try {
     await pipeline(
       Readable.fromWeb(source as Parameters<typeof Readable.fromWeb>[0]),
-      tee(state),
+      tee(state, slot),
       createWriteStream(tmp),
     );
   } catch (err) {
     await unlink(tmp).catch(() => {});
     if (err instanceof TooLarge) {
       return NextResponse.json(
-        { error: `That splat is over the ${MAX_BYTES / 1_048_576} MB limit.` },
+        { error: `That splat is over the ${MAX_UPLOAD_BYTES / 1_048_576} MB limit.` },
         { status: 413, headers: NO_STORE },
+      );
+    }
+    if (err instanceof NoSpace) {
+      // Not the same refusal as the one at admission: this upload was let in,
+      // and it is the file's own size — or another upload racing it — that ran
+      // the store out. Say that, rather than "the store is already full".
+      return NextResponse.json(
+        {
+          error:
+            `That splat does not fit: this app keeps at most ` +
+            `${SPLAT_STORE_BUDGET_BYTES / 1_073_741_824} GB of uploaded captures and it is now full. ` +
+            "Delete one you no longer want and send this again.",
+        },
+        { status: 507, headers: NO_STORE },
       );
     }
     // A dropped connection mid-upload lands here. The temp file is already
@@ -203,7 +291,7 @@ export async function POST(request: Request) {
   }
 
   /*
-    The header check runs BEFORE the size floor, and the order is the message.
+    The format check runs BEFORE the size floor, and the order is the message.
 
     With the floor first, a small ASCII PLY was refused as "too small to be a
     splat" — true, and useless. The file's actual problem is that it is ASCII,
@@ -214,18 +302,15 @@ export async function POST(request: Request) {
     The size passed here is the COUNTED one, not Content-Length — a sender's
     claim about length is exactly what the truncation check exists to catch.
   */
-  const header = parsePlyHeader(Buffer.concat(state.head), state.total);
-  if (!header.ok) {
+  const detected = detectSplatFormat(Buffer.concat(state.head), state.total);
+  if (!detected.ok) {
     await unlink(tmp).catch(() => {});
-    return NextResponse.json(
-      { error: header.reason },
-      { status: 415, headers: NO_STORE },
-    );
+    return NextResponse.json({ error: detected.reason }, { status: 415, headers: NO_STORE });
   }
 
-  // Reached only by a file that parsed clean, which at this size means a
-  // header describing almost no vertices. Nothing renders from it.
-  if (state.total < MIN_BYTES) {
+  // Reached only by a file that parsed clean, which at this size means a header
+  // describing almost no gaussians. Nothing renders from it.
+  if (state.total < MIN_UPLOAD_BYTES) {
     await unlink(tmp).catch(() => {});
     return NextResponse.json(
       { error: "That file is too small to be a splat." },
@@ -234,14 +319,17 @@ export async function POST(request: Request) {
   }
 
   const job = createSplatJob({
-    sourceName: declaredName || "uploaded.ply",
+    sourceName: declaredName || `uploaded.${detected.format}`,
     sourceBytes: state.total,
     origin: "ply",
     tripId,
   });
 
   try {
-    await rename(tmp, plyPathFor(job.id));
+    // The extension comes from the DETECTOR, never from `declaredName`. A file
+    // somebody called `walk.ply` that is really an SPZ is stored as `.spz`, so
+    // the renderer picks the right decoder from the URL it is handed.
+    await rename(tmp, splatPathFor(job.id, `.${detected.format}`));
   } catch {
     await unlink(tmp).catch(() => {});
     // The job now points at a file that is not there. `getSplatJob` reports
@@ -257,7 +345,7 @@ export async function POST(request: Request) {
     Re-read, rather than patching the record we already hold.
 
     `createSplatJob` returns the job as it looked BEFORE the rename — that is,
-    with no .ply on disk yet — so its derived fields describe a moment that has
+    with nothing on disk yet — so its derived fields describe a moment that has
     already passed. Spreading it and overriding `status` and `url` by hand
     produced a response that said `status: "ready"` next to `note: "The uploaded
     splat is no longer on disk"`, which is what happens when two fields are
@@ -277,10 +365,25 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       job: stored,
-      gaussians: header.count,
+      format: detected.format,
+      /**
+       * Null when the format will not say — a `.ksplat` with more sections than
+       * the kept prefix reaches. Null rather than 0, because 0 would be read as
+       * an empty capture and this is "not counted".
+       */
+      gaussians: detected.count,
       bytes: state.total,
+      /**
+       * Whether lib/video/plyBounds.ts can derive a camera from this file.
+       *
+       * False for every format but an all-float PLY, and reported rather than
+       * left to be discovered: the viewer frames a non-PLY capture with its
+       * default camera, and a caller that knows that up front can say so
+       * instead of showing "the header did not parse" about a good file.
+       */
+      measurable: detected.measurable,
       /** Null unless something is worth saying. The UI shows it when set. */
-      warning: header.warning,
+      warning: detected.warning,
       view: `/splat/${job.id}`,
     },
     { status: 201, headers: NO_STORE },

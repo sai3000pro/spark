@@ -20,6 +20,16 @@
  * guess about their origin would only mean refusing files that work.
  *
  * ─────────────────────────────────────────────────────────────────────────────
+ * FOUR FORMATS
+ *
+ * The picker offered `.ply` alone, which was the gate's old limit rather than
+ * the app's: both engines read `.splat` and `.ksplat`, and Spark reads `.spz`,
+ * which is about a third the size of the PLY it came from. A Luma export was
+ * refused here before the server ever saw it. The `accept` list and the check
+ * below both come from lib/splat/extensions.ts so this panel cannot fall behind
+ * what the server takes.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
  * XHR, NOT FETCH, AND THAT IS THE WHOLE REASON
  *
  * `fetch` cannot report upload progress — there is no event for bytes sent, only
@@ -37,11 +47,14 @@ import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 
 import { formatBytes } from "@/lib/format";
+import { SPLAT_ACCEPT_ATTRIBUTE, hasSplatExtension } from "@/lib/splat/extensions";
 
 interface Accepted {
   id: string;
-  gaussians: number;
+  /** Null when the format will not say — see the route's response. */
+  gaussians: number | null;
   bytes: number;
+  format: string;
   warning: string | null;
   view: string;
 }
@@ -69,17 +82,26 @@ export function SplatUploadPanel() {
       bytes, because an extension is a claim by whoever named the file. A `.ply`
       that is really a mesh gets past this line and is refused there, which is
       the correct division: the client saves time, the server decides.
+
+      The list comes from lib/splat/extensions.ts, the same one the server finds
+      stored splats by. Written out here as a second literal it would drift, and
+      the way it drifts is silent: the picker goes on offering `.ply` alone
+      while the server has taken four formats for weeks.
     */
-    if (!/\.ply$/i.test(file.name)) {
+    if (!hasSplatExtension(file.name)) {
       setPhase({
         k: "error",
-        message: `That is ${file.name}. This takes a .ply — the file your reconstruction produced.`,
+        message:
+          `That is ${file.name}. This takes a splat — ${SPLAT_ACCEPT_ATTRIBUTE.split(",").join(", ")} ` +
+          "— the file your reconstruction produced.",
       });
       return;
     }
 
     const form = new FormData();
-    form.append("ply", file);
+    // `splat`, not `ply`. The route still accepts the old field name so nothing
+    // already written against it breaks.
+    form.append("splat", file);
 
     const xhr = new XMLHttpRequest();
     xhrRef.current = xhr;
@@ -97,7 +119,15 @@ export function SplatUploadPanel() {
 
     xhr.onload = () => {
       xhrRef.current = null;
-      let body: { job?: { id?: string }; gaussians?: number; bytes?: number; warning?: string | null; view?: string; error?: string } = {};
+      let body: {
+        job?: { id?: string };
+        gaussians?: number | null;
+        bytes?: number;
+        format?: string;
+        warning?: string | null;
+        view?: string;
+        error?: string;
+      } = {};
       try {
         body = JSON.parse(xhr.responseText);
       } catch {
@@ -109,8 +139,12 @@ export function SplatUploadPanel() {
           k: "done",
           result: {
             id: body.job.id,
-            gaussians: body.gaussians ?? 0,
+            // `?? null`, not `?? 0`. A missing count means the format would not
+            // say; printing "0 gaussians" for a capture that just uploaded fine
+            // is the kind of confident wrong number this app does not tell.
+            gaussians: body.gaussians ?? null,
             bytes: body.bytes ?? file.size,
+            format: body.format ?? "",
             warning: body.warning ?? null,
             view: body.view ?? `/splat/${body.job.id}`,
           },
@@ -146,9 +180,12 @@ export function SplatUploadPanel() {
           <span className="fnote text-[10px] text-ink-faint">[ 05 ]</span>
           <h2 className="mt-1 text-[20px] leading-tight text-ink">Or bring a finished splat</h2>
           <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-ink-soft">
-            Already have a <code className="text-[12.5px]">.ply</code>? Drop it here and it becomes
-            a capture you can open, name and keep — no reconstruction, no waiting. Works with
-            output from the studio, from KIRI, or from anything else that makes splats.
+            Already have a splat? Drop it here and it becomes a capture you can open, name and
+            keep — no reconstruction, no waiting. Takes{" "}
+            <code className="text-[12.5px]">.ply</code>, <code className="text-[12.5px]">.spz</code>,{" "}
+            <code className="text-[12.5px]">.splat</code> and{" "}
+            <code className="text-[12.5px]">.ksplat</code>, so output from the studio, from KIRI,
+            from Luma, or from anything else that makes splats.
           </p>
         </div>
         <span className="fnote chip text-[10px]">[ no GPU needed ]</span>
@@ -179,7 +216,7 @@ export function SplatUploadPanel() {
               onClick={() => fileRef.current?.click()}
               className="pill-brass px-4 py-2 text-[13px]"
             >
-              Choose a .ply
+              Choose a splat
             </button>
             <p className="fnote mt-2.5 text-[9.5px] text-ink-faint">
               [ or drop it anywhere in this box · stays on this machine ]
@@ -223,7 +260,11 @@ export function SplatUploadPanel() {
         {phase.k === "done" && (
           <>
             <p className="text-[13.5px] text-ink">
-              {phase.result.gaussians.toLocaleString()} gaussians · {formatBytes(phase.result.bytes)}
+              {phase.result.gaussians === null
+                ? "stored"
+                : `${phase.result.gaussians.toLocaleString()} gaussians`}{" "}
+              · {formatBytes(phase.result.bytes)}
+              {phase.result.format ? ` · ${phase.result.format}` : ""}
             </p>
             {phase.result.warning && (
               <p className="mx-auto mt-2 max-w-prose text-[12.5px] leading-relaxed text-clay">
@@ -248,7 +289,7 @@ export function SplatUploadPanel() {
         <input
           ref={fileRef}
           type="file"
-          accept=".ply"
+          accept={SPLAT_ACCEPT_ATTRIBUTE}
           hidden
           onChange={(e) => {
             send(e.target.files?.[0]);
@@ -260,7 +301,7 @@ export function SplatUploadPanel() {
       </div>
 
       <p className="fnote mt-3 text-[10px] leading-relaxed text-ink-faint">
-        [ no .ply yet? the studio makes one from a video on this machine — see{" "}
+        [ no splat yet? the studio makes one from a video on this machine — see{" "}
         <code>tools/spark_studio/README.md</code> ]
       </p>
     </section>

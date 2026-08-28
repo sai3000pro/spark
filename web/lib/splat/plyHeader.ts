@@ -109,7 +109,7 @@ export function parsePlyHeader(prefix: Uint8Array, totalBytes: number): PlyHeade
   if (!text.startsWith("ply")) {
     // Name what it looks like instead. Someone who picked the wrong file wants
     // to know which wrong file they picked.
-    const sniff = sniffOther(prefix);
+    const sniff = sniffForeignFormat(prefix);
     return {
       ok: false,
       reason: sniff
@@ -241,8 +241,20 @@ export function parsePlyHeader(prefix: Uint8Array, totalBytes: number): PlyHeade
   };
 }
 
-/** Name the format someone uploaded by mistake, when it is one we recognise. */
-function sniffOther(prefix: Uint8Array): string | null {
+/**
+ * Name the format someone uploaded by mistake, when it is one we recognise.
+ *
+ * Exported so lib/splat/formats.ts can end its own chain with the same
+ * sentence. It has to: that module tries four formats before giving up, and
+ * once it does, the useful thing to say is still which wrong file this is —
+ * duplicating the table there would let the two drift.
+ *
+ * Note what "wrong file" means depends on who is asking. To THIS function's
+ * caller an SPZ is a wrong file, because `parsePlyHeader` answers one question
+ * and it is "is this a PLY". formats.ts recognises SPZ before it ever gets
+ * here, so it never sees that answer.
+ */
+export function sniffForeignFormat(prefix: Uint8Array): string | null {
   const b = prefix;
   if (b.length >= 4) {
     if (b[0] === 0x4e && b[1] === 0x47 && b[2] === 0x53 && b[3] === 0x50) return "an SPZ file";

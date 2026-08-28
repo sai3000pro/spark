@@ -57,15 +57,47 @@ const MAX_SAMPLES = 60_000;
  */
 const TRIM = 0.02;
 
-/** Read a PLY header far enough to learn its layout. */
+/**
+ * Read a PLY header far enough to learn its layout.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PLY ONLY, AND THAT IS NOT A GAP TO BE FIXED HERE
+ *
+ * The upload gate now accepts .spz, .splat and .ksplat too, and none of them
+ * can be measured by this function — SPZ is DEFLATE'd, KSPLAT is bucketed and
+ * quantised, and `.splat` stores positions as float32 but carries no header to
+ * find them from. Measuring those means decoding them, which is the renderer's
+ * job and not something to duplicate on the server for a camera hint.
+ *
+ * So the FIRST thing this does is confirm the file is a PLY at all. Without
+ * that check the function was one unlucky byte sequence away from finding
+ * `end_header\n` inside compressed data and measuring noise — a camera derived
+ * from garbage is worse than no camera, because the caller has no way to tell
+ * it apart from a good one. Returning null for everything else is correct and
+ * expected: `measurePly` returning null already means "keep your default", and
+ * every caller handles it. See app/splat/[jobId]/page.tsx, which says on the
+ * page that the framing is a default rather than a fit.
+ */
 function readHeader(fd: number): { dataOffset: number; count: number; stride: number } | null {
   const buf = Buffer.alloc(16_384);
   const read = readSync(fd, buf, 0, buf.length, 0);
   const text = buf.subarray(0, read).toString("latin1");
 
-  const marker = text.indexOf("end_header\n");
-  if (marker < 0) return null;
-  const header = text.slice(0, marker);
+  if (!text.startsWith("ply")) return null;
+
+  /*
+    CRLF as well as LF.
+
+    Windows-authored exporters emit `end_header\r\n`, which parsePlyHeader has
+    tolerated since it was written and this function did not — so a CRLF PLY
+    passed the upload gate and then could not be framed, and the viewer said
+    "unread — the header did not parse" about a file that parses fine. The
+    offset has to come from the match's own length, not from a constant, or the
+    `\r` shifts every vertex read by one byte.
+  */
+  const marker = /end_header\r?\n/.exec(text);
+  if (!marker) return null;
+  const header = text.slice(0, marker.index);
 
   const countMatch = /element vertex (\d+)/.exec(header);
   if (!countMatch) return null;
@@ -76,7 +108,7 @@ function readHeader(fd: number): { dataOffset: number; count: number; stride: nu
   if (props.length === 0 || props.some((p) => p[1] !== "float")) return null;
 
   return {
-    dataOffset: marker + "end_header\n".length,
+    dataOffset: marker.index + marker[0].length,
     count: Number(countMatch[1]),
     stride: props.length * 4,
   };
@@ -91,6 +123,12 @@ function percentile(sorted: number[], p: number): number {
 /**
  * Bounds and a camera for a splat on disk. Null when the file is not one we
  * can read — the caller then keeps whatever default it had.
+ *
+ * Null is the answer for every format that is not an all-float PLY, and that is
+ * a normal outcome rather than a failure: a `.spz` upload is a perfectly good
+ * capture that simply gets the default camera. `detectSplatFormat` reports the
+ * same fact up front as `measurable`, so a caller can say "this format cannot
+ * be measured here" rather than implying something went wrong with the file.
  */
 export function measurePly(filePath: string): PlyBounds | null {
   let fd: number;

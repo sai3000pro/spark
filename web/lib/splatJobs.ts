@@ -8,10 +8,17 @@
  * job is called, and how the app learns that the result has landed.
  *
  * STATUS IS DERIVED FROM THE FILESYSTEM, never ticked. A job is `ready` exactly
- * when its .ply exists on disk under public/mock/splats — so the loop closes for
- * real the moment the pipeline drops a file there, with nothing to poll, no
- * timer to leak, and correct answers on a cold read hours later. Same
+ * when a splat for it exists on disk under public/mock/splats — so the loop
+ * closes for real the moment the pipeline drops a file there, with nothing to
+ * poll, no timer to leak, and correct answers on a cold read hours later. Same
  * derive-don't-sync discipline as getActiveTrip().
+ *
+ * "A splat", not "a .ply", and the difference is load-bearing since the upload
+ * gate started accepting .spz, .splat and .ksplat as well. The format is NOT
+ * recorded on the job: it is recovered by looking, in `storedSplatFor`, which
+ * is the only way it cannot drift from what is actually on disk. The
+ * reconstruction pipeline still writes PLY, so the hand-drop instructions below
+ * still say .ply.
  *
  * The handoff, end to end:
  *
@@ -36,6 +43,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { SPLAT_EXTENSIONS } from "./splat/extensions";
+import { SPLAT_DIR } from "./splat/store";
 import { BROWSER_COPY_SUFFIX } from "./video/remux";
 
 export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
@@ -81,8 +90,14 @@ export interface SplatJob {
 /** Uploaded videos. Gitignored — these are large and they are not ours to keep. */
 export const UPLOAD_DIR = path.join(process.cwd(), ".uploads");
 
-/** Where a finished reconstruction has to be dropped to close the loop. */
-export const SPLAT_DIR = path.join(process.cwd(), "public", "mock", "splats");
+/**
+ * Where a finished reconstruction has to be dropped to close the loop.
+ *
+ * Re-exported rather than declared, so every caller that has always imported it
+ * from here still can. It lives in ./splat/store.ts because the upload limits
+ * need the same path and cannot import this module — see that file.
+ */
+export { SPLAT_DIR };
 
 const KEY = Symbol.for("spark.splatJobs.store");
 
@@ -226,8 +241,27 @@ function hydrate(s: Store): void {
     return; // Nothing reconstructed yet.
   }
   for (const name of splats) {
-    if (!name.endsWith(".ply")) continue;
-    const id = name.slice(0, -".ply".length);
+    /*
+      Any format the upload gate accepts, not just PLY.
+
+      This pass read `.ply` alone, which was right when that was the only thing
+      that could be stored. With .spz, .splat and .ksplat accepted, an
+      extension test that narrow would leave a perfectly good compressed
+      capture in the served directory that no job could ever address — the
+      cold-start orphan this whole pass exists to rescue, reintroduced for
+      three quarters of the formats.
+
+      `.uploading-*.tmp` files are excluded by the same test, for free: a temp
+      file has no accepted extension and no `splat_` prefix, so an upload in
+      flight is never adopted as a finished capture.
+    */
+    // `extname`, not `endsWith`. Two of these extensions are suffixes of each
+    // other — ".ksplat" ends with "splat" — so a suffix test gets the right
+    // answer only while the list happens to be in the right order, and silently
+    // gets the wrong one the day somebody sorts it alphabetically.
+    const ext = path.extname(name).toLowerCase();
+    if (!SPLAT_EXTENSIONS.includes(ext)) continue;
+    const id = name.slice(0, name.length - ext.length);
     if (!id.startsWith("splat_") || s.jobs.has(id)) continue;
     try {
       const st = statSync(path.join(SPLAT_DIR, name));
@@ -236,9 +270,9 @@ function hydrate(s: Store): void {
         createdAt: new Date(st.mtimeMs).toISOString(),
         sourceName: name,
         sourceBytes: st.size,
-        // Whatever produced it, what we HAVE is the .ply — and that is what
-        // `origin` describes. Claiming "video" would make a missing file read
-        // as "still reconstructing" for something already finished.
+        // Whatever produced it, what we HAVE is the finished splat — and that
+        // is what `origin` describes. Claiming "video" would make a missing
+        // file read as "still reconstructing" for something already finished.
         origin: "ply",
         tripId: null,
         note: "",
@@ -276,13 +310,14 @@ function store(): Store {
  *
  * Two uploads inside one millisecond is not the realistic case; two browser
  * tabs, a retried request, or the studio pushing several results at once is.
- * Checked against BOTH the job map and the served directory, because a .ply
- * adopted from disk is a real claim on an id even before its record is read.
+ * Checked against BOTH the job map and the served directory, because a splat
+ * adopted from disk is a real claim on an id even before its record is read —
+ * and against EVERY format, because `<id>.spz` occupying the name is exactly as
+ * much of a collision as `<id>.ply` occupying it.
  */
 function mintId(now: Date): string {
   const base = `splat_${now.getTime().toString(36)}`;
-  const taken = (id: string) =>
-    store().jobs.has(id) || existsSync(path.join(SPLAT_DIR, `${id}.ply`));
+  const taken = (id: string) => store().jobs.has(id) || storedSplatFor(id) !== null;
   if (!taken(base)) return base;
   for (let i = 0; i < 64; i++) {
     const candidate = `${base}${(36 + i).toString(36)}`;
@@ -414,8 +449,8 @@ export function getSplatJob(id: string): SplatJob | null {
   const job = store().jobs.get(id);
   if (!job) return null;
 
-  const file = path.join(SPLAT_DIR, `${id}.ply`);
-  const ready = existsSync(file);
+  const stored = storedSplatFor(id);
+  const ready = stored !== null;
 
   return {
     ...job,
@@ -429,12 +464,18 @@ export function getSplatJob(id: string): SplatJob | null {
       finished before it was ever created.
     */
     status: ready ? "ready" : job.origin === "ply" ? "failed" : "processing",
-    url: ready ? `/mock/splats/${id}.ply` : null,
-    note: ready
-      ? `Reconstructed. ${(statSync(file).size / 1_048_576).toFixed(1)} MB on disk.`
+    // The name the file actually has, not a name we would like it to have. A
+    // capture stored as `.spz` is served from `/mock/splats/<id>.spz`, and
+    // asserting `.ply` here would hand the viewer a 404 for a file on disk.
+    url: stored ? `/mock/splats/${stored.filename}` : null,
+    note: stored
+      ? `Reconstructed. ${(statSync(stored.path).size / 1_048_576).toFixed(1)} MB on disk.`
       : job.origin === "ply"
         ? "The uploaded splat is no longer on disk. Upload it again to restore this capture."
-        : `Waiting on the reconstruction. Drop it at public/mock/splats/${id}.ply to close the loop.`,
+        : // Still the .ply spelling, and deliberately: this sentence is an
+          // instruction to whoever is running the reconstruction by hand, and
+          // the pipeline in tools/video_intel writes PLY.
+          `Waiting on the reconstruction. Drop it at public/mock/splats/${id}.ply to close the loop.`,
   };
 }
 
@@ -482,14 +523,52 @@ export function findUploadFor(jobId: string): { path: string; filename: string }
 }
 
 /**
- * Where this job's finished splat belongs.
+ * Where this job's finished splat belongs, given the format it turned out to be.
  *
  * The one place that spelling lives, so an uploader writing a file and
- * `getSplatJob` looking for it cannot drift apart. `id` is always one this
- * module minted, never caller input — see `mintId`.
+ * `storedSplatFor` looking for it cannot drift apart. `id` is always one this
+ * module minted, never caller input — see `mintId` — and `ext` comes from
+ * SPLAT_EXTENSIONS rather than from anything a caller named their file.
  */
-export function plyPathFor(id: string): string {
-  return path.join(SPLAT_DIR, `${id}.ply`);
+export function splatPathFor(id: string, ext: string): string {
+  if (!SPLAT_EXTENSIONS.includes(ext)) {
+    // Not a user-facing error: reaching this means code in this repo tried to
+    // store a format the rest of the module cannot find again, which would
+    // produce a job stuck at "failed" over a file sitting right there.
+    throw new Error(`refusing to store a splat as \`${ext}\` — not a format this app serves`);
+  }
+  return path.join(SPLAT_DIR, `${id}${ext}`);
+}
+
+/**
+ * The stored splat for an id, whatever format it was uploaded in.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS AT ALL
+ *
+ * Readiness used to be `existsSync(<id>.ply)`, which was true when `.ply` was
+ * the only thing the upload gate accepted. Now that it takes .spz, .splat and
+ * .ksplat as well, that spelling would make every non-PLY upload land on disk
+ * and immediately report `failed` with a note saying the file is "no longer on
+ * disk" — a lie told about a file the same process had just written.
+ *
+ * So the question stops being "is `<id>.ply` there" and becomes "is there a
+ * splat for this id", which is answered by LOOKING. Same derive-don't-sync rule
+ * as everything else here: the format is not recorded on the job and does not
+ * need to be, because the filesystem already knows.
+ *
+ * Extensions are tried in SPLAT_EXTENSIONS order so the answer is deterministic
+ * if somebody hand-drops two formats for one id. It is not a case worth
+ * preventing — both files are real captures — but it IS worth answering the
+ * same way every time rather than by readdir order.
+ */
+export function storedSplatFor(id: string): { path: string; filename: string } | null {
+  for (const ext of SPLAT_EXTENSIONS) {
+    const filename = `${id}${ext}`;
+    const file = path.join(SPLAT_DIR, filename);
+    if (existsSync(file)) return { path: file, filename };
+  }
+  return null;
 }
 
 /** Both directories, created on demand — neither is committed. */
