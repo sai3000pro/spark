@@ -30,6 +30,7 @@ import type {
   Moment,
   ObjectIndexEntry,
   TrackPoint,
+  Trip,
   TripStats,
   Vec2,
 } from "./types";
@@ -186,6 +187,24 @@ export interface TripThumb {
   url?: string;
 }
 
+/**
+ * The cover plus the mini strip behind it — one spelling, for every shelf.
+ *
+ * Which frames represent a walk is a decision, not a detail: the card's collage
+ * lays out 1–4 of them and its first is the cover. It was written out inline in
+ * three places (here, lib/globeData.ts, and now lib/library.ts), and three
+ * copies of "the first keyframe of the first four moments" is three chances for
+ * a walk to be covered by a different picture depending on which screen you
+ * came from.
+ */
+export function coverThumbs(trip: Trip): TripThumb[] {
+  return trip.moments.slice(0, 4).map((m) => ({
+    seed: m.keyframes[0].placeholderSeed,
+    hue: m.keyframes[0].hue,
+    url: m.keyframes[0].url,
+  }));
+}
+
 export interface TripListItem {
   id: string;
   title: string;
@@ -234,6 +253,13 @@ export function listTrips(): TripListItem[] {
  * of them — only the accessors that reached for all seven did. These are those
  * accessors, restored under names of their own so the two designs can disagree
  * about how many trips exist without either one breaking the other.
+ *
+ * ONE CALLER LEFT THIS LIST, AND IT MATTERS WHICH. The landing's shelf used to
+ * read `listAllTrips()` under the heading "every album the robot has pressed",
+ * so nine authored walks were shown to every reader as their own library. The
+ * shelf reads lib/library.ts now. What still reads this is the globe (these ARE
+ * the "everybody else" it amalgamates — see lib/postedWalks.ts) and the demo
+ * gallery at `/trip`, both of which are honest about whose walks these are.
  */
 export function listAllTrips(): TripListItem[] {
   return TRIP_SPECS.map((spec) => {
@@ -247,11 +273,7 @@ export function listAllTrips(): TripListItem[] {
       origin: trip.place.origin,
       startedAt: trip.startedAt,
       stats: computeTripStats(trip, distanceM),
-      momentThumbs: trip.moments.slice(0, 4).map((m) => ({
-        seed: m.keyframes[0].placeholderSeed,
-        hue: m.keyframes[0].hue,
-        url: m.keyframes[0].url,
-      })),
+      momentThumbs: coverThumbs(trip),
     };
   });
 }

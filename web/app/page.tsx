@@ -5,18 +5,46 @@ import {
   type LandingMoment,
 } from "@/components/home/Landing";
 import { clockTime, compactNumber, distance, duration, tripDate } from "@/lib/format";
+import { listCaptures } from "@/lib/library";
 import { getActiveTrip } from "@/lib/liveTrip";
 import { LABEL_FAMILIES } from "@/lib/mock/labels";
 import { describeTrigger } from "@/lib/triggers";
-import { getTripView, listAllTrips } from "@/lib/tripData";
+import { getTripView } from "@/lib/tripData";
 
 /**
  * The landing. Everything the page needs is composed here on the server — the
- * intro storm's noticed words, the six moment cards, the discarded candidates
- * and the day's honest numbers — so the client ships zero raw telemetry.
+ * intro storm's noticed words, the six moment cards, the discarded candidates,
+ * the day's honest numbers and the reader's own shelf — so the client ships
+ * zero raw telemetry.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TWO SOURCES, AND WHICH ONE IS ALLOWED TO CLAIM WHAT
+ *
+ * `getTripView()` is the flagship AUTHORED walk, and it feeds sections I–VII:
+ * the sieve, the three instruments, the six kept moments and every candidate
+ * they beat. That is a demo and the page now says so — see the hero's fnote in
+ * components/home/Landing.tsx for the argument for keeping it rather than
+ * deleting it.
+ *
+ * `listCaptures()` is what this person actually has, and it feeds section VIII
+ * alone. That section used to be `listAllTrips()` — nine authored walks under
+ * the heading "every album the robot has pressed" — which meant a first-time
+ * reader with an empty machine was shown a library of somebody's walks through
+ * Lisbon, Kyoto and Cape Town as their own. The two sources never mix now, and
+ * an empty result is rendered as empty rather than backfilled from the demo.
  *
  * Old `/?m=` deep-links belong to the walk screen now and redirect there.
  */
+
+/**
+ * The shelf reads globalThis stores and the filesystem — uploaded walks,
+ * albums, journeys and whatever .ply files are on disk — none of which exist at
+ * build time. Prerendering this page would freeze somebody's shelf at "empty"
+ * forever, which is the one wrong answer it must never cache. Same reason
+ * app/trip/[tripId] and app/live carry it.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function Home({ searchParams }: PageProps<"/">) {
   const sp = await searchParams;
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -92,7 +120,10 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       noticed={noticed}
       moments={moments}
       discards={discards}
-      albums={listAllTrips()}
+      // The reader's own shelf. Derived by looking at the four stores every
+      // time — there is no "has captures" flag anywhere, and an empty array is
+      // a state the shelf renders, not a case to fall back from.
+      captures={listCaptures()}
       // Read here rather than polled on the client so the companion on the
       // ticker paints the right state on the very first frame.
       activeTrip={getActiveTrip()}

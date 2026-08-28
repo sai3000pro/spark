@@ -49,10 +49,10 @@ import { ArrowDown, ArrowUpRight, Music, Plus, RotateCw, Volume2, VolumeX } from
 import { KeyframeImg } from "@/components/system/ui";
 import { BlobMark } from "@/components/shell/BlobMark";
 import { TickerBlob } from "@/components/home/TickerBlob";
-import { distance, duration, shortDate } from "@/lib/format";
+import { Shelf } from "@/components/home/Shelf";
 import { BRASS, CLAY, MOMENT_INKS } from "@/lib/theme";
 import type { ActiveTripSnapshot } from "@/lib/liveTrip";
-import type { TripListItem } from "@/lib/tripData";
+import type { CaptureCard } from "@/lib/library";
 
 export interface LandingMoment {
   id: string;
@@ -100,8 +100,14 @@ export interface LandingProps {
   noticed: string[];
   moments: LandingMoment[];
   discards: LandingDiscard[];
-  /** Every pressed album, for the shelf. */
-  albums: TripListItem[];
+  /**
+   * What THIS person has actually captured — walks built from their footage,
+   * the albums they filed, their journeys, their finished reconstructions.
+   * Empty is the ordinary first-run state and the shelf renders it as such;
+   * see components/home/Shelf.tsx. Deliberately NOT the authored walks, which
+   * is what this prop used to be.
+   */
+  captures: CaptureCard[];
   /**
    * The live-trip snapshot, read on the server so the companion on the ticker
    * paints its first frame already correct — no idle→recording flash while the
@@ -255,7 +261,7 @@ function useNightAir() {
 
 /* ═════════════════════════════════ page ════════════════════════════════ */
 
-export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, albums, activeTrip }: LandingProps) {
+export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, moments, discards, captures, activeTrip }: LandingProps) {
   const root = useRef<HTMLDivElement>(null);
   const heroWord = useRef<HTMLSpanElement>(null);
   const [note, setNote] = useState(0);
@@ -791,7 +797,7 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         </Link>
         <nav className="flex items-center gap-3 sm:gap-5">
           <a href="#albums" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk md:block">
-            Albums
+            Your shelf
           </a>
           <Link href="/detect" className="link-pen hidden text-[13.5px] text-milk/85 transition-colors hover:text-milk sm:block">
             Detector bench
@@ -856,8 +862,17 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
           />
 
           <div className="mx-auto max-w-3xl text-center">
+            {/* DEMO WALK, said before the date and the place rather than
+                after them. Everything from here to section VII narrates ONE
+                authored evening from lib/mock/trips — it is a worked example of
+                the scorer deciding, kept because a product claiming "it decides
+                for you" has to be able to show one decision end to end. But a
+                dated place with coordinates under it reads as a record of where
+                the reader was, and on a machine with no captures at all that is
+                the first line on the page. Their own captures are section VIII;
+                this is a demo, and says so. */}
             <p className="fnote text-[11.5px] text-ink-faint" data-reveal>
-              [ {dateLabel} · {placeLabel} ]
+              [ A DEMO WALK · {dateLabel} · {placeLabel} ]
             </p>
             {/* Each line rises out of its own mask — the fold of the page. The
                 last line keeps rolling all evening: up and out, in from below.
@@ -1494,86 +1509,13 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
         </div>
       </section>
 
-      {/* ── VIII · the shelf ───────────────────────────────────────────────
-          The aurora library, folded into the journal: every album the robot
-          has pressed, mounted as taped vellum prints. One walk is told above;
-          the rest live here. */}
-      <section
-        id="albums"
-        tabIndex={-1}
-        className="papergrain gridfield relative border-t border-ink/10 bg-paper py-20 outline-none sm:py-24"
-        aria-label="Every album on the shelf"
-      >
-        <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 data-lines className="text-[clamp(2rem,4.2vw,3.2rem)] leading-[1.06] text-spruce">
-              The shelf.
-            </h2>
-            <p data-reveal className="fnote pb-2 text-[11px] text-ink-faint">
-              [ {albums.length} ALBUMS · ONE EVENING TOLD ABOVE ]
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
-            {albums.map((t, i) => {
-              const tilt = [-0.9, 0.7, -0.5, 0.9, -0.7, 0.5, -0.8][i % 7];
-              return (
-                <Link
-                  key={t.id}
-                  href={`/trip/${t.id}`}
-                  data-reveal
-                  style={{ "--reveal-delay": `${(i % 3) * 90}ms`, "--tilt": `${tilt}deg` } as React.CSSProperties}
-                  className="group block"
-                >
-                  <article className="relative">
-                    <div className="papergrain relative rotate-[var(--tilt)] bg-vellum p-3 shadow-[0_2px_4px_rgb(27_27_24_/_0.08),0_24px_44px_-24px_rgb(27_27_24_/_0.5)] transition-transform duration-500 ease-(--ease-reveal) group-hover:-translate-y-2 group-hover:rotate-0">
-                      <span aria-hidden className="tape -top-2.5 left-6 -rotate-5" />
-                      <span aria-hidden className="tape -top-2.5 right-8 rotate-3" />
-                      {/* Odd counts still fill the mat: with 1 or 3 prints the
-                          first goes full-width, so the collage never shows a
-                          bare quadrant. */}
-                      <div className="grid grid-cols-2 gap-1 overflow-hidden">
-                        {t.momentThumbs.slice(0, 4).map((th, k, arr) => {
-                          const wide = arr.length % 2 === 1 && k === 0;
-                          return (
-                            <KeyframeImg
-                              key={k}
-                              keyframe={{ placeholderSeed: th.seed, hue: th.hue, url: th.url }}
-                              alt=""
-                              width={420}
-                              height={315}
-                              className={`w-full object-cover ${wide ? "col-span-2 aspect-[8/3]" : "aspect-[4/3]"}`}
-                            />
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-baseline justify-between pt-2.5">
-                        <p className="fnote text-[10px] text-ink-faint">[ {String(i + 1).padStart(3, "0")} ]</p>
-                        <p className="fnote text-[10px] text-ink-faint">{shortDate(t.startedAt)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 px-1">
-                      <h3 className="flex items-baseline gap-2 text-[21px] leading-snug text-ink">
-                        {t.title}
-                        <ArrowUpRight
-                          size={15}
-                          strokeWidth={2}
-                          className="shrink-0 translate-y-[2px] text-brass-deep transition-transform duration-300 ease-(--ease-signature) group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-                          aria-hidden
-                        />
-                      </h3>
-                      <p className="tag mt-1 text-[12.5px] text-ink-soft">
-                        {t.placeLabel} · {t.stats.momentCount} moments · {distance(t.stats.distanceM)} ·{" "}
-                        {duration(t.stats.durationSec)}
-                      </p>
-                    </div>
-                  </article>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      {/* ── VIII · the shelf ──────────────────────────────────
+          Everything YOU have captured. It used to be every authored walk in
+          lib/mock/trips, under a heading that called them albums the robot had
+          pressed — a possession claim about nine walks nobody in front of the
+          screen had taken. components/home/Shelf.tsx owns both states now, the
+          full one and the empty one; lib/library.ts owns what goes in them. */}
+      <Shelf captures={captures} />
 
       {/* ── IX · finale ────────────────────────────────────────────────── */}
       <section className="dotfield starfield relative overflow-hidden bg-pine pb-10 sm:pb-14" aria-label="Enter the app">
@@ -1627,7 +1569,7 @@ export function Landing({ dateLabel, placeLabel, coordsLabel, stats, noticed, mo
                 </Link>
               </nav>
               <p className="fnote text-center text-[10.5px] text-mist">
-                {placeLabel} · {coordsLabel}
+                demo walk · {placeLabel} · {coordsLabel}
                 <br />
                 {stats.objects} things remembered · every discard on the record
               </p>
