@@ -1,13 +1,19 @@
 /**
  * POST /api/ingest/detections — the robot's stage-1 feed.
  *
- * Day-2 integration seam. Today it validates against lib/types.ts and reports
- * what stage 2 would make of the batch, without persisting; swap the marked
- * section for a DB insert and the client contract does not change.
+ * Validates against lib/types.ts, scores the batch with the real pipeline so the
+ * caller can see immediately whether it would produce anything, and STORES it.
+ *
+ * It used to do the first two and drop the third — `TODO(day 2): persist here`,
+ * and a response that said `persisted: false`. Honest, and it meant a rover
+ * could stream for an hour and leave nothing behind but counters that had since
+ * reset. lib/ingest/store.ts holds it now, per trip, with the detection feed
+ * capped and the trimming REPORTED rather than silent.
  */
 import { NextResponse } from "next/server";
 import { noteIngest, openTripForIngest } from "@/lib/liveTrip";
 import { scoreCandidates } from "@/lib/pipeline";
+import { recordDetections } from "@/lib/ingest/store";
 import { validateDetections } from "@/lib/validate";
 
 export async function POST(request: Request) {
@@ -49,7 +55,15 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── TODO(day 2): persist here. `await db.detections.insertMany(detections)` ──
+  /*
+    Stored before the session is opened, and before anything is reported.
+
+    Order matters: `openTripForIngest` makes the counters on /live move, so a
+    write that happened after it would leave a window where the screen says a
+    batch arrived and nothing on disk agrees. Cheap, and it removes the window
+    entirely.
+  */
+  const kept = recordDetections(detections[0].tripId, detections);
 
   // This batch IS the start. A rover does not have to call /api/trip/start
   // first — the first detections to arrive open the session under the rover's
@@ -78,8 +92,20 @@ export async function POST(request: Request) {
         discardReason: c.discardReason,
         triggerKinds: c.triggers.map((t) => t.kind),
       })),
-      persisted: false,
-      note: "Validated and scored, not stored. See TODO in this route for the DB hook.",
+      persisted: true,
+      held: kept.held,
+      totalForTrip: kept.total,
+      /*
+        Non-zero when the per-trip cap trimmed the oldest detections on THIS
+        call. Reported rather than swallowed: `accepted` would otherwise be a
+        number that quietly stopped meaning "kept", and a caller reconciling its
+        own counts against ours would find a discrepancy with no explanation.
+      */
+      trimmed: kept.dropped,
+      note:
+        kept.dropped > 0
+          ? `Stored. ${kept.dropped} older detection(s) were trimmed — this trip holds the most recent ${kept.held}.`
+          : "Stored.",
     },
     { status: 202 },
   );

@@ -33,7 +33,17 @@ import {
   getUploadedWalk,
   setWalkPlace,
 } from "../lib/uploadedTrips";
-import type { Detection } from "../lib/types";
+import type { Detection, Moment } from "../lib/types";
+import {
+  MAX_DETECTIONS_PER_TRIP,
+  MAX_TRIPS,
+  __resetIngest,
+  __simulateRestart as __simulateIngestRestart,
+  getIngestedTrip,
+  listIngestedTrips,
+  recordDetections,
+  recordMoment,
+} from "../lib/ingest/store";
 import {
   __resetAlbums,
   __simulateRestart as __simulateAlbumRestart,
@@ -325,6 +335,84 @@ __wipeStore("__probe");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ---------------------------------------------------------------------------
+section("The rover feed survives a restart");
+{
+  __resetIngest();
+
+  const det = (i: number, tripId = "trip_rover"): Detection => ({
+    id: `det_${i}`,
+    tripId,
+    frameId: `f_${i}`,
+    t: i,
+    label: i % 2 === 0 ? "bottle" : "bench",
+    confidence: 0.9,
+    bbox: [0.1, 0.1, 0.2, 0.2],
+    source: "onboard",
+  });
+
+  const first = recordDetections("trip_rover", [det(0), det(1), det(2)]);
+  ok("a batch is stored", first.stored === 3 && first.held === 3);
+  ok("...and nothing was trimmed", first.dropped === 0);
+
+  recordDetections("trip_rover", [det(3)]);
+  __simulateIngestRestart();
+
+  const back = getIngestedTrip("trip_rover");
+  ok("the trip survives a restart", back !== null);
+  ok("...with every detection", back?.detections.length === 4);
+  ok("...in order", back?.detections[0].id === "det_0" && back?.detections[3].id === "det_3");
+  ok("...and its running total", back?.totalDetections === 4);
+
+  // The cap, and the honesty about it. A silent trim would make `accepted` lie.
+  __resetIngest();
+  const big = Array.from({ length: MAX_DETECTIONS_PER_TRIP + 25 }, (_, i) => det(i));
+  const capped = recordDetections("trip_big", big);
+  ok("the per-trip cap bites", capped.held === MAX_DETECTIONS_PER_TRIP);
+  ok("...and says how many it trimmed", capped.dropped === 25);
+  ok("...while still reporting what was sent", capped.total === MAX_DETECTIONS_PER_TRIP + 25);
+  ok(
+    "...keeping the NEWEST, which is the window a moment came from",
+    getIngestedTrip("trip_big")?.detections.at(-1)?.id === `det_${MAX_DETECTIONS_PER_TRIP + 24}`,
+  );
+
+  // Moments upsert rather than duplicate.
+  __resetIngest();
+  const moment = (id: string, title: string): Moment =>
+    ({
+      id,
+      tripId: "trip_rover",
+      title,
+      tStart: 0,
+      tEnd: 4,
+      score: 1,
+      objects: [],
+      transcript: [],
+      triggers: [],
+      splat: { status: "none" },
+    }) as unknown as Moment;
+
+  recordMoment(moment("m_1", "first guess"));
+  recordMoment(moment("m_1", "refined"));
+  const after = getIngestedTrip("trip_rover");
+  ok("a re-posted moment replaces rather than doubles", after?.moments.length === 1);
+  ok("...with the newer content", after?.moments[0].title === "refined");
+
+  __simulateIngestRestart();
+  ok("moments survive a restart too", getIngestedTrip("trip_rover")?.moments.length === 1);
+
+  // Eviction is a memory policy, not a delete.
+  __resetIngest();
+  for (let i = 0; i < MAX_TRIPS + 3; i++) recordDetections(`trip_${i}`, [det(0, `trip_${i}`)]);
+  ok("trips are capped in memory", listIngestedTrips().length === MAX_TRIPS);
+  __simulateIngestRestart();
+  ok(
+    "...but eviction did NOT delete the records from disk",
+    listIngestedTrips().length === MAX_TRIPS + 3,
+  );
+
+  __resetIngest();
+}
+
 // NOT COVERED HERE: lib/push/registry.ts, and it is worth saying why rather
 // than leaving a hole someone has to rediscover.
 //

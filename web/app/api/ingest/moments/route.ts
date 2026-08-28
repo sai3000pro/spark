@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { noteIngest, openTripForIngest } from "@/lib/liveTrip";
 import { buildObjectIndex } from "@/lib/objectIndex";
+import { recordMoment } from "@/lib/ingest/store";
 import { validateMoment } from "@/lib/validate";
 
 export async function POST(request: Request) {
@@ -51,7 +52,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // ── TODO(day 2): persist here. `await db.moments.upsert(moment)` ────────────
+  // Upsert by id: a rover re-posting a moment it has refined must correct the
+  // record rather than add a second one beside it.
+  const kept = recordMoment(moment);
 
   // See the note in the detections route — reporting is what opens a session,
   // and there is no other way to open one.
@@ -69,7 +72,8 @@ export async function POST(request: Request) {
       transcriptSegments: moment.transcript.length,
       splatStatus: moment.splat.status,
       indexedLabels: index.map((e) => e.label).sort(),
-      persisted: false,
+      persisted: true,
+      momentsForTrip: kept.held,
     },
     { status: 202 },
   );
