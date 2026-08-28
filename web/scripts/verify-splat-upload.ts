@@ -38,6 +38,15 @@
  *           build that layout and pad it to the size it declares. Nobody has
  *           run this against a file the mkkellogg tool actually wrote.
  *
+ *   RAD     SYNTHETIC here, VERIFIED against a real file out of band. The
+ *           fixtures below reproduce the layout measured on World Labs'
+ *           haunted-house-lod.rad (57,031,040 bytes, 3,532,163 splats): that
+ *           real file was run through this detector, accepted with its exact
+ *           count, agreed with by Spark's own getSplatFileType, and refused
+ *           when its length was halved. The file is 54 MB and is not committed,
+ *           which is why the assertions here are fixtures rather than a read of
+ *           it.
+ *
  *   SPLAT   SYNTHETIC in origin, EXACT in form. The format is a bare array of
  *           32-byte records with no header at all, so a constructed one is not
  *           an approximation of a real one — it is the same thing with
@@ -1019,29 +1028,96 @@ section("The picker and the store agree about what is accepted");
   );
 }
 
-section("RAD - streaming/LOD, and the least checked format here");
-{
-  const rad = (bytes = 4096) => {
-    const b = Buffer.alloc(bytes);
-    b.write("RAD0", 0, "latin1");
-    return b;
+/**
+ * A RAD file, laid out the way the real one is.
+ *
+ * Measured on haunted-house-lod.rad (57,031,040 bytes, 3,532,163 splats):
+ *
+ *     magic(4) "RAD0" | jsonLength(4) | JSON | pad to 8 | chunks
+ *
+ * with `align8(8 + jsonLength) + allChunkBytes === fileSize` exactly, and the
+ * 54 entries of `chunks` summing to `allChunkBytes`. The fixture reproduces the
+ * header; `total` is what the file's size WOULD be, so truncation can be
+ * expressed without allocating 54 MB.
+ */
+function radFile(o: { count?: number; allChunkBytes?: number; type?: string; lodTree?: boolean } = {}): {
+  prefix: Buffer;
+  total: number;
+} {
+  const meta = {
+    version: 1,
+    type: o.type ?? "gsplat",
+    count: o.count ?? 3_532_163,
+    maxSh: 0,
+    lodTree: o.lodTree ?? true,
+    chunkSize: 65536,
+    allChunkBytes: o.allChunkBytes ?? 57_026_448,
+    chunks: [{ offset: 0, bytes: o.allChunkBytes ?? 57_026_448 }],
   };
+  const json = Buffer.from(JSON.stringify(meta), "utf8");
+  const head = Buffer.alloc(8);
+  head.write("RAD0", 0, "latin1");
+  head.writeUInt32LE(json.length, 4);
+  const prefix = Buffer.concat([head, json]);
+  const headerEnd = 8 + json.length;
+  const padded = Math.ceil(headerEnd / 8) * 8;
+  return { prefix, total: padded + meta.allChunkBytes };
+}
 
-  const r = detectSplatFormat(rad(), 40_000_000);
-  ok("a RAD0 file is accepted", r.ok);
+section("RAD - the streaming/LOD format, header and all");
+{
+  const good = radFile();
+  const r = detectSplatFormat(good.prefix, good.total);
+  ok("a real-shaped RAD is accepted", r.ok);
   ok("...identified as rad", r.ok && r.format === "rad");
   ok(
-    "...with no splat count, because the header is wasm-decoded and unreadable here",
-    r.ok && r.count === null,
+    "...and its splat count is READ, not guessed",
+    r.ok && r.count === 3_532_163,
   );
-  ok("...not measurable, so the viewer keeps its default camera", r.ok && !r.measurable);
+  ok("...not measurable — plyBounds cannot walk a chunked LOD tree", r.ok && !r.measurable);
   ok("...and warns that only one engine opens it", r.ok && !!r.warning && /Spark/i.test(r.warning));
 
-  // The floor is the ONLY size fact available for RAD: truncation is not caught.
-  ok("a four-byte RAD0 is refused", !detectSplatFormat(rad(4), 4).ok);
+  // The check that made reading the header worth doing at all.
+  const half = detectSplatFormat(good.prefix, Math.floor(good.total / 2));
+  ok("a half-downloaded RAD is refused", !half.ok);
+  ok("...and told it is truncated, with both sizes", !half.ok && /truncated/i.test(half.reason) && (half.reason.match(/MB/g) ?? []).length >= 2);
 
-  // `null` and `0` are different claims: one says unmeasured, the other empty.
-  ok("count is null, never 0", r.ok && r.count !== 0);
+  ok("a complete one is accepted at exactly its size", detectSplatFormat(good.prefix, good.total).ok);
+
+  // Degenerate headers.
+  const noSplats = radFile({ count: 0 });
+  ok("a RAD declaring zero splats is refused", !detectSplatFormat(noSplats.prefix, noSplats.total).ok);
+
+  const mesh = radFile({ type: "mesh" });
+  const rm = detectSplatFormat(mesh.prefix, mesh.total);
+  ok("a RAD that is not a gsplat scene is refused", !rm.ok);
+  ok("...and named for what it holds", !rm.ok && /mesh/i.test(rm.reason));
+
+  const bogus = Buffer.alloc(64);
+  bogus.write("RAD0", 0, "latin1");
+  bogus.writeUInt32LE(0xffffffff, 4);
+  ok("an impossible header length is refused", !detectSplatFormat(bogus, 10_000_000).ok);
+
+  const badJson = (() => {
+    const body = Buffer.from("{ not json at all", "utf8");
+    const h = Buffer.alloc(8);
+    h.write("RAD0", 0, "latin1");
+    h.writeUInt32LE(body.length, 4);
+    return Buffer.concat([h, body]);
+  })();
+  ok("an unreadable header is refused", !detectSplatFormat(badJson, 5_000_000).ok);
+
+  // A header bigger than the prefix we keep: accepted, and SAYS it was unchecked.
+  const huge = (() => {
+    const h = Buffer.alloc(8);
+    h.write("RAD0", 0, "latin1");
+    h.writeUInt32LE(200_000, 4); // beyond MAX_HEADER_BYTES
+    return Buffer.concat([h, Buffer.alloc(1024)]);
+  })();
+  const rh = detectSplatFormat(huge, 80_000_000);
+  ok("a RAD whose header outruns the prefix is still accepted", rh.ok);
+  ok("...with no count claimed", rh.ok && rh.count === null);
+  ok("...and a warning that says it went unchecked", rh.ok && !!rh.warning && /not checked/i.test(rh.warning));
 }
 
 section("Our gate agrees with the engine that will draw the file");
@@ -1057,6 +1133,15 @@ section("Our gate agrees with the engine that will draw the file");
 
     It is also where the RAD magic came from: Spark compares a little-endian
     uint32 against 809779538, which is the four bytes R A D 0.
+
+    THE AGREEMENT IS NOT SYMMETRIC, and only one direction is a bug. Accepting
+    something Spark cannot open is the broken promise this whole path exists to
+    prevent. Refusing something Spark would nominally identify is allowed when
+    we can prove the file is unusable — and we do exactly that: Spark calls
+    four bytes of "RAD0" followed by zeros a RAD, because it checks the magic
+    and nothing else, while this gate reads on and refuses a header claiming
+    zero length. Being stricter is fine. Being looser is not. So the cases below
+    use well-formed files, where the two must land on the same answer.
   */
   const realPly = (() => {
     const file = path.join(SPLAT_DIR, "summerhacks_build_room_400k.ply");
@@ -1070,17 +1155,13 @@ section("Our gate agrees with the engine that will draw the file");
     return { bytes: buf, total: statSync(file).size };
   })();
 
-  const radBytes = (() => {
-    const b = Buffer.alloc(4096);
-    b.write("RAD0", 0, "latin1");
-    return b;
-  })();
+  const rad = radFile();
 
   const spz = spzFile({ numSplats: 500 });
 
   const cases: Array<[string, Buffer, number]> = [
     ["real ply", realPly.bytes, realPly.total],
-    ["rad", radBytes, 40_000_000],
+    ["rad", rad.prefix, rad.total],
     ["spz", spz.prefix, spz.total],
   ];
 
@@ -1092,6 +1173,15 @@ section("Our gate agrees with the engine that will draw the file");
       mine.ok && mine.format === theirs,
     );
   }
+
+  // The deliberate divergence, asserted so nobody "fixes" it into a false accept.
+  const magicOnly = Buffer.alloc(64);
+  magicOnly.write("RAD0", 0, "latin1");
+  ok(
+    "we refuse a RAD0 with an empty header that Spark would call a rad",
+    !detectSplatFormat(magicOnly, 10_000_000).ok &&
+      getSplatFileType(new Uint8Array(magicOnly)) === "rad",
+  );
 
   const junk = Buffer.from("this is not a splat, not even slightly, no".repeat(4), "latin1");
   ok(

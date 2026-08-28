@@ -61,22 +61,23 @@
  *           than that is accepted on its file header alone and SAYS SO in the
  *           warning rather than quietly.
  *
- *   RAD     MAGIC ONLY, and it is the least checked format here. RAD is World
- *           Labs' streaming/LOD format: a "RAD0" magic, then a header that
- *           Spark decodes in wasm (`decode_rad_header`, handed the first 1 MB
- *           of the file). That layout is not published and is not readable from
- *           TypeScript without shipping the wasm into this request handler, so
- *           the only fact established here is those four bytes and a plausible
- *           length. Truncation is NOT caught. A half-downloaded .rad reaches
- *           the viewer and fails there.
+ *   RAD     HEADER FULLY CHECKED. World Labs' streaming/LOD container opens
+ *           with "RAD0", a uint32 length, and then a JSON header in plain
+ *           UTF-8 — so the splat count, the scene type and the total size of
+ *           the chunk payload are all readable, and truncation is caught from
+ *           `allChunkBytes` the same way it is for KSPLAT. The one gap is a
+ *           header longer than the 64 KB prefix kept on upload; that case is
+ *           accepted on the magic and says so in its warning.
  *
- *           Accepted anyway, on the same reasoning as SPZ: the failure is a
- *           loud one at load rather than a wrong scene quietly drawn, and the
- *           format is what makes a million-splat capture openable at all. If
- *           the header layout is ever published, this becomes checkable and
- *           this paragraph should shrink.
+ *           This entry used to read "MAGIC ONLY, and it is the least checked
+ *           format here", on the reasoning that Spark decodes the header in
+ *           wasm and the layout is not published. Both true; neither made it
+ *           unreadable. Downloading one real file (haunted-house-lod.rad,
+ *           57,031,040 bytes, 3,532,163 splats) settled in a minute what the
+ *           guess had written off — and the guess was the kind that costs a
+ *           user a real check. "Not published" is not the same as "unknowable".
  *
- *   SPLAT   Structure only, and it is the weakest of the five BY CONSTRUCTION.
+ *   SPLAT   Structure only, and it is now the weakest of the five BY CONSTRUCTION.
  *           The antimatter15/Luma `.splat` format has no magic number and no
  *           header at all: it is a bare array of 32-byte records (3 float32
  *           position, 3 float32 scale, 4 uint8 RGBA, 4 uint8 quaternion). So
@@ -513,15 +514,6 @@ function readKsplatHeader(prefix: Uint8Array, totalBytes: number): SplatFileResu
  * specification is this one number.
  */
 /*
-  "RAD0" — World Labs' streaming/LOD container.
-
-  Taken from Spark's own `getSplatFileType`, which compares a little-endian
-  uint32 against 809779538. That is 0x30444152, which is the four bytes
-  52 41 44 30 in file order: R A D 0. Written here as bytes rather than as that
-  integer so it cannot silently mean something else on a big-endian host, and so
-  the next person does not have to do the arithmetic to see what it is.
-*/
-/*
   The accepted list, as a sentence, DERIVED rather than typed.
 
   This was written out by hand as ".ply, .spz, .splat and .ksplat" and went
@@ -537,20 +529,148 @@ function spokenExtensions(): string {
   return `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
 }
 
+/*
+  "RAD0" - World Labs' streaming/LOD container.
+
+  Taken from Spark's own `getSplatFileType`, which compares a little-endian
+  uint32 against 809779538. That is 0x30444152, which is the four bytes
+  52 41 44 30 in file order: R A D 0. Written here as bytes rather than as that
+  integer so it cannot silently mean something else on a big-endian host, and so
+  the next person does not have to do the arithmetic to see what it is.
+*/
 const RAD_MAGIC = [0x52, 0x41, 0x44, 0x30] as const;
 
 /*
-  A floor, not a validation, and the comment is the honest part.
+  The layout, read off a real file rather than guessed.
 
-  Spark hands `decode_rad_header` up to the first megabyte, so the real header
-  can be large and its layout is not something this module can read. All this
-  rules out is a four-byte file that happens to spell RAD0. Anything past it is
-  the viewer's problem, which the module header says plainly.
+    magic(4) "RAD0"
+    jsonLength(4)          little-endian uint32
+    header                 jsonLength bytes of UTF-8 JSON
+    padding                up to the next 8-byte boundary
+    chunks                 `allChunkBytes` bytes
+
+  Measured on haunted-house-lod.rad (57,031,040 bytes): jsonLength 4579, so the
+  header ends at 4587, padded to 4592, plus allChunkBytes 57,026,448 == the file
+  size exactly. The 54 entries in `chunks` sum to `allChunkBytes` as well.
+
+  THIS SECTION USED TO SAY THE HEADER WAS UNREADABLE. It is not. The first
+  version of this branch checked four magic bytes and a floor, on the reasoning
+  that Spark decodes the header in wasm (`decode_rad_header`) and the layout is
+  not published. Both of those are true and neither made it unreadable - the
+  header is plain JSON, four bytes in, and downloading one real file settled in
+  a minute what the guess had written off. The honest version of "not published"
+  is "look at one".
 */
-const RAD_MIN_BYTES = 64;
+const RAD_JSON_OFFSET = 8;
+
+/*
+  A ceiling on the declared header length, so a corrupt uint32 cannot ask this
+  to slice a gigabyte out of a 64 KB prefix. Spark hands its own decoder the
+  first megabyte, which is the natural bound to agree with.
+*/
+const RAD_MAX_JSON_BYTES = 1024 * 1024;
+
+interface RadHeader {
+  version?: number;
+  type?: string;
+  count?: number;
+  lodTree?: boolean;
+  allChunkBytes?: number;
+  chunks?: unknown[];
+}
 
 function startsWithRadMagic(b: Uint8Array): boolean {
   return b.length >= 4 && RAD_MAGIC.every((byte, i) => b[i] === byte);
+}
+
+function readRadHeader(prefix: Uint8Array, totalBytes: number): SplatFileResult {
+  const buf = Buffer.from(prefix);
+  if (buf.length < RAD_JSON_OFFSET) {
+    return { ok: false, reason: "That .rad file is truncated: it stops inside its own header." };
+  }
+  const jsonLength = buf.readUInt32LE(4);
+  if (jsonLength === 0 || jsonLength > RAD_MAX_JSON_BYTES) {
+    return {
+      ok: false,
+      reason: "That .rad file declares an impossible header size, so it is corrupt rather than merely unfinished.",
+    };
+  }
+
+  const headerEnd = RAD_JSON_OFFSET + jsonLength;
+  if (buf.length < headerEnd) {
+    /*
+      The header is real but longer than the prefix we keep. Accepted on the
+      magic alone and SAID SO, rather than refused: only the first
+      MAX_HEADER_BYTES of an upload is retained, and a scene big enough to have
+      a 64 KB chunk table is exactly the kind this format exists for.
+    */
+    return {
+      ok: true,
+      format: "rad",
+      count: null,
+      gaussian: true,
+      measurable: false,
+      warning:
+        "This RAD file's header is larger than the part read on upload, so its splat count " +
+        "and length were not checked. It opens in the Spark engine only.",
+    };
+  }
+
+  let meta: RadHeader;
+  try {
+    meta = JSON.parse(buf.subarray(RAD_JSON_OFFSET, headerEnd).toString("utf8")) as RadHeader;
+  } catch {
+    return {
+      ok: false,
+      reason: "That .rad file's header is not readable, so the file is corrupt.",
+    };
+  }
+
+  if (meta.type !== undefined && meta.type !== "gsplat") {
+    return {
+      ok: false,
+      reason: `That .rad file contains ${meta.type}, not a Gaussian splat scene.`,
+    };
+  }
+  const count = typeof meta.count === "number" && meta.count > 0 ? meta.count : null;
+  if (meta.count !== undefined && count === null) {
+    return { ok: false, reason: "That .rad file declares no splats, so there is nothing to draw." };
+  }
+
+  /*
+    Truncation, which is the whole reason to read this header.
+
+    Deliberately `>=` and not `===`. The padding rule is 8-byte alignment on the
+    one real file measured, and demanding an exact total would turn any other
+    alignment - or a trailing byte some writer appends - into a refused file
+    that renders perfectly. Short is the failure that matters and short is what
+    this catches.
+  */
+  if (typeof meta.allChunkBytes === "number" && meta.allChunkBytes > 0) {
+    const need = headerEnd + meta.allChunkBytes;
+    if (totalBytes < need) {
+      const got = (totalBytes / 1_048_576).toFixed(1);
+      const want = (need / 1_048_576).toFixed(1);
+      return {
+        ok: false,
+        reason:
+          `That .rad file is truncated: it declares ${want} MB of scene data but only ` +
+          `${got} MB arrived. The download was interrupted.`,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    format: "rad",
+    count,
+    gaussian: true,
+    // plyBounds reads raw float32 offsets; a chunked LOD tree is not that.
+    measurable: false,
+    warning:
+      "Streaming RAD files open in the Spark engine only — the original engine " +
+      "cannot read them, so the renderer choice will be fixed for this capture.",
+  };
 }
 
 const SPLAT_RECORD_BYTES = 32;
@@ -693,24 +813,7 @@ export function detectSplatFormat(prefix: Uint8Array, totalBytes: number): Splat
   if (looksLikeKsplat(prefix, totalBytes)) return readKsplatHeader(prefix, totalBytes);
 
   // RAD, before the headerless guess below, because it can name itself.
-  if (startsWithRadMagic(prefix)) {
-    if (totalBytes < RAD_MIN_BYTES) {
-      return { ok: false, reason: "That .rad file is too small to contain a scene." };
-    }
-    return {
-      ok: true,
-      format: "rad",
-      // Both unknowable without the wasm decoder. `null` rather than 0: the
-      // count is not zero, it is unmeasured, and the difference is the whole
-      // point of the type allowing null.
-      count: null,
-      gaussian: true,
-      measurable: false,
-      warning:
-        "Streaming RAD files open in the Spark engine only — the original engine " +
-        "cannot read them, so the renderer choice will be fixed for this capture.",
-    };
-  }
+  if (startsWithRadMagic(prefix)) return readRadHeader(prefix, totalBytes);
 
   const splat = readSplatStructure(prefix, totalBytes);
   if (splat) return splat;

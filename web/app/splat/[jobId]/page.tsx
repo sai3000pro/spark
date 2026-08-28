@@ -131,6 +131,23 @@ function resolveSplat(
   }
 }
 
+/**
+ * How many gaussians, from whichever source actually knows.
+ *
+ * `measurePly` re-derives it on every load and is the better answer when it can
+ * give one — it reads the file that is on disk right now. It only reads PLY
+ * though, so for the other four formats the job record holds the only count
+ * anybody ever took, at upload. Neither is authoritative alone; measured wins,
+ * stored fills in, and 0 means nobody knows rather than "none".
+ */
+function countOf(
+  measured: { pointCount: number } | null,
+  job: { splatCount: number | null } | null,
+): number {
+  if (measured && measured.pointCount > 0) return measured.pointCount;
+  return job?.splatCount && job.splatCount > 0 ? job.splatCount : 0;
+}
+
 export async function generateMetadata({ params }: Ctx) {
   const { jobId } = await params;
   return {
@@ -228,7 +245,7 @@ export default async function SplatPage({ params }: Ctx) {
             view={view}
             span={span}
             bytes={ply.bytes}
-            pointCount={measured?.pointCount ?? 0}
+            pointCount={countOf(measured, job)}
           />
         </div>
       </section>
@@ -241,9 +258,23 @@ export default async function SplatPage({ params }: Ctx) {
 
         <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
           <Fact label="gaussians">
-            {measured
-              ? `${compactNumber(measured.pointCount)} (${measured.pointCount.toLocaleString("en-CA")})`
-              : "unread — the header did not parse"}
+            {(() => {
+              const n = countOf(measured, job);
+              if (n > 0) return `${compactNumber(n)} (${n.toLocaleString("en-CA")})`;
+              /*
+                Two different unknowns, and they had one sentence between them.
+
+                "the header did not parse" is true of a damaged PLY and false of
+                every healthy .spz, .ksplat and .rad — none of which `measurePly`
+                can read at all, because it walks raw float32 offsets. So a
+                perfectly good 3.5-million-splat RAD reported that its header had
+                failed, forty seconds after the upload gate parsed that header and
+                counted every one of them.
+              */
+              return ply.name.endsWith(".ply")
+                ? "unread — the header did not parse"
+                : "not counted for this format";
+            })()}
           </Fact>
           <Fact label="on disk">{formatBytes(ply.bytes)}</Fact>
           <Fact label="collected">{shortDate(ply.landedAt)}</Fact>

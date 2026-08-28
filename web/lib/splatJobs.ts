@@ -71,6 +71,22 @@ export interface SplatJob {
   /** Bytes of the uploaded video, so the UI can be honest about the wait. */
   sourceBytes: number;
   origin: SplatJobOrigin;
+  /**
+   * Splats in the file, when whatever accepted it could tell.
+   *
+   * Read once, at upload, by the format gate — and kept because for three of
+   * the five formats it is the ONLY chance. `measurePly` re-derives this for a
+   * PLY every time the page loads, by sampling raw float offsets; an .spz is
+   * compressed, a .rad is a chunked LOD tree, and neither answers that question
+   * without being decoded. So the viewer showed "gaussian count unread — the
+   * header did not parse" over a 3,532,163-splat scene whose header had parsed
+   * perfectly forty seconds earlier, in a different process, and thrown the
+   * number away.
+   *
+   * Null means genuinely unknown, never zero. A capture with no splats and a
+   * capture we did not count are different facts.
+   */
+  splatCount: number | null;
   /** The walk this reconstruction belongs to, once one has been built. */
   tripId: string | null;
   status: SplatJobStatus;
@@ -179,6 +195,7 @@ function hydrate(s: Store): void {
         // Records written before uploads existed have no origin and are all
         // videos. Defaulting rather than dropping keeps them readable.
         origin: raw.origin === "ply" ? "ply" : "video",
+        splatCount: typeof raw.splatCount === "number" && raw.splatCount > 0 ? raw.splatCount : null,
         tripId: raw.tripId ?? null,
         note: "",
         kiriSerialize: raw.kiriSerialize ?? null,
@@ -202,6 +219,7 @@ function hydrate(s: Store): void {
         sourceName: name,
         sourceBytes: bytes,
         origin: "video",
+        splatCount: null,
         tripId: null,
         note: "",
         // Unrecoverable. A clip adopted this way may already have been sent to
@@ -274,6 +292,7 @@ function hydrate(s: Store): void {
         // is what `origin` describes. Claiming "video" would make a missing
         // file read as "still reconstructing" for something already finished.
         origin: "ply",
+        splatCount: null,
         tripId: null,
         note: "",
         kiriSerialize: null,
@@ -334,6 +353,8 @@ export function createSplatJob(input: {
   tripId?: string | null;
   /** Defaults to "video" — the long-standing case, and every existing caller. */
   origin?: SplatJobOrigin;
+  /** What the format gate counted, when it could. See `SplatJob.splatCount`. */
+  splatCount?: number | null;
 }): SplatJob {
   const now = new Date();
   const id = mintId(now);
@@ -343,6 +364,7 @@ export function createSplatJob(input: {
     sourceName: input.sourceName,
     sourceBytes: input.sourceBytes,
     origin: input.origin ?? "video",
+    splatCount: input.splatCount ?? null,
     tripId: input.tripId ?? null,
     note: "",
     kiriSerialize: null,
