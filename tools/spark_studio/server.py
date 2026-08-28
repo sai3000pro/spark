@@ -680,10 +680,17 @@ def _ui_jobs(paths: Paths, watcher: Watcher) -> list[dict]:
     errors = {f["job"]: f for f in watcher.finished if f.get("error")}
     done = {f["job"]: f for f in watcher.finished if not f.get("error")}
 
-    if not paths.uploads.is_dir():
-        return out
+    # NOT an early return. No uploads directory means no job records, which is
+    # precisely the state the orphan pass at the bottom exists to rescue - so
+    # bailing here made that code unreachable in the one case it was written
+    # for, and a finished splat stayed invisible.
+    records = (
+        sorted(paths.uploads.glob("*.job.json"), reverse=True)
+        if paths.uploads.is_dir()
+        else []
+    )
 
-    for record in sorted(paths.uploads.glob("*.job.json"), reverse=True):
+    for record in records:
         job_id = record.name[: -len(".job.json")]
         try:
             meta = json.loads(record.read_text("utf-8"))
@@ -714,6 +721,45 @@ def _ui_jobs(paths: Paths, watcher: Watcher) -> list[dict]:
         else:
             entry["status"] = "queued"
         out.append(entry)
+
+    #: FINISHED SPLATS WITH NO RECORD LEFT.
+    #
+    # The list above is built from job records in `uploads`, which also holds
+    # the source videos - 150-400 MB each. Clearing that folder out to reclaim
+    # space is an obvious thing to do once a reconstruction has finished, and
+    # doing it made every finished splat disappear from the page while the
+    # files sat untouched in `splats`. An hour of work, invisible, because its
+    # receipt was thrown away.
+    #
+    # So the .ply is evidence in its own right, exactly as it is in the web
+    # app's splatJobs hydrate. The record adds a nicer name and a start time;
+    # its absence must not cost the capture.
+    known = {e["id"] for e in out}
+    if paths.splats.is_dir():
+        orphans = []
+        for ply in paths.splats.glob("*.ply"):
+            job_id = ply.stem
+            if job_id in known:
+                continue
+            try:
+                st = ply.stat()
+            except OSError:
+                continue
+            if st.st_size == 0:
+                continue
+            orphans.append(
+                {
+                    "id": job_id,
+                    "name": f"{job_id}.ply",
+                    "createdAt": time.strftime(
+                        "%Y-%m-%dT%H:%M:%S", time.localtime(st.st_mtime)
+                    ),
+                    "status": "done",
+                    "bytes": st.st_size,
+                }
+            )
+        out.extend(sorted(orphans, key=lambda e: e["createdAt"], reverse=True))
+
     return out
 
 
