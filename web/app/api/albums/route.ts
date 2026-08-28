@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 
 import { createAlbum, listAlbums } from "@/lib/albums";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: { title?: unknown; journeyId?: unknown };
   try {
     body = (await request.json()) as { title?: unknown; journeyId?: unknown };

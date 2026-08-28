@@ -86,6 +86,7 @@ import { NextResponse } from "next/server";
 import { canStoreUploads, storageReality } from "@/lib/deployment";
 import { detectSplatFormat, MAX_HEADER_BYTES } from "@/lib/splat/formats";
 import { createSplatJob, ensureDirs, getSplatJob, splatPathFor } from "@/lib/splatJobs";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 import {
   MAX_UPLOAD_BYTES,
@@ -140,6 +141,9 @@ function tee(state: { head: Buffer[]; headLen: number; total: number }, slot: Up
 }
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   /*
     Admission before a single byte is read.
 

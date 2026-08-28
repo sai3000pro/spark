@@ -40,6 +40,7 @@
  * Albums are tiny (a title and a list of ids); the thing worth capping is bytes.
  */
 
+import { mintId } from "./ids";
 import { normaliseTitle } from "./albumTitle";
 import { __wipeStore, forget, hydrate, persist } from "./persist";
 
@@ -173,7 +174,10 @@ export function createAlbum(input: {
   if (!title) return { ok: false, reason: "bad-title" };
 
   const now = new Date().toISOString();
-  const id = `${ALBUM_ID_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // Unguessable, not just unique. An album id is a link somebody can open, and
+  // until there are owners the id is the only thing standing between it and a
+  // stranger walking the timestamps. See lib/ids.ts.
+  const id = mintId(ALBUM_ID_PREFIX);
 
   const album: Album = {
     id,

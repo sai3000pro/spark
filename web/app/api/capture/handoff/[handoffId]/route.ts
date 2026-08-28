@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 
 import { claimHandoff, getHandoff } from "@/lib/handoff";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,9 @@ export async function GET(_request: Request, { params }: Ctx) {
 
 /** The phone claims the handoff, presenting the token it read from the fragment. */
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { handoffId } = await params;
 
   let token = "";

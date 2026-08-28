@@ -24,6 +24,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { registerPushToken, revokePushTokens, type PushPlatform } from "@/lib/push/registry";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,6 +45,9 @@ function isPlausibleToken(value: unknown): value is string {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: { token?: unknown; platform?: unknown; userAgent?: unknown };
   try {
     body = (await request.json()) as typeof body;
@@ -79,6 +83,9 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function DELETE(request: Request): Promise<Response> {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: { token?: unknown };
   try {
     body = (await request.json()) as typeof body;

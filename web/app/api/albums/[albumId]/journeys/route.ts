@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 
 import { addToAlbum, removeFromAlbum } from "@/lib/albums";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,9 @@ async function journeyIdFrom(request: Request): Promise<string | null> {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { albumId } = await params;
   const journeyId = await journeyIdFrom(request);
   if (!journeyId) {
@@ -43,6 +47,9 @@ export async function POST(request: Request, { params }: Ctx) {
 }
 
 export async function DELETE(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { albumId } = await params;
   const journeyId = await journeyIdFrom(request);
   if (!journeyId) {

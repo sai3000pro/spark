@@ -26,6 +26,7 @@
  * phase 1.3. Until then, do not treat a stream as private.
  */
 import { NextResponse } from "next/server";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 import {
   noteStreaming,
@@ -50,6 +51,9 @@ function roleOf(value: unknown): SignalRole | null {
 
 /** Post an offer, an answer, or a candidate. */
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { handoffId } = await params;
 
   let body: {

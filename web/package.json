@@ -19,7 +19,8 @@
     "verify:persistence": "tsx scripts/verify-persistence.ts",
     "verify:upload": "tsx scripts/verify-splat-upload.ts",
     "verify:webxr": "tsx scripts/verify-webxr.ts",
-    "verify:all": "npm run verify && npm run verify:journey && npm run verify:persistence && npm run verify:upload && npm run verify:webxr"
+    "verify:origin": "tsx scripts/verify-origin.ts",
+    "verify:all": "npm run verify && npm run verify:journey && npm run verify:persistence && npm run verify:upload && npm run verify:webxr && npm run verify:origin"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",

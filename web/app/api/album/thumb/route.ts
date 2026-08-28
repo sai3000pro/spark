@@ -8,10 +8,14 @@
  */
 import { NextResponse } from "next/server";
 import { STUDIO_URL } from "@/lib/studio";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: { id?: string; path?: string };
   try {
     body = await request.json();

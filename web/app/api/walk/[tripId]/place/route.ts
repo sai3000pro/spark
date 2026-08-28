@@ -23,6 +23,7 @@ import { NextResponse } from "next/server";
 
 import { resolvePlace } from "@/lib/geo/geocode";
 import { getUploadedWalk, setWalkPlace } from "@/lib/uploadedTrips";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +38,9 @@ interface Ctx {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { tripId } = await params;
   if (!getUploadedWalk(tripId)) {
     return NextResponse.json({ error: "no such walk" }, { status: 404, headers: NO_STORE });

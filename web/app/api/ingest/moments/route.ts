@@ -8,8 +8,12 @@ import { noteIngest, openTripForIngest } from "@/lib/liveTrip";
 import { buildObjectIndex } from "@/lib/objectIndex";
 import { recordMoment } from "@/lib/ingest/store";
 import { validateMoment } from "@/lib/validate";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: unknown;
   try {
     body = await request.json();

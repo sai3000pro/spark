@@ -52,6 +52,7 @@ import { countLegs, createJourney, listJourneys, summariseJourney } from "@/lib/
 import type { JourneyLeg } from "@/lib/journey/store";
 import type { ClipFacts } from "@/lib/journey/clips";
 import type { GeoPoint } from "@/lib/types";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,9 @@ const MAX_NAME_CHARS = 400;
 const MAX_DEVICE_CHARS = 200;
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

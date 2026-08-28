@@ -42,6 +42,7 @@ import { NextResponse } from "next/server";
 import { dispatch } from "@/lib/reconstruction/dispatch";
 import { isReconTarget, type ReconTarget } from "@/lib/reconstruction/targets";
 import { createSplatJob, ensureDirs, listSplatJobs, UPLOAD_DIR } from "@/lib/splatJobs";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 /** Node, not edge: this writes to the filesystem. */
@@ -73,6 +74,9 @@ const MAX_BYTES = 512 * 1024 * 1024;
 const DEFAULT_TARGET: ReconTarget = "studio-batch";
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let form: FormData;
   try {
     form = await request.formData();

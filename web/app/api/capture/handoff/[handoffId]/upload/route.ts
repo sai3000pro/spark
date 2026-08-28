@@ -29,6 +29,7 @@ import { dispatch } from "@/lib/reconstruction/dispatch";
 import { isReconTarget, type ReconTarget } from "@/lib/reconstruction/targets";
 import { createSplatJob, UPLOAD_DIR } from "@/lib/splatJobs";
 import { videoExtFor } from "@/lib/storage/keys";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,6 +45,9 @@ interface Ctx {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { handoffId } = await params;
 
   // The token rides a header rather than the multipart body: it must be checked

@@ -43,6 +43,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { mintId as mintSplatId } from "./ids";
 import { SPLAT_EXTENSIONS } from "./splat/extensions";
 import { SPLAT_DIR } from "./splat/store";
 import { BROWSER_COPY_SUFFIX } from "./video/remux";
@@ -346,18 +347,36 @@ function store(): Store {
  * adopted from disk is a real claim on an id even before its record is read —
  * and against EVERY format, because `<id>.spz` occupying the name is exactly as
  * much of a collision as `<id>.ply` occupying it.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * IT IS ALSO THE ONLY THING GUARDING THE CLIP
+ *
+ * The id used to be the millisecond and nothing else, and the routes that serve
+ * by id say so out loud — see the header of app/api/splat/jobs/[jobId]/video.
+ * A predictable capability is not a capability: anyone who could reach the port
+ * and knew roughly when a walk was recorded could enumerate the timestamps and
+ * pull the video down. That is not hypothetical on a server that binds the LAN
+ * on purpose so a phone can find it.
+ *
+ * So the tail is now CSPRNG bytes (lib/ids.ts). The collision loop below stays
+ * exactly as it was — 64 bits does not collide, but "does not collide" is a
+ * probability and overwriting somebody's only reconstruction is not a risk worth
+ * taking on one, and the check costs a map lookup.
+ *
+ * Old ids keep working. Nothing parses this format; ids are read back from
+ * sidecars and filenames, and every guard on the path is a `startsWith("splat_")`
+ * or the `[A-Za-z0-9_-]` fence, both of which this still satisfies.
  */
 function mintId(now: Date): string {
-  const base = `splat_${now.getTime().toString(36)}`;
   const taken = (id: string) => store().jobs.has(id) || storedSplatFor(id) !== null;
-  if (!taken(base)) return base;
   for (let i = 0; i < 64; i++) {
-    const candidate = `${base}${(36 + i).toString(36)}`;
+    const candidate = mintSplatId("splat_", now);
     if (!taken(candidate)) return candidate;
   }
-  // 64 collisions in one millisecond is not a case worth branching for, but
-  // silently reusing an id is never acceptable. Randomness ends it.
-  return `${base}${Math.random().toString(36).slice(2, 8)}`;
+  // Unreachable short of a broken CSPRNG, and a throw is the right answer to
+  // that: silently reusing an id is how a finished reconstruction gets
+  // overwritten by the next upload.
+  throw new Error("could not mint an unused splat id");
 }
 
 export function createSplatJob(input: {

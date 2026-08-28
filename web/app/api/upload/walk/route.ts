@@ -19,12 +19,16 @@ import { validateDetections } from "@/lib/validate";
 import { probeVideoMetadata } from "@/lib/video/probeMetadata";
 import type { KeywordHit } from "@/lib/pipeline";
 import type { AudioEvent, TranscriptSegment } from "@/lib/types";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

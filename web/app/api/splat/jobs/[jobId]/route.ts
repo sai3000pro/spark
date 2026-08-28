@@ -18,6 +18,7 @@ import { collectFromKiri } from "@/lib/reconstruction/collect";
 import { measurePly } from "@/lib/video/plyBounds";
 import { getSplatJob, storedSplatFor } from "@/lib/splatJobs";
 import { attachSplat } from "@/lib/uploadedTrips";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -79,7 +80,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/splat/jobs/[
   );
 }
 
-export async function POST(_request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
+export async function POST(request: Request, ctx: RouteContext<"/api/splat/jobs/[jobId]">) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { jobId } = await ctx.params;
   const job = getSplatJob(jobId);
   if (!job) {

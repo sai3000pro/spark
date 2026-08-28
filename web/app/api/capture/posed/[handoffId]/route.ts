@@ -57,6 +57,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { noteUploadFinished, noteUploadStarted, verifyClaim } from "@/lib/handoff";
+import { randomSuffix } from "@/lib/ids";
 import { frameFileName, sparseModel, type PosedFrame } from "@/lib/webxr/colmap";
 // From lib/webxr/record, NOT lib/webxr/capture. The capture module is
 // "use client", and Next turns every export of a "use client" module into a
@@ -64,6 +65,7 @@ import { frameFileName, sparseModel, type PosedFrame } from "@/lib/webxr/colmap"
 // "Attempted to call intrinsicsForRecord() from the server", having typechecked
 // perfectly. See the header of lib/webxr/record.ts.
 import { intrinsicsForRecord, type CapturedFrameRecord } from "@/lib/webxr/record";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -100,6 +102,9 @@ interface Ctx {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { handoffId } = await params;
 
   // Checked before a single byte is read, for the same reason as the video
@@ -296,6 +301,9 @@ export async function POST(request: Request, { params }: Ctx) {
  */
 function mintSessionId(): string {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
-  const rand = Math.random().toString(36).slice(2, 8);
+  // CSPRNG, not Math.random: this names a directory holding somebody's frames,
+  // and a second-resolution timestamp in front of four predictable characters is
+  // not a secret. See lib/ids.ts.
+  const rand = randomSuffix(6);
   return `wx_${stamp}_${rand}`;
 }

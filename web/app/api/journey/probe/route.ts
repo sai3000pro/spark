@@ -51,6 +51,7 @@ import { stat } from "node:fs/promises";
 import { findUploadFor, getSplatJob } from "@/lib/splatJobs";
 import { clipFactsFromFile } from "@/lib/video/probeMetadata";
 import type { ClipFacts } from "@/lib/journey/clips";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,9 @@ const PROBE_CONCURRENCY = 4;
 const SAFE_ID = /^[A-Za-z0-9_-]{1,120}$/;
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;

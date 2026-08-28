@@ -60,6 +60,7 @@
  * verification scripts reach this under tsx, where `next/server` is not there to
  * be imported. `__resetJourneys` exists for them.
  */
+import { mintId } from "../ids";
 import { normaliseTitle } from "../albums";
 import { __wipeStore, forget, hydrate, persist } from "../persist";
 import type { DerivedRoute } from "./clips";
@@ -207,7 +208,9 @@ export function createJourney(input: CreateJourneyInput): Journey {
   // timestamp in lib/uploadedTrips.ts. Two journeys posted in the same
   // millisecond is a thing a client loop can actually do, and with a bare
   // timestamp the second one would silently overwrite the first in the map.
-  const id = `${JOURNEY_ID_PREFIX}${now.getTime().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // Unguessable, not just unique — /journey/<id> is a share link, and the id is
+  // the whole of its access control today. See lib/ids.ts.
+  const id = mintId(JOURNEY_ID_PREFIX, now);
 
   const byClip = new Map(input.legs.map((leg) => [leg.clipId, leg]));
 

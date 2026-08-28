@@ -9,11 +9,15 @@ import { NextResponse } from "next/server";
 
 import { createHandoff, type HandoffIntent } from "@/lib/handoff";
 import { captureCapabilities, phoneOrigin } from "@/lib/net";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // node:os and node:crypto
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let tripId: string | null = null;
   let intent: HandoffIntent = "record";
   try {

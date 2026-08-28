@@ -38,6 +38,7 @@ import { NextResponse } from "next/server";
 import { dispatch } from "@/lib/reconstruction/dispatch";
 import { isReconTarget, type ReconTarget } from "@/lib/reconstruction/targets";
 import { findUploadFor, getSplatJob } from "@/lib/splatJobs";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 /** Node, not edge: dispatch reads the clip off the filesystem. */
@@ -57,6 +58,9 @@ interface Ctx {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { jobId } = await params;
 
   // Through the job record first — it is the only thing that proves this id was

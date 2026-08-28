@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { isWalkMine, isWalkPosted, setWalkPosted } from "@/lib/postedWalks";
 import { resolveTripId } from "@/lib/tripData";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 /** Mutable in-memory state — never prerendered, never CDN-cached. See
  *  app/api/trip/active/route.ts for the full argument. */
@@ -33,6 +34,9 @@ export async function GET(_request: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   const { tripId } = await params;
   if (!knownTripId(tripId)) {
     return NextResponse.json({ error: "trip not found" }, { status: 404 });

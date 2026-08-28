@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { PROCESSING_SEC, TripConflictError, stopTrip } from "@/lib/liveTrip";
 import { validateStopTrip } from "@/lib/validate";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 /** See the note in ../active/route.ts — mutable state must not be prerendered. */
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: unknown = null;
   try {
     const text = await request.text();

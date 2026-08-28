@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 
 import { clearKiriKey, describeKey, setKiriKey } from "@/lib/reconstruction/keys";
+import { crossOriginRefusal } from "@/lib/http/sameOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   let body: { key?: unknown };
   try {
     body = (await request.json()) as { key?: unknown };
@@ -44,7 +48,10 @@ export async function POST(request: Request) {
   return NextResponse.json(result.description, { headers: NO_STORE });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const refused = crossOriginRefusal(request);
+  if (refused) return refused;
+
   clearKiriKey();
   return NextResponse.json(describeKey(), { headers: NO_STORE });
 }

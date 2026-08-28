@@ -66,6 +66,54 @@ const nextConfig: NextConfig = {
    */
   serverExternalPackages: ["ffmpeg-static"],
 
+  /**
+   * The other half of the fix in proxy.ts.
+   *
+   * `frame-ancestors 'none'` closes the route around it. proxy.ts refuses a
+   * cross-origin fetch, but it cannot refuse a REAL click: a page that iframes
+   * this app, makes the frame transparent and floats it under its own button
+   * gets a genuine same-origin request, made by the user, with every header a
+   * legitimate one would have. Every destructive control in this app is one
+   * unconfirmed click — "Delete run" on the capture page, "Send to KIRI" on a
+   * job — so an invisible frame is a working attack against exactly the actions
+   * proxy.ts was written for.
+   *
+   * Nothing embeds this app. The studio's bigview and the live viewer are opened
+   * with `window.open` into their own tabs, never framed — they have to be, since
+   * bigview needs SharedArrayBuffer and its own COOP/COEP headers to get it.
+   * So this costs nothing.
+   *
+   * `X-Frame-Options` is sent as well, and it is not redundant on purpose: it is
+   * what a browser too old for `frame-ancestors` obeys, and the two never
+   * disagree because both say no.
+   *
+   * WHAT IS DELIBERATELY NOT HERE: a full CSP with `script-src`. This app runs
+   * WebGPU, Transformers.js and a wasm splat renderer, all of which need
+   * `wasm-unsafe-eval` and some of which build workers from blobs — a policy
+   * written without measuring which directives they actually need would either
+   * be so loose it means nothing or would break the detector silently, in the
+   * browser, where nothing in `npm run build` would catch it. It is worth doing
+   * with a real browser to test against; it is not worth guessing at.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          // A response the browser is not allowed to re-interpret. An uploaded
+          // .ply served under a guessed content type is the case that matters.
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // A handoff URL carries a token in its fragment, which never leaves the
+          // browser — but the path itself still names somebody's capture, and an
+          // outbound click should not spend it on another origin.
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
+
   async redirects() {
     return [
       // The journal landing moved back to the root; keep old links alive.
