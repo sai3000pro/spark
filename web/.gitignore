@@ -59,3 +59,8 @@ scripts/.bake-cache/
 # Durable sidecars for the in-process stores (lib/persist.ts). Records of one
 # machine's activity, like /.uploads — not source, and not ours to keep.
 /.data/
+
+# Posed captures delivered by the WebXR path (POST /api/capture/posed). Frames
+# plus a COLMAP model per session — one machine's recordings, like /.uploads/.
+# The studio reconstructs them in place; see app/api/capture/posed.
+/.captures/

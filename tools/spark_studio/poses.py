@@ -54,6 +54,46 @@ def list_images(images_dir: Path) -> list[Path]:
     return sorted(images_dir.glob("*.jpg"))
 
 
+def count_images_txt_records(images_txt: Path) -> int:
+    """How many images a COLMAP text model actually holds.
+
+    Counted the way COLMAP's own reader does it, which is the only way that is
+    right for both producers we have: alternate pose line, points2D line, and
+    the points2D line counts EVEN WHEN IT IS EMPTY.
+
+    THE BUG THIS REPLACES, BECAUSE IT WAS INVISIBLE AND EXPENSIVE
+
+    This used to be `len(non_blank_lines) // 2`, which is correct only when
+    every image carries 2D observations. Neither of our no-SfM producers writes
+    any: `tools/arkit_capture/export_colmap.py` emits `pose line + blank line`
+    per image, and so does the WebXR path in `web/lib/webxr/colmap.ts`. The
+    blank lines were filtered out before the division, so a perfect 12-image
+    capture reported 6 of 12 placed -- under PARTIAL_REGISTRATION, so the
+    pipeline then warned that "the splat will cover the part of the walk that
+    solved, not all of it" about a dataset with nothing wrong with it.
+
+    Nothing failed. The reconstruction was fine. The number underneath it was
+    half, and it is the number this package exists to report honestly.
+    """
+    count = 0
+    expect_pose = True
+    for line in images_txt.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        if expect_pose:
+            if not line.strip():
+                continue
+            count += 1
+            expect_pose = False
+        else:
+            # Whatever this line holds, it belongs to the image above it. Not
+            # inspected on purpose: a points2D line of "1234 567 -1" is
+            # indistinguishable from a pose line by shape alone, so position is
+            # the only reliable signal.
+            expect_pose = True
+    return count
+
+
 class PoseError(RuntimeError):
     """No usable camera solution. Carries a sentence a person can act on."""
 
@@ -290,13 +330,7 @@ class PrecomputedSolver:
                 f"Expected an existing COLMAP model at {model} but "
                 f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} absent."
             )
-        # Two lines per registered image in images.txt; comments start with '#'.
-        body = [
-            ln
-            for ln in (model / "images.txt").read_text(encoding="utf-8").splitlines()
-            if ln.strip() and not ln.startswith("#")
-        ]
-        registered = len(body) // 2
+        registered = count_images_txt_records(model / "images.txt")
         points = [
             ln
             for ln in (model / "points3D.txt").read_text(encoding="utf-8").splitlines()

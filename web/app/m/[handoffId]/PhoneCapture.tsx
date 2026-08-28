@@ -37,6 +37,7 @@ import {
 } from "@/lib/captureSupport";
 
 import { GuidedRecorder } from "./GuidedRecorder";
+import { WebXRCapture } from "./WebXRCapture";
 
 interface Props {
   handoffId: string;
@@ -292,6 +293,28 @@ export function PhoneCapture({ handoffId }: Props) {
               Use your phone&rsquo;s own camera app, or pick a clip you already have.
             </span>
           </button>
+
+          {/*
+            Listed LAST despite being the best capture when it works, because
+            on most phones it does not: iOS has no WebXR at all, and Android
+            needs ARCore installed. Putting an option that a majority of
+            visitors will find greyed out at the top of the list would make the
+            page read as broken. It states its own reason either way — see
+            ./WebXRCapture.tsx.
+          */}
+          <WebXRCapture
+            handoffId={handoffId}
+            token={token}
+            onDelivered={({ frames, bytes, note }) =>
+              // Straight to "done", skipping the destination picker. There is
+              // nothing to choose: the dataset is already on the laptop with
+              // its poses solved, so the only remaining work is local training.
+              // It is NOT a CaptureMode and never becomes a File, which is why
+              // it bypasses the two-step flow the rest of this component runs.
+              setPhase({ k: "done", bytes, note: note || `${frames} posed frames stored.` })
+            }
+            onDeclined={() => setPhase({ k: "capturing", mode: support.best })}
+          />
 
           {support.guidedBlockedBecause && (
             <p className="text-xs leading-relaxed opacity-50">

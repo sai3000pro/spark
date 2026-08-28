@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .doctor import is_frozen, render, report
 from .pipeline import PipelineError, RunPaths, run
+from .poses import count_images_txt_records
 from .train import TrainConfig, latest_snapshot
 
 _BAR = 34
@@ -408,16 +409,48 @@ def main(argv: list[str] | None = None) -> int:
         return _selftest(args)
 
     video = Path(args.video).expanduser()
-    if not video.is_file():
+
+    # A DIRECTORY that already holds a solved model is a legitimate source, and
+    # it is how a posed capture gets reconstructed.
+    #
+    # A phone running WebXR (or ARKit, via tools/arkit_capture/export_colmap.py)
+    # already knows where its camera was, so it delivers `images/` plus
+    # `sparse/0/` and stages 1 and 2 have nothing left to do. `pipeline.run`
+    # ALREADY handles this correctly when the work directory is the dataset -
+    # `_has_frames` and `_has_poses` both find their artefacts and both stages
+    # skip themselves. All that was missing was a way to say so on the command
+    # line, since the positional argument insisted on being a file.
+    #
+    # `video` is still passed through to `run` because the manifest records
+    # where a run came from; nothing reads it as a video once stage 1 is skipped.
+    posed = video.is_dir() and (video / "sparse" / "0" / "cameras.txt").is_file()
+
+    if not posed and not video.is_file():
+        if video.is_dir():
+            print(
+                f"{video} is a directory but has no sparse/0/cameras.txt, so there\n"
+                "are no camera poses in it. Pass a video file, or a dataset "
+                "exported by\ntools/arkit_capture/export_colmap.py or the WebXR "
+                "capture page.",
+                file=sys.stderr,
+            )
+            return 2
         print(f"No such video: {video}", file=sys.stderr)
         return 2
 
-    out = Path(args.out).expanduser() if args.out else video.with_suffix(".ply")
-    work = (
-        Path(args.work).expanduser()
-        if args.work
-        else out.parent / "runs" / video.stem
-    )
+    if posed:
+        # The dataset IS the working directory. Copying it somewhere else first
+        # would double a few hundred megabytes of JPEG to no purpose, and the
+        # exports belong beside the frames they were trained on.
+        work = Path(args.work).expanduser() if args.work else video
+        out = Path(args.out).expanduser() if args.out else video / "splat.ply"
+    else:
+        out = Path(args.out).expanduser() if args.out else video.with_suffix(".ply")
+        work = (
+            Path(args.work).expanduser()
+            if args.work
+            else out.parent / "runs" / video.stem
+        )
 
     cfg = TrainConfig.preset(args.preset)
     if args.steps:
@@ -430,9 +463,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  output     {out}")
     print(f"  preset     {args.preset} ({cfg.steps:,} steps at {cfg.max_resolution}px)")
     print()
-    print("  Camera solving and training are both slow. On a laptop without CUDA")
-    print("  expect roughly 30 minutes to 2 hours in total. Snapshots appear in")
-    print(f"  {work / 'exports'} as training runs - you can open the newest at any time.")
+    if posed:
+        n = count_images_txt_records(video / "sparse" / "0" / "images.txt")
+        # Worth saying out loud, because the wait is a different length: someone
+        # braced for two hours will assume a twenty-minute run failed.
+        print(f"  This capture already carries {n} camera poses, so the slow camera-")
+        print("  solving stage is skipped entirely. Only training has to run.")
+    else:
+        print("  Camera solving and training are both slow. On a laptop without CUDA")
+        print("  expect roughly 30 minutes to 2 hours in total.")
+    print(f"  Snapshots appear in {work / 'exports'} as training runs -")
+    print("  you can open the newest at any time.")
     print()
 
     started = time.time()

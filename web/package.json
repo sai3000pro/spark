@@ -17,7 +17,8 @@
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "verify:persistence": "tsx scripts/verify-persistence.ts",
-    "verify:upload": "tsx scripts/verify-splat-upload.ts"
+    "verify:upload": "tsx scripts/verify-splat-upload.ts",
+    "verify:webxr": "tsx scripts/verify-webxr.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
