@@ -73,6 +73,28 @@ The one genuine in-tab route is a device that already knows its own poses —
 WebXR/ARCore, or ARKit as `tools/arkit_capture/export_colmap.py` already
 exploits. See `tools/spark_studio/README.md` for the full table.
 
+### The executable now has a face
+
+`spark-studio.exe` was a 163 MB download that required a terminal — the exact
+audience it was built to avoid. Double-clicking it opened a console, printed a
+three-line health check, and closed. It now serves its own page.
+
+| | Evidence |
+|---|---|
+| ✅ Frozen exe serves a UI | `app` starts in 9 s, `GET /` returns the page, `/api/studio/health` reports all three stages green |
+| ✅ Upload → queue → run, **frozen** | video POSTed to the frozen studio reached `matching frames` → `solving camera positions (42/48 placed)` → `starting trainer` |
+| ✅ Cold-start derivation | a studio restarted on an existing workspace reports `done` from the `.ply` being there, with the original filename off the record |
+| ✅ Download is the file | SHA-256 of the download matches the source exactly, 22,400,362 bytes |
+| ✅ Job id fenced | `?job=../../../etc/passwd` → 400 before it can touch a path |
+| ✅ Upload validated | `.txt` → 415, empty body → 400 |
+
+**A bug this found: the watcher could never have worked in the frozen build.**
+It shelled out to `[sys.executable, "-m", "spark_studio", ...]`, which is right
+in a checkout and wrong frozen — there `sys.executable` *is* the studio, so it
+would have been handed `-m` as the video to reconstruct. Every queued job would
+have failed instantly. Fixed and verified by watching a frozen build actually
+place 42 of 48 frames.
+
 ### Two things about the upload endpoint that matter before it is public
 
 **It does not authenticate.** Neither does `/api/splat/jobs`, `/api/upload/walk`

@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-from .doctor import render, report
+from .doctor import is_frozen, render, report
 from .pipeline import PipelineError, RunPaths, run
 from .train import TrainConfig, latest_snapshot
 
@@ -111,6 +111,61 @@ def _selftest(args) -> int:
     return 0 if result.ok else 1
 
 
+def _default_workspace() -> Path:
+    """Where a standalone studio keeps everything.
+
+    A named folder in the user's home rather than a temp directory, because the
+    outputs are the point: an hour of reconstruction lands here, and somewhere
+    the operating system is entitled to delete is the wrong place for it. Also
+    somewhere a person can actually find without being told a path.
+    """
+    return Path.home() / "SparkStudio"
+
+
+def _app(args) -> int:
+    """Serve the page and open it. The frozen build's front door."""
+    import threading
+    import webbrowser
+
+    from .server import serve
+
+    work = Path(args.work).expanduser() if args.work else _default_workspace()
+    work.mkdir(parents=True, exist_ok=True)
+
+    tools = report()
+    if not all(t.found for t in tools):
+        # Refuse rather than open a page whose only possible outcome is a
+        # failed job twenty minutes in.
+        print(render(tools))
+        return 1
+
+    url = f"http://127.0.0.1:{args.port}/"
+    print()
+    print("  Spark Studio is running.")
+    print(f"  Open        {url}")
+    print(f"  Files       {work}")
+    print()
+    print("  Leave this window open - closing it stops the studio.")
+    print("  Ctrl+C to stop.")
+    print()
+
+    if not args.no_open:
+        # After a beat, so the server is listening before the browser asks.
+        # Daemon: a failure to open a browser must never hold the process open.
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    serve(
+        web=None,
+        work=work,
+        port=args.port,
+        preset=args.preset,
+        host="127.0.0.1",
+        capture_url=args.capture_url,
+        ui=True,
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="spark_studio",
@@ -119,7 +174,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "video",
         nargs="?",
-        help="The clip to reconstruct, or one of: doctor, serve, selftest",
+        help="The clip to reconstruct, or one of: app, doctor, serve, selftest",
+    )
+    parser.add_argument(
+        "--no-open", action="store_true",
+        help="app: do not open a browser, just print the address",
     )
     parser.add_argument(
         "--port", type=int, default=8899, help="serve: port (default 8899)"
@@ -185,6 +244,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # The verbs are spelled as the positional so the common case stays one word.
+    #
+    # No argument means different things depending on how you got here, and the
+    # difference is which entry point is the likely one. In a checkout you typed
+    # this into a shell, so `doctor` is a useful first answer. Frozen, you almost
+    # certainly DOUBLE-CLICKED it - and a console window that prints three lines
+    # and vanishes is not an answer to anything. So the download opens its page.
+    if args.video is None and is_frozen():
+        return _app(args)
+
     if args.video in (None, "doctor"):
         tools = report()
         print(render(tools))
@@ -215,6 +283,9 @@ def main(argv: list[str] | None = None) -> int:
             allowed_origins=tuple(args.allow_origin),
         )
         return 0
+
+    if args.video == "app":
+        return _app(args)
 
     if args.video == "selftest":
         return _selftest(args)

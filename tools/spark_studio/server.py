@@ -45,7 +45,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
 from urllib.error import URLError
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from urllib.request import urlopen
 
 from .live import LiveRegistry
@@ -129,11 +129,30 @@ def lan_ip() -> str:
         return "127.0.0.1"
 
 
+#: Job ids are minted here, so anything else did not come from us. Checked
+#: before an id is ever joined onto a directory - the same posture as the
+#: session fence in live.py.
+_SAFE_JOB = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+#: A phone recording is routinely 150-400 MB; 2 GB is a long 4K take.
+MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
+
+VIDEO_SUFFIXES = (".mp4", ".mov", ".m4v", ".webm")
+
+
 @dataclass
 class Paths:
-    """Where the web app keeps its half of the contract."""
+    """Where the web app keeps its half of the contract.
 
-    web: Path
+    `web` is optional, and that is what lets the frozen executable run on a
+    machine with no checkout on it. Beside the Next app the two directories are
+    the app's own - it reads uploads from `.uploads` and serves splats out of
+    `public/mock/splats`, so writing anywhere else would mean the app never saw
+    the result. Standalone there is no app to agree with, and everything lives
+    under `work` where the user can find it.
+    """
+
+    web: Optional[Path]
     work: Path
     #: Where live sessions land. Overridable because it is NOT ours: it is
     #: whatever `--root` tools/live_capture_server was started with, and the two
@@ -142,11 +161,18 @@ class Paths:
 
     @property
     def uploads(self) -> Path:
-        return self.web / ".uploads"
+        return (self.web / ".uploads") if self.web else (self.work / "uploads")
 
     @property
     def splats(self) -> Path:
-        return self.web / "public" / "mock" / "splats"
+        return (
+            (self.web / "public" / "mock" / "splats") if self.web else (self.work / "splats")
+        )
+
+    @property
+    def standalone(self) -> bool:
+        """No web app beside us, so we are the whole product."""
+        return self.web is None
 
     @property
     def runs(self) -> Path:
@@ -239,18 +265,32 @@ class Watcher(threading.Thread):
             started = time.time()
             destination = self.paths.splats / f"{job_id}.ply"
 
-            cmd = [
-                sys.executable, "-m", "spark_studio",
+            # `sys.executable -m spark_studio` is right in a checkout and WRONG
+            # in the frozen build, where sys.executable is the studio itself:
+            # it would be handed "-m" as the video to reconstruct. Frozen, the
+            # executable already is the CLI, so the arguments go straight on.
+            args = [
                 str(clip),
                 "-o", str(destination),
                 "-w", str(self.paths.runs / job_id),
                 "--preset", self.preset,
             ]
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable, *args]
+            else:
+                cmd = [sys.executable, "-m", "spark_studio", *args]
             tail: list[str] = []
             try:
                 proc = subprocess.Popen(
                     cmd,
-                    cwd=str(Path(__file__).resolve().parents[1]),
+                    # In a checkout this puts `tools/` on the path so `-m
+                    # spark_studio` resolves. Frozen there is no package to
+                    # import and no meaningful source directory, so stay put.
+                    cwd=(
+                        None
+                        if getattr(sys, "frozen", False)
+                        else str(Path(__file__).resolve().parents[1])
+                    ),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -352,6 +392,9 @@ class Handler(BaseHTTPRequestHandler):
     port: int
     capture_url: str
     allowed_origins: tuple[str, ...] = ()
+    #: Serve the built-in page. On beside the Next app the app IS the UI, and
+    #: two of them would be two places to look for the same jobs.
+    ui: bool = False
 
     def log_message(self, fmt: str, *args) -> None:  # quieter than the default
         return
@@ -384,6 +427,44 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         query = parse_qs(url.query)
         route = url.path.rstrip("/") or "/"
+
+        if self.ui and route == "/":
+            from .ui import PAGE
+
+            return self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+
+        if route == "/api/studio/health":
+            from .doctor import report
+
+            tools = report()
+            return self._send(
+                200,
+                {
+                    "ready": all(t.found for t in tools),
+                    "missing": [t.name for t in tools if not t.found],
+                },
+            )
+
+        if route == "/api/studio/jobs":
+            return self._send(200, {"jobs": _ui_jobs(self.paths, self.watcher)})
+
+        if route == "/api/studio/download":
+            job_id = (query.get("job") or [""])[0]
+            if not _SAFE_JOB.match(job_id):
+                # Fenced before it can become a path. The id is minted here, so
+                # anything that does not look like one was not.
+                return self._send(400, {"error": "bad job id"})
+            ply = self.paths.splats / f"{job_id}.ply"
+            if not ply.is_file():
+                return self._send(404, {"error": "no splat for that job"})
+            body = ply.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{job_id}.ply"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return self.wfile.write(body)
 
         if route == "/health":
             return self._send(
@@ -489,9 +570,85 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send(404, {"error": f"no route {route}"})
 
+    def _accept_video(self, length: int) -> None:
+        """Take a video off the wire and queue it.
+
+        Written straight to disk in chunks rather than read into memory: these
+        are phone recordings, routinely 150-400 MB, and this process also has a
+        reconstruction running beside it.
+
+        The job record is written LAST and is what makes the clip visible to the
+        watcher - `pending()` looks for a `.job.json` with a video beside it. So
+        an upload that dies halfway leaves an orphan video that nothing picks
+        up, rather than a job pointing at a truncated clip that COLMAP would
+        chew on for ten minutes before failing.
+        """
+        if length <= 0:
+            return self._send(400, {"error": "no video in that request"})
+        if length > MAX_VIDEO_BYTES:
+            return self._send(
+                413,
+                {"error": f"that clip is over the {MAX_VIDEO_BYTES // (1024 * 1024)} MB limit"},
+            )
+
+        raw_name = unquote(self.headers.get("X-Video-Filename", "") or "")
+        suffix = Path(raw_name).suffix.lower()
+        if suffix not in VIDEO_SUFFIXES:
+            return self._send(
+                415,
+                {"error": f"{suffix or 'that file'} is not a video the studio can read"},
+            )
+
+        preset = (parse_qs(urlparse(self.path).query).get("preset") or ["balanced"])[0]
+        if preset not in ("fast", "balanced", "high"):
+            preset = "balanced"
+
+        job_id = f"job_{int(time.time() * 1000):x}"
+        self.paths.uploads.mkdir(parents=True, exist_ok=True)
+        clip = self.paths.uploads / f"{job_id}{suffix}"
+
+        remaining = length
+        try:
+            with clip.open("wb") as fh:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(1 << 20, remaining))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    remaining -= len(chunk)
+        except OSError as exc:
+            clip.unlink(missing_ok=True)
+            return self._send(500, {"error": f"could not store the clip: {exc}"})
+
+        if remaining > 0:
+            clip.unlink(missing_ok=True)
+            return self._send(400, {"error": "the upload stopped early; nothing was queued"})
+
+        # Only now does the watcher become able to see it.
+        (self.paths.uploads / f"{job_id}.job.json").write_text(
+            json.dumps(
+                {
+                    "id": job_id,
+                    "sourceName": raw_name or clip.name,
+                    "sourceBytes": length,
+                    "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "preset": preset,
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+        return self._send(201, {"job": job_id, "bytes": length, "preset": preset})
+
     def do_POST(self) -> None:
         route = urlparse(self.path).path.rstrip("/") or "/"
         length = int(self.headers.get("Content-Length") or 0)
+
+        # BEFORE the JSON read below, which would swallow a whole video into
+        # memory and then fail to parse it.
+        if route == "/api/studio/reconstruct":
+            return self._accept_video(length)
+
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
@@ -511,8 +668,57 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, {"error": f"no route {route}"})
 
 
+def _ui_jobs(paths: Paths, watcher: Watcher) -> list[dict]:
+    """Every reconstruction this studio knows about, derived by looking.
+
+    Same rule as the web app's splatJobs: a job is done when its .ply is on
+    disk. Nothing is ticked, so a page opened an hour later on a cold server
+    still reports the truth, and a job that finished while nobody was watching
+    is not lost.
+    """
+    out: list[dict] = []
+    errors = {f["job"]: f for f in watcher.finished if f.get("error")}
+    done = {f["job"]: f for f in watcher.finished if not f.get("error")}
+
+    if not paths.uploads.is_dir():
+        return out
+
+    for record in sorted(paths.uploads.glob("*.job.json"), reverse=True):
+        job_id = record.name[: -len(".job.json")]
+        try:
+            meta = json.loads(record.read_text("utf-8"))
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+        ply = paths.splats / f"{job_id}.ply"
+
+        entry = {
+            "id": job_id,
+            "name": meta.get("sourceName") or job_id,
+            "createdAt": meta.get("createdAt"),
+        }
+        if ply.is_file() and ply.stat().st_size > 0:
+            entry["status"] = "done"
+            entry["bytes"] = ply.stat().st_size
+            if job_id in done:
+                entry["seconds"] = done[job_id].get("seconds")
+        elif watcher.current == job_id:
+            entry["status"] = "running"
+            stage, fraction = watcher.progress
+            # The watcher prefixes its stage with the job id; the page already
+            # shows which job this is.
+            entry["stage"] = stage.split(": ", 1)[-1] if ": " in stage else stage
+            entry["fraction"] = fraction
+        elif job_id in errors:
+            entry["status"] = "failed"
+            entry["error"] = errors[job_id].get("error")
+        else:
+            entry["status"] = "queued"
+        out.append(entry)
+    return out
+
+
 def serve(
-    web: Path,
+    web: Optional[Path],
     work: Path,
     port: int = DEFAULT_PORT,
     preset: str = "balanced",
@@ -520,10 +726,12 @@ def serve(
     sessions_root: Optional[Path] = None,
     capture_url: str = DEFAULT_CAPTURE_URL,
     allowed_origins: tuple[str, ...] = (),
+    ui: bool = False,
+    open_browser: bool = False,
 ) -> None:
     """Run the studio until interrupted."""
     paths = Paths(
-        web=Path(web),
+        web=Path(web) if web else None,
         work=Path(work),
         sessions_root=Path(sessions_root) if sessions_root else None,
     )
@@ -541,6 +749,7 @@ def serve(
     Handler.port = port
     Handler.capture_url = capture_url
     Handler.allowed_origins = tuple(allowed_origins)
+    Handler.ui = ui
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"  spark studio   http://{host}:{port}")

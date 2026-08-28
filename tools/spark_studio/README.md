@@ -61,13 +61,32 @@ project ends for them. So there is a build that is one file:
 ```
 
 It contains Python, numpy, pycolmap, ffmpeg and brush-cli. Nothing else is
-needed on the machine that runs it:
+needed on the machine that runs it.
+
+**Double-click it and a browser opens.** That is the whole interface: drop a
+video on the page, watch the stages go by, download the `.ply` when it lands.
+No terminal, no Node, no repo, no npm.
 
 ```
+spark-studio.exe                              # opens the page (frozen build)
+spark-studio.exe app                          # the same, from a checkout
 spark-studio.exe doctor                       # can this machine do it at all
-spark-studio.exe walk.mp4 -o walk.ply         # the whole pipeline
-spark-studio.exe walk.mp4 -o walk.ply --push  # ...and put it in the app
+spark-studio.exe walk.mp4 -o walk.ply         # the whole pipeline, no browser
+spark-studio.exe walk.mp4 -o walk.ply --push  # ...and put it in the Spark app
 ```
+
+Files land in `~/SparkStudio` — a named folder rather than a temp directory,
+because an hour of reconstruction is not something the operating system should
+be entitled to delete.
+
+Running with no argument means different things depending on how you got here,
+and that is deliberate: from a checkout you typed it into a shell, so `doctor`
+is a useful first answer; the frozen build was almost certainly double-clicked,
+and a console window that prints three lines and vanishes answers nothing.
+
+The page is served by the studio itself with every byte of CSS and script
+inline — no CDN, because a laptop reconstructing locally may well have no
+internet, and that is half the point.
 
 `--push` uploads the finished `.ply` to a running Spark app (default
 `http://localhost:3000`) and prints the URL to open it at. Without it you get a

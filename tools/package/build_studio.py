@@ -146,6 +146,7 @@ def main() -> int:
         "--hidden-import", "spark_studio.server",
         "--hidden-import", "spark_studio.synth",
         "--hidden-import", "spark_studio.push",
+        "--hidden-import", "spark_studio.ui",
     ]
     for src, as_name in binaries:
         # `.` puts them at the root of the unpack directory, which is exactly
