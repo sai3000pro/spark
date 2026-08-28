@@ -95,6 +95,42 @@ would have been handed `-m` as the video to reconstruct. Every queued job would
 have failed instantly. Fixed and verified by watching a frozen build actually
 place 42 of 48 frames.
 
+### Three bugs that only appeared when the exe was used the way a person uses it
+
+Every one of these passed the scripted tests and failed the moment the binary
+was double-clicked and driven from a browser.
+
+**Training progress was never reported.** brush-cli draws a progress bar when it
+owns a terminal and prints *nothing* into a pipe, which is every way this
+package runs it — measured at 30 iterations: exit 0, a 5.2 MB `.ply`, and
+exactly **0 bytes** across stdout and stderr. So the step parser could never
+match, the callback fired once with "starting trainer", and the page sat pinned
+at 50% for forty minutes under a heading reading "watch it build". Progress now
+derives from the snapshots Brush writes on `--export-every` — the artefact *is*
+the progress, the same rule the rest of the package runs on. Verified
+0% → 33% → 67% → 100%.
+
+**Two studios could bind one port.** On Windows a second bind of an occupied
+port succeeds — `http.server` sets `SO_REUSEADDR` by default — so double-clicking
+the icon twice produced two studios on 8899, each with its own watcher over its
+own workspace, requests landing on whichever the OS preferred. Measured: two
+PIDs listening on `127.0.0.1:8899` at once. This is an ordinary thing to do,
+because the first window is hidden behind the browser it opened. Now it detects
+the running studio and opens that instead. Fixing it exposed a second case: a
+port held by something that is *not* an HTTP server returned `False` rather than
+`None`, fell through to the bind, and threw a raw `WinError 10013` traceback
+into a console window that closes a second later.
+
+**The startup banner could be invisible.** Python block-buffers to anything that
+is not a console, so redirected to a file or a pipe the `Open http://…` line sat
+unwritten for as long as the server ran. That line is the fallback for when the
+browser fails to open — the one moment it is needed was the one moment it was
+missing.
+
+The lesson worth keeping: the scripted tests drove the CLI with arguments and a
+captured pipe, which is the one configuration in which none of these three can
+be observed.
+
 ### Two things about the upload endpoint that matter before it is public
 
 **It does not authenticate.** Neither does `/api/splat/jobs`, `/api/upload/walk`
