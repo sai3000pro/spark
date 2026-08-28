@@ -6,17 +6,22 @@ line are given so you can check rather than trust.
 
 ---
 
-## The short version
+## DECIDED — 2026-08-28
 
-**The wall you proposed is the inverse of the wall that is already built**, on
-both axes. That is not a criticism of either — it is the one decision that has
-to be made before any of this is wired, and it is a product call, not a
-technical one.
+**The wall stays where `007_rls.sql` already puts it.** A guest keeps albums and
+private walks; publishing to the globe, sharing, inviting and groups need an
+account. No SQL changes.
 
-|                        | You proposed        | What `007_rls.sql` enforces today |
-|------------------------|---------------------|-----------------------------------|
-| post to the globe      | free                | **needs an account**              |
-| save to an album       | **needs an account**| free                              |
+|                        | Originally proposed | **Decided** (= what is already enforced) |
+|------------------------|---------------------|------------------------------------------|
+| post to the globe      | free                | **needs an account**                     |
+| save to an album       | needs an account    | **free**                                 |
+
+The two designs were exact inverses, and the rest of this document is the
+argument that led here. It is kept rather than trimmed because the losing side
+of it is real — see *The cost being accepted*, below — and someone will
+reasonably want to reopen it later. They should reopen it knowing what was
+already weighed.
 
 ---
 
@@ -95,28 +100,33 @@ an account.**
 - It puts the prompt at a moment of *investment* rather than at a moment of
   *intent to publish*, and investment is when people accept friction.
 
-### My reading
+### The decision, and why
 
-The two are not actually in conflict on the axis that matters, because
-**"account" and "guest" are already the same row**. The real question is only
-*when you ask for the email*, and the honest answer is that the database already
-enforces the safety-critical half (nothing anonymous reaches the public globe)
-and is silent about the rest.
+**Keep the built wall.** It is the safety-critical half, it is already reasoned
+about down to the `visibility` interaction, and the free action stays the one
+that costs nobody else anything: a guest can record, reconstruct, name and
+collect indefinitely without being asked for a thing.
 
-So: **keep the built wall as the security boundary, and put your wall on top of
-it as the prompt.** Concretely — a guest may create albums freely, and the album
-screen invites them to add an email so they do not lose it, without refusing
-anything if they decline. The globe stays gated because that one is not a
-nudge, it is a policy.
+Your instinct — prompt at the album — is still worth having, just not as a
+*gate*. `is_guest` is a claim on a row that already exists, so an album screen
+can invite someone to add an email so they do not lose their collection, and
+accept "no" without refusing anything. That is a nudge, and it needs no policy
+behind it.
 
-**But that leaves the globe gated, and the globe is your growth loop.** This is
-the one place the two designs genuinely collide, and no amount of layering
-dissolves it: either an anonymous row can publish to the world or it cannot. If
-posting is meant to be the thing that spreads, `007_rls.sql:275` has to change —
-which is a deliberate decision to allow anonymous public content, and it brings
-moderation, rate limiting and takedown along with it. That policy should be
-changed on purpose or not at all; the one outcome to avoid is discovering it was
-relaxed as a side effect of making a demo work.
+### The cost being accepted
+
+**The globe is the growth loop, and it is the gated one.** That is a real price,
+knowingly paid: someone has to give an email before their capture can be seen by
+anybody else, which is the moment reach is lost.
+
+The alternative was allowing anonymous rows to publish to strangers, and that
+brings moderation, rate limiting and takedown with it — an abuse surface with
+nobody behind it, where a fresh guest is one request away. Accountability won.
+
+If this is ever reopened, the change is `007_rls.sql:275` (plus 282 and 314),
+and it should be made on purpose, with the moderation story decided first. The
+outcome to avoid is discovering the policy was relaxed as a side effect of making
+a demo work.
 
 ---
 
@@ -132,7 +142,8 @@ Everything below is blocked on a Supabase project existing.
    comment says callers "take that path; they do not report an error to the
    user." A wall that appears in a build with no auth server would be a dead end
    in front of a working app.
-3. **Decide the globe question above.** It is the only one that changes SQL.
+3. ~~Decide the globe question.~~ **Decided above — no SQL changes.** The
+   policies ship as written.
 4. **The stores are not on Postgres yet.** `lib/albums.ts`, `lib/journey/store.ts`
    and the rest persist to `.data/` sidecars via `lib/persist.ts`. The wall is
    meaningless until ownership is a column rather than a file, because today
