@@ -40,12 +40,28 @@ import { BROWSER_COPY_SUFFIX } from "./video/remux";
 
 export type SplatJobStatus = "queued" | "processing" | "ready" | "failed";
 
+/**
+ * How this job expects to acquire its .ply.
+ *
+ *   video   a clip was uploaded and something still has to reconstruct it
+ *   ply     a finished splat was handed to us and the work is already done
+ *
+ * The distinction is not cosmetic: it decides what an ABSENT file means. For a
+ * video job, no .ply is the normal state for the first hour — the pipeline is
+ * still running, and the honest note is "waiting". For a ply job it can only
+ * mean the file was uploaded and has since been deleted, and telling that user
+ * to "wait for the reconstruction" would be waiting for something that already
+ * happened. One field, two very different sentences.
+ */
+export type SplatJobOrigin = "video" | "ply";
+
 export interface SplatJob {
   id: string;
   createdAt: string;
   sourceName: string;
   /** Bytes of the uploaded video, so the UI can be honest about the wait. */
   sourceBytes: number;
+  origin: SplatJobOrigin;
   /** The walk this reconstruction belongs to, once one has been built. */
   tripId: string | null;
   status: SplatJobStatus;
@@ -145,6 +161,9 @@ function hydrate(s: Store): void {
         createdAt: raw.createdAt ?? new Date().toISOString(),
         sourceName: raw.sourceName ?? raw.id,
         sourceBytes: raw.sourceBytes ?? 0,
+        // Records written before uploads existed have no origin and are all
+        // videos. Defaulting rather than dropping keeps them readable.
+        origin: raw.origin === "ply" ? "ply" : "video",
         tripId: raw.tripId ?? null,
         note: "",
         kiriSerialize: raw.kiriSerialize ?? null,
@@ -167,11 +186,62 @@ function hydrate(s: Store): void {
         createdAt: new Date(st.mtimeMs).toISOString(),
         sourceName: name,
         sourceBytes: bytes,
+        origin: "video",
         tripId: null,
         note: "",
         // Unrecoverable. A clip adopted this way may already have been sent to
         // KIRI by a previous run, and re-sending it would spend a second credit
         // — so callers should treat adoption as "reachable again", not "unsent".
+        kiriSerialize: null,
+      };
+      s.jobs.set(id, adopted);
+      persist(adopted);
+    } catch {
+      // Vanished between readdir and stat.
+    }
+  }
+
+  /*
+    Third: finished splats with no record at all.
+
+    Two ways to arrive here, and both are real. The header of this file
+    documents "drop the decoded result at public/mock/splats/<jobId>.ply" as
+    the way to close the loop by hand — and doing exactly that for an id this
+    process has never seen produced a file sitting in the served directory that
+    `getSplatJob` answered `null` for. The documented step did not work on a
+    cold start. The second way is an upload whose sidecar was swept, which
+    matters more now that a .ply can BE the whole job: for those the sidecar is
+    not a convenience over a video that is also on disk, it is the only record
+    that the id was ever minted.
+
+    Same derive-don't-sync rule the rest of the file runs on. A .ply in the
+    served directory is a finished capture whatever the bookkeeping says, so it
+    is adopted rather than ignored. The authored mock captures are skipped by
+    the same `splat_` test the video pass uses — they are scenery, not jobs.
+  */
+  let splats: string[];
+  try {
+    splats = readdirSync(SPLAT_DIR);
+  } catch {
+    return; // Nothing reconstructed yet.
+  }
+  for (const name of splats) {
+    if (!name.endsWith(".ply")) continue;
+    const id = name.slice(0, -".ply".length);
+    if (!id.startsWith("splat_") || s.jobs.has(id)) continue;
+    try {
+      const st = statSync(path.join(SPLAT_DIR, name));
+      const adopted: StoredJob = {
+        id,
+        createdAt: new Date(st.mtimeMs).toISOString(),
+        sourceName: name,
+        sourceBytes: st.size,
+        // Whatever produced it, what we HAVE is the .ply — and that is what
+        // `origin` describes. Claiming "video" would make a missing file read
+        // as "still reconstructing" for something already finished.
+        origin: "ply",
+        tripId: null,
+        note: "",
         kiriSerialize: null,
       };
       s.jobs.set(id, adopted);
@@ -195,18 +265,49 @@ function store(): Store {
   return fresh;
 }
 
+/**
+ * Mint an id nothing is already using.
+ *
+ * The id was the millisecond alone, which collides — and a collision does not
+ * fail, it OVERWRITES: the second job takes the first one's name, and its bytes
+ * land on the first one's file. For a video that costs an upload. For a .ply it
+ * costs a finished reconstruction, which may be the only copy in existence and
+ * may have taken an hour of someone's laptop to produce.
+ *
+ * Two uploads inside one millisecond is not the realistic case; two browser
+ * tabs, a retried request, or the studio pushing several results at once is.
+ * Checked against BOTH the job map and the served directory, because a .ply
+ * adopted from disk is a real claim on an id even before its record is read.
+ */
+function mintId(now: Date): string {
+  const base = `splat_${now.getTime().toString(36)}`;
+  const taken = (id: string) =>
+    store().jobs.has(id) || existsSync(path.join(SPLAT_DIR, `${id}.ply`));
+  if (!taken(base)) return base;
+  for (let i = 0; i < 64; i++) {
+    const candidate = `${base}${(36 + i).toString(36)}`;
+    if (!taken(candidate)) return candidate;
+  }
+  // 64 collisions in one millisecond is not a case worth branching for, but
+  // silently reusing an id is never acceptable. Randomness ends it.
+  return `${base}${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function createSplatJob(input: {
   sourceName: string;
   sourceBytes: number;
   tripId?: string | null;
+  /** Defaults to "video" — the long-standing case, and every existing caller. */
+  origin?: SplatJobOrigin;
 }): SplatJob {
   const now = new Date();
-  const id = `splat_${now.getTime().toString(36)}`;
+  const id = mintId(now);
   store().jobs.set(id, {
     id,
     createdAt: now.toISOString(),
     sourceName: input.sourceName,
     sourceBytes: input.sourceBytes,
+    origin: input.origin ?? "video",
     tripId: input.tripId ?? null,
     note: "",
     kiriSerialize: null,
@@ -253,6 +354,23 @@ export function sweepUploads(now = Date.now()): number {
   }
 
   for (const name of entries) {
+    /*
+      NEVER the job record.
+
+      This swept the sidecar alongside the video, because both live in
+      `.uploads` and both were older than the window. That reclaimed a few
+      hundred bytes and threw away the job — and for a KIRI job it threw away
+      `kiriSerialize`, which is the ONLY handle to a reconstruction whose
+      credit is already spent. Retention exists to reclaim the 150–400 MB
+      video; a record costing 0.0002% of that is not what it is for, and
+      deleting it at exactly the moment the video goes is what turns an
+      expected state ("source expired, result still collectable") into a
+      permanent one ("nothing here ever existed").
+
+      The record outliving the video is the correct shape: `findUploadFor`
+      already returns null for a swept clip and every caller handles it.
+    */
+    if (name.endsWith(RECORD_SUFFIX)) continue;
     const file = path.join(UPLOAD_DIR, name);
     try {
       if (now - statSync(file).mtimeMs < UPLOAD_RETENTION_MS) continue;
@@ -301,11 +419,22 @@ export function getSplatJob(id: string): SplatJob | null {
 
   return {
     ...job,
-    status: ready ? "ready" : "processing",
+    /*
+      A ply job with no file is FAILED, not processing.
+
+      "Processing" is a promise that waiting will help. That is true of a video
+      whose reconstruction is still running and false of an upload whose file
+      has been deleted — nothing is working on it and nothing ever will, so
+      reporting progress would leave someone watching a spinner for a job that
+      finished before it was ever created.
+    */
+    status: ready ? "ready" : job.origin === "ply" ? "failed" : "processing",
     url: ready ? `/mock/splats/${id}.ply` : null,
     note: ready
       ? `Reconstructed. ${(statSync(file).size / 1_048_576).toFixed(1)} MB on disk.`
-      : `Waiting on the reconstruction. Drop it at public/mock/splats/${id}.ply to close the loop.`,
+      : job.origin === "ply"
+        ? "The uploaded splat is no longer on disk. Upload it again to restore this capture."
+        : `Waiting on the reconstruction. Drop it at public/mock/splats/${id}.ply to close the loop.`,
   };
 }
 
@@ -350,6 +479,17 @@ export function findUploadFor(jobId: string): { path: string; filename: string }
   );
   if (!name) return null;
   return { path: path.join(UPLOAD_DIR, name), filename: name };
+}
+
+/**
+ * Where this job's finished splat belongs.
+ *
+ * The one place that spelling lives, so an uploader writing a file and
+ * `getSplatJob` looking for it cannot drift apart. `id` is always one this
+ * module minted, never caller input — see `mintId`.
+ */
+export function plyPathFor(id: string): string {
+  return path.join(SPLAT_DIR, `${id}.ply`);
 }
 
 /** Both directories, created on demand — neither is committed. */

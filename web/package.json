@@ -16,7 +16,8 @@
     "build:frames": "tsx scripts/build-capture-frames.ts",
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
-    "verify:persistence": "tsx scripts/verify-persistence.ts"
+    "verify:persistence": "tsx scripts/verify-persistence.ts",
+    "verify:upload": "tsx scripts/verify-splat-upload.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",

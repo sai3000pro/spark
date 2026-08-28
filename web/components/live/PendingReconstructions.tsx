@@ -93,10 +93,10 @@ export function PendingReconstructions() {
   return (
     <section
       className="plate-vellum rise-in relative mt-5 p-5 sm:p-6"
-      style={{ "--i": 4 } as React.CSSProperties}
+      style={{ "--i": 6 } as React.CSSProperties}
     >
       <header>
-        <span className="fnote text-[10px] text-ink-faint">[ 04 ]</span>
+        <span className="fnote text-[10px] text-ink-faint">[ 06 ]</span>
         <h2 className="mt-1 text-[20px] leading-tight text-ink">Clips still to finish</h2>
         <p className="mt-1.5 max-w-prose text-[13.5px] leading-relaxed text-ink-soft">
           Footage this machine still holds. Pick a destination and it goes from here — the video

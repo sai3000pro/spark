@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { LiveTripProvider, useLiveTrip } from "@/components/shell/LiveTripProvider";
 import { PhoneHandoffPanel } from "@/components/live/PhoneHandoffPanel";
 import { PendingReconstructions } from "@/components/live/PendingReconstructions";
+import { SplatUploadPanel } from "@/components/live/SplatUploadPanel";
 import { VideoWalkPanel } from "@/components/live/VideoWalkPanel";
 import { MultiVideoPanel } from "@/components/journey/MultiVideoPanel";
 import type { ActiveTripSnapshot } from "@/lib/liveTrip";
@@ -60,6 +61,12 @@ export function LiveScreen({ initial }: { initial: ActiveTripSnapshot | null }) 
           in front of someone who dropped a single clip and has nothing to
           order. See lib/journey/clips.ts for what the route refuses to invent. */}
       <MultiVideoPanel />
+
+      {/* The other end of the same pipe as the two panels above: they take a
+          video and owe a reconstruction, this takes the reconstruction. It is
+          what makes the studio executable useful to someone who never opens a
+          terminal — a .ply on their desktop becomes a capture in the app. */}
+      <SplatUploadPanel />
 
       {/* Renders itself away when nothing is outstanding. Its other job is to
           be somewhere the KIRI collector can run: a reconstruction is only
